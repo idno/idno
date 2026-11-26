@@ -251,46 +251,75 @@ final class SitePageClaimsTest extends TestCase
     }
 
     /**
-     * The keys (as the snapshot writes them, `{permalink}` for the permalink route) each placeholder of a page routed by the legacy table stands in for: the keys
-     * of the class it replaces at the snapshot's commit.
+     * The core keys (as the snapshot writes them, `{permalink}` for the permalink route) each legacy class that a routed action names must hold: the keys of
+     * the class it replaces at the snapshot's commit (for a placeholder), or that it held there (for a kept shell). Listed for the pages that are
+     * named, or will be, by an action; a class that names a routed action and is not here fails.
      *
      * @var array<class-string, list<string>>
      */
-    private const PLACEHOLDER_KEYS = [
+    private const ROUTED_KEYS = [
         \Idno\Legacy\Placeholder\AnnotationView::class => ['/view/([A-Za-z0-9\\-]+)/annotations/([A-Za-z0-9\\-]+)?', '{permalink}/annotations/([A-Za-z0-9\\-]+)?'],
         \Idno\Legacy\Placeholder\AnnotationDelete::class => ['{permalink}/annotations/([A-Za-z0-9\\-]+)/delete/?', '{permalink}/annotation/delete/?'],
+        \Idno\Pages\Entity\View::class => ['/view/([A-Za-z0-9\\-]+)/?', '{permalink}/?'],
+        \Idno\Pages\User\View::class => ['/profile/([^\\/]+)/?', '/profile/([^\\/]+)/([A-Za-z\\-\\/]+)+'],
     ];
 
     /**
-     * What is wrong with the registrations of the classes that name a routed action: a key that holds one is a key of the snapshot (the permalink route
-     * written out), and a placeholder holds every key of the class it replaces.
+     * The keys outside core's that a class is registered under, and why (the bundled plugins that register a core page for the address of a content type
+     * of their own): the registrations of the same class that are allowed beyond `ROUTED_KEYS`. Each is pinned against the booted table, so a plugin that
+     * adds or drops one changes this list.
      *
-     * @param list<class-string>                 $namers          the classes that name a routed action
-     * @param list<string>                       $snapshotKeys    the snapshot's keys as the table keys them (`{permalink}` replaced)
-     * @param array<class-string, list<string>>  $placeholderKeys the keys each placeholder replaces, as the table keys them
+     * @var array<class-string, array<string, string>>
+     */
+    private const KNOWN_PLUGIN_KEYS = [
+        \Idno\Pages\Entity\View::class => [
+            '/entry/([A-Za-z0-9\\-]+)/.*' => 'IdnoPlugins\Text: the address of an article',
+            '/bookmark/([A-Za-z0-9\\-]+)/.*' => 'IdnoPlugins\Like: the address of a bookmark',
+            '/event/([A-Za-z0-9\\-]+)/.*' => 'IdnoPlugins\Event: the address of an event',
+            '/rsvp/([A-Za-z0-9\\-]+)/.*' => 'IdnoPlugins\Event: the address of an RSVP',
+        ],
+    ];
+
+    /**
+     * What is wrong with the registrations of the classes that name a routed action: a namer with no listed keys; one registered under no key at all; a key it
+     * must hold (`$required`, as the table keys it) that holds another page, or none; and a registration of it under a key that is neither one of those nor a
+     * known registration of a plugin (`$known`, key => reason).
+     *
+     * @param iterable                           $table    pattern => handler, the legacy route table
+     * @param list<class-string>                 $namers   the classes that name a routed action
+     * @param array<class-string, list<string>>  $required the keys each must hold, as the table keys them
+     * @param array<class-string, array<string, string>> $known the keys outside core's it may also be registered under, with the reason
      *
      * @return list<string>
      */
-    public static function routedViolations(PageHandler $table, array $namers, array $snapshotKeys, array $placeholderKeys): array
+    public static function routedViolations(iterable $table, array $namers, array $required, array $known): array
     {
         $found = [];
         $held = [];
+        $handlers = [];
         foreach ($table as $key => $handler) {
-            $class = ltrim((string) $handler, '\\');
-            if (in_array($class, $namers, true)) {
-                $held[$class][] = (string) $key;
-                if (!in_array((string) $key, $snapshotKeys, true)) {
-                    $found[] = $class . ' is registered under ' . $key . ', which core did not register before any page moved';
-                }
-            }
+            $handlers[(string) $key] = strtolower(ltrim((string) $handler, '\\'));
+            $held[$handlers[(string) $key]][] = (string) $key;
         }
-        foreach ($placeholderKeys as $class => $keys) {
-            if (!isset($held[$class])) {
+        foreach ($namers as $class) {
+            $name = strtolower(ltrim($class, '\\'));
+            if (!isset($required[$class])) {
+                $found[] = $class . ' names a routed action and has no listed core keys (ROUTED_KEYS)';
                 continue;
             }
-            foreach ($keys as $key) {
-                if (!in_array($key, $held[$class], true)) {
-                    $found[] = $class . ' does not hold ' . $key . ', which the class it replaces held';
+            if (!isset($held[$name])) {
+                $found[] = $class . ' is registered under no key: the legacy router would never choose it';
+            }
+            foreach ($required[$class] as $key) {
+                if (!isset($handlers[$key])) {
+                    $found[] = $class . ' does not hold ' . $key . ', which core registered for it, and nothing is registered there';
+                } elseif ($handlers[$key] !== $name) {
+                    $found[] = $class . ' does not hold ' . $key . ', which core registered for it: it is ' . $handlers[$key];
+                }
+            }
+            foreach ($held[$name] ?? [] as $key) {
+                if (!in_array($key, $required[$class], true) && !isset($known[$class][$key])) {
+                    $found[] = $class . ' is registered under ' . $key . ', which is neither one of core\'s keys for it nor a known registration of a plugin (KNOWN_PLUGIN_KEYS)';
                 }
             }
         }
@@ -298,28 +327,117 @@ final class SitePageClaimsTest extends TestCase
         return $found;
     }
 
-    public function testEveryRoutedHandlerIsRegisteredUnderTheSnapshotsKeys(): void
+    /**
+     * @param array<class-string, list<string>> $keys as the snapshot writes them
+     *
+     * @return array<class-string, list<string>> as the table keys them in this site
+     */
+    private static function tableKeys(array $keys): array
     {
         $permalink = \Idno\Common\Entity::getPermalinkRoute();
-        $placeholders = array_map(static fn (array $keys): array => array_map(static fn (string $key): string => self::keyOf(str_replace('{permalink}', $permalink, $key)), $keys), self::PLACEHOLDER_KEYS);
+
+        return array_map(static fn (array $list): array => array_map(static fn (string $key): string => self::keyOf(str_replace('{permalink}', $permalink, $key)), $list), $keys);
+    }
+
+    /**
+     * The booted table with the fixture pages routed by the table registered as the fixtures register them: the real table, and the namers of the
+     * fixtures in it, so the check runs on a table that has a page that names a routed action before any page of core does.
+     *
+     * @return array{0: PageHandler, 1: array<class-string, list<string>>}
+     */
+    private static function tableWithFixtures(): array
+    {
+        $table = new PageHandler();
+        foreach (Idno::site()->routes() as $key => $handler) {
+            $table[$key] = $handler;
+        }
+        $table->addRoute('/_test/routed/word/:id/?', \Tests\Fixtures\RoutedPlaceholder::class);
+        $table->addRoute('/_test/routed-shell/:id/.*', \Tests\Fixtures\RoutedFixtureShell::class);
+        $fixtures = [
+            \Tests\Fixtures\RoutedPlaceholder::class => [self::keyOf('/_test/routed/word/:id/?')],
+            \Tests\Fixtures\RoutedFixtureShell::class => [self::keyOf('/_test/routed-shell/:id/.*')],
+        ];
+
+        return [$table, $fixtures];
+    }
+
+    /**
+     * @return list<class-string> the classes that name a routed action
+     */
+    private static function namersOfRoutedActions(): array
+    {
+        $actions = array_column(RoutedActions::actions(), 'action');
         $namers = [];
         foreach (RoutedActions::namers() as $class => [$controller, $method]) {
-            foreach (RoutedActions::actions() as $action) {
-                if ($action['action'] === $controller . '::' . $method) {
-                    $namers[] = $class;
-                }
+            if (in_array($controller . '::' . $method, $actions, true)) {
+                $namers[] = $class;
             }
         }
-        $keys = array_values(array_filter(self::expectedKeys(), static fn (string $key): bool => $key !== self::MARKER));
 
-        $this->assertSame([], self::routedViolations(Idno::site()->routes(), $namers, $keys, $placeholders));
-        // each way it can fail
-        $table = new PageHandler();
-        $table->addRoute('/a-key-core-never-had/?', \Idno\Legacy\Placeholder\AnnotationView::class);
-        $table->addRoute($permalink . '/annotations/:id?', \Idno\Legacy\Placeholder\AnnotationView::class);
-        $found = implode("\n", self::routedViolations($table, [\Idno\Legacy\Placeholder\AnnotationView::class], $keys, $placeholders));
-        $this->assertStringContainsString('is registered under /a-key-core-never-had/?', $found);
-        $this->assertStringContainsString('does not hold ' . $placeholders[\Idno\Legacy\Placeholder\AnnotationView::class][0], $found, 'the key of the class it replaces that is gone');
+        return $namers;
+    }
+
+    public function testEveryRoutedHandlerIsRegisteredUnderTheSnapshotsKeys(): void
+    {
+        [$table, $fixtures] = self::tableWithFixtures();
+        $namers = self::namersOfRoutedActions();
+
+        $this->assertContains(\Tests\Fixtures\RoutedPlaceholder::class, $namers, 'the fixtures name routed actions, so the check runs on the real table with namers in it');
+        $this->assertContains(\Tests\Fixtures\RoutedFixtureShell::class, $namers);
+        $this->assertSame([], self::routedViolations($table, $namers, self::tableKeys(self::ROUTED_KEYS) + $fixtures, self::tableKeys(array_map(static fn (array $keys): array => array_keys($keys), self::KNOWN_PLUGIN_KEYS))), 'the real table');
+    }
+
+    public function testThePinnedKeysOfTheKeptShellsAreTheBootedTables(): void
+    {
+        $table = Idno::site()->routes();
+        $required = self::tableKeys(self::ROUTED_KEYS);
+        $known = self::tableKeys(array_map(static fn (array $keys): array => array_keys($keys), self::KNOWN_PLUGIN_KEYS));
+        $checked = 0;
+        foreach ($required as $class => $keys) {
+            if (str_contains($class, '\\Placeholder\\')) {
+                continue;
+            }
+            ++$checked;
+            $held = [];
+            foreach ($table as $key => $handler) {
+                if (strtolower(ltrim((string) $handler, '\\')) === strtolower($class)) {
+                    $held[] = (string) $key;
+                }
+            }
+            $this->assertEqualsCanonicalizing(array_merge($keys, $known[$class] ?? []), $held, $class . ': the keys core and the bundled plugins register it under');
+        }
+        $this->assertSame(2, $checked, 'the two pages core registers under their own classes');
+    }
+
+    public function testAnyWayARoutedHandlerCanLoseItsPlaceIsFound(): void
+    {
+        $class = \Idno\Pages\Entity\View::class;
+        $required = [$class => ['/a/?', '/b/?']];
+        $known = [$class => ['/plugin/.*' => 'a plugin']];
+        $namers = [$class];
+        $table = static function (array $routes): PageHandler {
+            $table = new PageHandler();
+            foreach ($routes as $key => $handler) {
+                $table->addRoute($key, $handler);
+            }
+
+            return $table;
+        };
+        $ok = ['/a/?' => $class, '/b/?' => $class, '/plugin/.*' => $class];
+
+        $this->assertSame([], self::routedViolations($table($ok), $namers, $required, $known), 'core\'s keys and a known plugin registration');
+        // a namer nobody listed
+        $this->assertStringContainsString('has no listed core keys', implode("\n", self::routedViolations($table($ok), $namers, [], $known)));
+        // registered under no key at all
+        $this->assertStringContainsString('is registered under no key', implode("\n", self::routedViolations($table(['/a/?' => ClaimingPage::class, '/b/?' => ClaimingPage::class]), $namers, $required, $known)));
+        // a key it lost to another page, and one nothing is registered at
+        $lost = implode("\n", self::routedViolations($table(['/a/?' => $class, '/b/?' => ClaimingPage::class]), $namers, $required, $known));
+        $this->assertStringContainsString('does not hold /b/?, which core registered for it: it is tests\fixtures\claimingpage', $lost);
+        $this->assertStringContainsString('and nothing is registered there', implode("\n", self::routedViolations($table(['/a/?' => $class]), $namers, $required, $known)));
+        // a registration of the same class that is no core key and is not a known plugin's
+        $this->assertStringContainsString('/other/.*, which is neither', implode("\n", self::routedViolations($table($ok + ['/other/.*' => $class]), $namers, $required, $known)));
+        // a hijack in front of a key changes nothing here: the key still holds the class; the router's order is the snapshot test's
+        $this->assertSame([], self::routedViolations($table($ok), $namers, $required, $known));
     }
 
     public function testAPlaceholderOfItsOwnHoldsCoresPlace(): void
@@ -334,7 +452,7 @@ final class SitePageClaimsTest extends TestCase
                 continue;
             }
             $handler = ControllerRoute::class;
-            foreach (self::PLACEHOLDER_KEYS as $class => $keys) {
+            foreach (array_intersect_key(self::ROUTED_KEYS, array_flip([\Idno\Legacy\Placeholder\AnnotationView::class, \Idno\Legacy\Placeholder\AnnotationDelete::class])) as $class => $keys) {
                 if (in_array(self::keyOf(str_replace('{permalink}', $permalink, $key)), array_map(static fn (string $k): string => self::keyOf(str_replace('{permalink}', $permalink, $k)), $keys), true)) {
                     $handler = $class;
                 }

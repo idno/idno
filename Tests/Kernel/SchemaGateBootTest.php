@@ -84,6 +84,19 @@ final class SchemaGateBootTest extends TestCase
         $this->assertSame([], $this->tables(), 'nothing was created');
     }
 
+    /**
+     * The listener that routes a request by the legacy table asks nothing and builds nothing while the gate is closed: the gate answers first, so the
+     * legacy router's dispatcher (its table, its configuration) is never built and the request is neither given a choice nor routed.
+     */
+    public function testTheRoutedPagesListenerAsksNothingWhileTheGateIsClosed(): void
+    {
+        [$exit, $stdout, $stderr] = $this->script('Tests/Kernel/gate_closed_routed_request.php');
+
+        $this->assertSame(0, $exit, "stdout: $stdout\nstderr: $stderr");
+        $this->assertSame(['legacy' => false, 'status' => 503, 'dispatcher' => false, 'choice' => false, 'routed' => false], json_decode($stdout, true), $stderr);
+        $this->assertSame([], $this->tables(), 'nothing was created');
+    }
+
     public function testStartBootsTheLegacyApplicationOnceTheSchemaIsCurrent(): void
     {
         (new SchemaMigrator($this->db()))->migrate();

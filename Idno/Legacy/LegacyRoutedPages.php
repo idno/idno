@@ -35,6 +35,9 @@ final class LegacyRoutedPages
     /** @var array<string, ?array{0: class-string, 1: string}> the action each class names itself, by class */
     private static array $actions = [];
 
+    /** @var array<string, ?RoutedByLegacyTable> the attribute of each action, by `Class::method` */
+    private static array $routedBy = [];
+
     /**
      * @param \Closure(): LegacyDispatcher $dispatcher
      */
@@ -125,13 +128,18 @@ final class LegacyRoutedPages
      */
     public static function routedBy(array $action): ?RoutedByLegacyTable
     {
-        if (!class_exists($action[0]) || !method_exists($action[0], $action[1])) {
-            return null;
+        $key = $action[0] . '::' . $action[1];
+        if (array_key_exists($key, self::$routedBy)) {
+            return self::$routedBy[$key];
         }
-        foreach ((new \ReflectionMethod($action[0], $action[1]))->getAttributes(RoutedByLegacyTable::class) as $attribute) {
-            return $attribute->newInstance();
+        $routed = null;
+        if (class_exists($action[0]) && method_exists($action[0], $action[1])) {
+            foreach ((new \ReflectionMethod($action[0], $action[1]))->getAttributes(RoutedByLegacyTable::class) as $attribute) {
+                $routed = $attribute->newInstance();
+                break;
+            }
         }
 
-        return null;
+        return self::$routedBy[$key] = $routed;
     }
 }

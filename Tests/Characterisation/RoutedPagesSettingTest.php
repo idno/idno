@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Tests\Characterisation;
 
-use Idno\Legacy\ControllerPage;
 use Tests\Support\PrivateSiteTestCase;
 
 /**
@@ -28,6 +27,6 @@ final class RoutedPagesSettingTest extends PrivateSiteTestCase
         $this->assertStringContainsString('[&quot;abc&quot;]', $other->body);
         $old = $this->site()->request('GET', '/_test/routed/word/abc');
         $this->assertSame(404, $old->status, 'the old address is the 404 page');
-        $this->assertStringNotContainsString(ControllerPage::class, $old->body);
+        $this->assertStringNotContainsString('arguments=', html_entity_decode($old->body), 'no controller drew a page for the old address');
     }
 }

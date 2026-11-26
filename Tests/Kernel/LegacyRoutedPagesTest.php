@@ -155,18 +155,21 @@ final class LegacyRoutedPagesTest extends TestCase
         $this->assertNull($dispatcher->recordedChoice(Request::create('/claimed/abc')), 'a request that nothing asked about has none');
 
         // what Toro is given: one entry, or none (an `[]` choice); a request without a choice is given the whole table
-        $this->assertSame(1, self::entriesToroSees(['pattern' => '/session/login']), 'the entry the router chose');
-        $this->assertSame(0, self::entriesToroSees([]), 'no entry for a path the router has no page for');
-        $this->assertGreaterThan(10, self::entriesToroSees(null), 'the whole table without a choice');
+        $real = Idno::site()->routes();
+        $this->assertSame(['/session/login' => $real['/session/login']], self::entriesToroSees(['pattern' => '/session/login']), 'the entry the router chose, with its own handler');
+        $this->assertSame([], self::entriesToroSees([]), 'no entry for a path the router has no page for');
+        $this->assertSame(iterator_to_array($real), self::entriesToroSees(null), 'the whole table without a choice');
     }
 
     /**
-     * The number of entries the router's table has when the real dispatcher serves a request with this choice (a hook of the router, `before_request`,
+     * The table the router is given when the real dispatcher serves a request with this choice (a hook of the router, `before_request`,
      * reads it and stops the request before any page runs).
      *
      * @param array<string, mixed>|null $choice
+     *
+     * @return array<string, mixed> pattern => handler
      */
-    private static function entriesToroSees(?array $choice): int
+    private static function entriesToroSees(?array $choice): array
     {
         $dispatcher = Idno::container()->get(LegacyDispatcher::class);
         $saved = $_SERVER;
@@ -201,7 +204,11 @@ final class LegacyRoutedPagesTest extends TestCase
                 $table->addRoute(Entity::getPermalinkRoute(), \Idno\Pages\Entity\View::class);
 
                 // the address Entity::getURL() builds for an entity with this slug and creation time
-                $path = '/' . date($dates, $created) . '/hello-world';
+                $entity = new \Idno\Entities\GenericDataItem();
+                $entity->created = $created;
+                $entity->slug = 'hello-world';
+                $path = (string) parse_url($entity->getURL(), PHP_URL_PATH);
+                $this->assertSame('/' . date($dates, $created) . '/hello-world', $path, $structure . ': the address the entity builds');
                 $routed = PageHandler::routedFor($table, 'GET', $path);
 
                 $this->assertSame(\Idno\Pages\Entity\View::class, $routed['class'] ?? null, $structure);
@@ -217,13 +224,14 @@ final class LegacyRoutedPagesTest extends TestCase
 /** Stops the router at its first hook, saying how many entries its table has */
 final class PageHandlerHookProbe extends \RuntimeException
 {
-    public int $entries = 0;
+    /** @var array<string, mixed> */
+    public array $entries = [];
 
     public static function arm(): void
     {
         \ToroHook::add('before_request', static function (array &$params): void {
             $probe = new self();
-            $probe->entries = is_countable($params['routes']) ? count($params['routes']) : iterator_count($params['routes']);
+            $probe->entries = is_array($params['routes']) ? $params['routes'] : iterator_to_array($params['routes']);
             throw $probe;
         });
     }
