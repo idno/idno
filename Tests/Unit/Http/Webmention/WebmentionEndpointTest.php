@@ -50,6 +50,8 @@ final class WebmentionEndpointTest extends TestCase
 
     public bool $receivesRoute = true;
 
+    public bool $exists = true;
+
     /** @var list<ReceivedWebmention> */
     public array $received = [];
 
@@ -64,6 +66,7 @@ final class WebmentionEndpointTest extends TestCase
         $this->received = [];
         $this->taken = true;
         $this->receivesRoute = true;
+        $this->exists = true;
         $this->safe = true;
         $this->local = false;
         $this->resolved = new WebmentionTarget('Idno\Pages\Entity\View', 'idno_permalink', ['a-note']);
@@ -129,6 +132,13 @@ final class WebmentionEndpointTest extends TestCase
             public function receivesFor(string $route): bool
             {
                 return $this->test->receivesRoute;
+            }
+
+            public function accepts(string $route, array $arguments): bool
+            {
+                $this->test->calls[] = 'accepts ' . $route . ' ' . implode(',', $arguments);
+
+                return $this->test->exists;
             }
 
             public function receiveWebmention(string $route, array $arguments, ReceivedWebmention $mention): bool
@@ -239,6 +249,24 @@ final class WebmentionEndpointTest extends TestCase
         $this->assertContains(['error', 'Could not find handler for ' . self::TARGET], $this->logged);
     }
 
+    public function testATargetThatNamesNothingIsTargetNotFoundBeforeAnythingAboutTheSourceIsAskedOrFetched(): void
+    {
+        $this->exists = false;
+
+        $answer = $this->mention();
+
+        $this->assertSame('The target page ' . self::TARGET . ' does not exist.', $this->refusal($answer, 'target_not_found')['error_text']);
+        $this->assertSame(['resolve ' . self::TARGET, 'accepts idno_permalink a-note'], $this->calls, 'no isLocal, no isSafe, no fetch');
+        $this->assertSame([], $this->received);
+    }
+
+    public function testAMentionThatIsAcceptedIsOnlyAskedOnceAndBeforeTheSource(): void
+    {
+        $this->mention();
+
+        $this->assertSame(['resolve ' . self::TARGET, 'accepts idno_permalink a-note', 'isLocal ' . self::SOURCE], array_slice($this->calls, 0, 3));
+    }
+
     public function testAPageCannotMentionItself(): void
     {
         $this->local = true;
@@ -246,7 +274,7 @@ final class WebmentionEndpointTest extends TestCase
         $answer = $this->post(['source' => 'https://example.com/2026/a-note/', 'target' => self::TARGET]);
 
         $this->assertSame("A page can't webmention itself.", $this->refusal($answer, 'target_not_supported')['error_text']);
-        $this->assertSame(['resolve ' . self::TARGET, 'isLocal https://example.com/2026/a-note/'], $this->calls);
+        $this->assertSame(['resolve ' . self::TARGET, 'accepts idno_permalink a-note', 'isLocal https://example.com/2026/a-note/'], $this->calls);
     }
 
     public function testAnotherPageOfThisSiteMayMentionIt(): void
@@ -272,7 +300,7 @@ final class WebmentionEndpointTest extends TestCase
         $answer = $this->post(['source' => 'http://127.0.0.1:9/', 'target' => self::TARGET]);
 
         $this->assertSame('The source URL is not allowed.', $this->refusal($answer, 'source_not_allowed')['error_text']);
-        $this->assertSame(['resolve ' . self::TARGET, 'isLocal http://127.0.0.1:9/', 'isSafe http://127.0.0.1:9/'], $this->calls, 'and nothing is fetched');
+        $this->assertSame(['resolve ' . self::TARGET, 'accepts idno_permalink a-note', 'isLocal http://127.0.0.1:9/', 'isSafe http://127.0.0.1:9/'], $this->calls, 'and nothing is fetched');
     }
 
     public function testASourceThatCannotBeObtainedIsSourceNotFound(): void
@@ -282,7 +310,7 @@ final class WebmentionEndpointTest extends TestCase
         $answer = $this->mention();
 
         $this->assertSame('The source content for ' . self::SOURCE . ' could not be obtained.', $this->refusal($answer, 'source_not_found')['error_text']);
-        $this->assertSame(['resolve ' . self::TARGET, 'isLocal ' . self::SOURCE, 'isSafe ' . self::SOURCE, 'fetch ' . self::SOURCE], $this->calls);
+        $this->assertSame(['resolve ' . self::TARGET, 'accepts idno_permalink a-note', 'isLocal ' . self::SOURCE, 'isSafe ' . self::SOURCE, 'fetch ' . self::SOURCE], $this->calls);
     }
 
     public function testASourceThatDoesNotLinkToTheTargetIsNoLinkFound(): void
@@ -323,7 +351,7 @@ final class WebmentionEndpointTest extends TestCase
     {
         $this->mention();
 
-        $this->assertSame(['resolve ' . self::TARGET, 'isLocal ' . self::SOURCE, 'isSafe ' . self::SOURCE, 'fetch ' . self::SOURCE, 'parse ' . self::SOURCE, 'receive idno_permalink a-note'], $this->calls);
+        $this->assertSame(['resolve ' . self::TARGET, 'accepts idno_permalink a-note', 'isLocal ' . self::SOURCE, 'isSafe ' . self::SOURCE, 'fetch ' . self::SOURCE, 'parse ' . self::SOURCE, 'receive idno_permalink a-note'], $this->calls);
         $mention = $this->received[0];
         $this->assertSame(self::SOURCE, $mention->source);
         $this->assertSame(self::TARGET, $mention->target);
@@ -360,6 +388,24 @@ final class WebmentionEndpointTest extends TestCase
         $this->assertSame(202, $this->mention()->getStatusCode());
         $this->assertCount(1, $seen);
         $this->assertSame([], $this->received, 'no service took it');
+    }
+
+    public function testEveryAnswerIsNeverSniffedAndNothingTheSenderWroteIsMarkupInARefusal(): void
+    {
+        $this->resolved = null;
+        $target = "https://example.com/<script>alert(1)</script>&'\"";
+
+        $response = $this->post(['source' => self::SOURCE, 'target' => $target]);
+
+        $this->assertSame('nosniff', $response->headers->get('X-Content-Type-Options'));
+        $body = (string) $response->getContent();
+        foreach (['<', '>', '&', "'"] as $character) {
+            $this->assertStringNotContainsString($character, $body, 'the body holds no ' . $character);
+        }
+        $this->assertSame('The target page ' . $target . ' does not exist.', json_decode($body, true)['error_text'], 'and it still reads back as written');
+
+        $this->resolved = new WebmentionTarget('Idno\Pages\Entity\View', 'idno_permalink', ['a-note']);
+        $this->assertSame('nosniff', $this->mention()->headers->get('X-Content-Type-Options'), 'an accepted mention too');
     }
 
     public function testEveryErrorIsJson(): void

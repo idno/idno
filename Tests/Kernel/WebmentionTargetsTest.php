@@ -514,6 +514,11 @@ final class WebmentionTargetsTest extends TestCase
                 return true;
             }
 
+            public function accepts(string $route, array $arguments): bool
+            {
+                return true;
+            }
+
             public function receiveWebmention(string $route, array $arguments, ReceivedWebmention $mention): bool
             {
                 return true;

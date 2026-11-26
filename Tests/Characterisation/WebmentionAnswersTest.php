@@ -32,7 +32,27 @@ final class WebmentionAnswersTest extends PermalinkSiteCase
 
     private const NOBODY_WHY = 'a mention is received as nobody, whoever sent it: a post only some members may read takes none (the legacy endpoint received it as the sender\'s session)';
 
+    private const NOT_THERE_WHY = 'a target that names nothing a visitor may see is target_not_found before the source is fetched, and a private post, a draft, a deleted post and a missing one are that one answer (the legacy endpoint fetched the source and answered source_not_supported)';
+
+    /** The cases whose source the site must never fetch: every refused kind of target (the sources are named as the cases are). */
+    private const NEVER_FETCHED = [
+        'mention-post-other-host-name', 'mention-post-other-port', 'mention-post-no-host', 'mention-actor-address', 'mention-webmention-endpoint-address',
+        'mention-file-address', 'mention-annotation-list', 'mention-annotation-one', 'mention-feed-xml', 'mention-feed-rss-xml', 'mention-tag-address',
+        'mention-search-address', 'mention-robots-address', 'mention-nothing-serves', 'mention-missing-post', 'mention-private-post', 'mention-members-only-post',
+        'mention-draft-post', 'mention-deleted-post', 'mention-bookmark-address', 'mention-shortlink-unknown', 'mention-profile-unknown',
+    ];
+
     private const CHANGED = [
+        'mention-nothing-serves' => self::NOT_THERE_WHY,
+        'mention-bookmark-address' => self::NOT_THERE_WHY,
+        'mention-missing-post' => self::NOT_THERE_WHY,
+        'mention-private-post' => self::NOT_THERE_WHY,
+        'mention-members-only-post' => self::NOT_THERE_WHY,
+        'mention-draft-post' => self::NOT_THERE_WHY,
+        'mention-deleted-post' => self::NOT_THERE_WHY,
+        'mention-profile-unknown' => self::NOT_THERE_WHY,
+        'home-multi-user' => 'nothing receives a mention of a multi-user site\'s home page: it is target_not_found before the source is fetched',
+        'content-multi-user' => 'nothing receives a mention of a multi-user site\'s home page: it is target_not_found before the source is fetched',
         'source-loopback' => self::SOURCE_WHY,
         'source-ftp' => self::SOURCE_WHY,
         'mention-post-markdown-address' => 'the Markdown form of a post is the post: its address resolves to the permalink (the legacy page answered target_not_found for it after the permalink moved)',
@@ -40,7 +60,7 @@ final class WebmentionAnswersTest extends PermalinkSiteCase
         'mention-post-other-port' => self::HOST_WHY,
         'mention-post-no-host' => 'a target with no host is no address of the site: the target must be an absolute address (the legacy endpoint matched the path alone)',
         'mention-shortlink' => 'a shortlink takes a mention as the post it names does (the legacy endpoint answered target_not_found for it after the page moved)',
-        'mention-shortlink-unknown' => 'a shortlink no post has is a target that does not take the mention: the source is fetched and the answer is source_not_supported, as for any address of a page that exists and takes none',
+        'mention-shortlink-unknown' => self::NOT_THERE_WHY,
         'mention-actor-address' => self::NO_MENTIONS_WHY,
         'mention-webmention-endpoint-address' => self::NO_MENTIONS_WHY,
         'mention-home-index-php' => 'the front controller\'s own address is the home page (the legacy router had no page for it)',
@@ -63,13 +83,23 @@ final class WebmentionAnswersTest extends PermalinkSiteCase
         'mention-post-other-port' => [400, 'target_not_found'],
         'mention-post-no-host' => [400, 'target_not_found'],
         'mention-shortlink' => [202, null],
-        'mention-shortlink-unknown' => [400, 'source_not_supported'],
+        'mention-shortlink-unknown' => [400, 'target_not_found'],
+        'mention-nothing-serves' => [400, 'target_not_found'],
+        'mention-bookmark-address' => [400, 'target_not_found'],
+        'mention-missing-post' => [400, 'target_not_found'],
+        'mention-private-post' => [400, 'target_not_found'],
+        'mention-members-only-post' => [400, 'target_not_found'],
+        'mention-draft-post' => [400, 'target_not_found'],
+        'mention-deleted-post' => [400, 'target_not_found'],
+        'mention-profile-unknown' => [400, 'target_not_found'],
+        'home-multi-user' => [400, 'target_not_found'],
+        'content-multi-user' => [400, 'target_not_found'],
         'mention-actor-address' => [400, 'target_not_found'],
         'mention-webmention-endpoint-address' => [400, 'target_not_found'],
         'mention-home-index-php' => [202, null],
-        'private-post-owner-cookie' => [400, 'source_not_supported'],
-        'private-post-admin-cookie' => [400, 'source_not_supported'],
-        'members-only-post-member-cookie' => [400, 'source_not_supported'],
+        'private-post-owner-cookie' => [400, 'target_not_found'],
+        'private-post-admin-cookie' => [400, 'target_not_found'],
+        'members-only-post-member-cookie' => [400, 'target_not_found'],
         'target-not-a-url' => [400, 'unknown_error'],
     ];
 
@@ -126,7 +156,7 @@ final class WebmentionAnswersTest extends PermalinkSiteCase
 
     /**
      * A POST to the endpoint, recorded. The page the endpoint is now has its own lifecycle, which the legacy endpoint (it took the request in its own `post()`)
-     * had none of: the `Link` headers that the pages of the site carry (the webmention endpoint, the hub, `self`) and `Vary: Accept` are added to every answer,
+     * had none of: the `Link` headers that the pages of the site carry (the webmention endpoint, the hub, `self`) `Vary: Accept` and `X-Content-Type-Options: nosniff` are added to every answer,
      * and a refusal is `application/json` (the legacy endpoint sent its JSON as `text/html`). The answer is compared with the recording with those left
      * out, and they are asserted to be there. A case in `CHANGED` is held to what `EXPECTED` says of it.
      *
@@ -152,7 +182,9 @@ final class WebmentionAnswersTest extends PermalinkSiteCase
         if (str_starts_with($recorded, 'status 400')) {
             $expected = str_replace("content-type: text/html; charset=UTF-8\n", "content-type: application/json\n", $recorded);
             $this->assertNotSame($recorded, $expected, $case . ': the recording holds the legacy type');
-            $recorded = $expected;
+            // (the JSON is written with an apostrophe as \u0027 now, so that nothing a sender wrote is markup)
+            [$head, $body] = explode("\n\n", $expected, 2) + [1 => ''];
+            $recorded = $head . "\n\n" . str_replace("'", '\u0027', $body);
         }
         if ($recorded !== $actual) {
             $this->differences[] = $case . ': ' . $response->status . ' ' . (json_decode($response->body, true)['error'] ?? '') . ' (recorded ' . strtok($recorded, "\n") . ' ' . (preg_match('/"error":"([a-z_]+)"/', $recorded, $m) === 1 ? $m[1] : '') . ')';
@@ -166,7 +198,7 @@ final class WebmentionAnswersTest extends PermalinkSiteCase
     {
         [$head, $body] = explode("\n\n", $answer, 2) + [1 => ''];
         $lines = explode("\n", $head);
-        foreach (['link: <{site}/webmention/>; rel="http://webmention.org/"', 'link: <{site}/webmention/>; rel="webmention"', 'link: <https://hub.example/>; rel="hub"', 'link: <{site}/webmention/>; rel="self"', 'vary: Accept'] as $line) {
+        foreach (['link: <{site}/webmention/>; rel="http://webmention.org/"', 'link: <{site}/webmention/>; rel="webmention"', 'link: <https://hub.example/>; rel="hub"', 'link: <{site}/webmention/>; rel="self"', 'vary: Accept', 'x-content-type-options: nosniff'] as $line) {
             self::assertSame(1, count(array_keys($lines, $line, true)), $case . ': ' . $line);
             $lines = array_values(array_diff($lines, [$line]));
         }
@@ -320,9 +352,15 @@ final class WebmentionAnswersTest extends PermalinkSiteCase
             $this->post($case, ['source' => $this->source($case, $target), 'target' => $target]);
         }
         $fetched = $this->fetched();
-        foreach (['mention-feed-xml', 'mention-feed-rss-xml', 'mention-tag-address', 'mention-search-address', 'mention-robots-address'] as $case) {
-            $this->assertNotContains($case, $fetched, 'a mention of an address no page takes mentions at does not make the site fetch its source: ' . $case);
+        foreach (self::NEVER_FETCHED as $case) {
+            $this->assertNotContains($case, $fetched, 'a mention of an address that names nothing a visitor may see does not make the site fetch its source: ' . $case);
         }
+        $this->assertContains('mention-post-public', $fetched, 'while a mention of a post is fetched');
+        // (an alias of the host name is no address of the site either)
+        $alias = str_replace('://', '://www.', $base) . ltrim($paths['bob-public'], '/');
+        $answer = $this->site()->request('POST', 'webmention/', [], ['source' => $this->source('www-alias', $alias), 'target' => $alias]);
+        $this->assertSame([400, 'target_not_found'], [$answer->status, json_decode($answer->body, true)['error']]);
+        $this->assertNotContains('www-alias', $this->fetched());
 
         // A mention of each kind, again (the same source again is an update), and a source that has gone
         $target = $this->targets()['mention-post-public'];
@@ -334,10 +372,12 @@ final class WebmentionAnswersTest extends PermalinkSiteCase
 
         // Who sends it: the sender's own session is not what the page sees
         $this->post('post-public-admin-cookie', ['source' => $this->source('admin-cookie', $target), 'target' => $target], 'admin');
+        $this->fetched();
         $this->post('private-post-owner-cookie', ['source' => $this->source('owner-cookie', $this->targets()['mention-private-post']), 'target' => $this->targets()['mention-private-post']], 'owner');
         $this->post('private-post-admin-cookie', ['source' => $this->source('admin-private', $this->targets()['mention-private-post']), 'target' => $this->targets()['mention-private-post']], 'admin');
         $this->post('members-only-post-member-cookie', ['source' => $this->source('member-cookie', $this->targets()['mention-members-only-post']), 'target' => $this->targets()['mention-members-only-post']], 'member');
 
+        $this->assertSame([], array_intersect(['owner-cookie', 'admin-private', 'member-cookie'], $this->fetched()), 'nor is the source of a mention of what a visitor may not see, whoever sends it');
         $this->recordStored('stored-bob-public', $postId);
         $this->recordStored('stored-private-post', '00000000000040008000000000000043');
         // (the post's own annotations: the mention of the address that is the post's, spelled other ways, and each kind; none for a source that has gone, and none
@@ -352,8 +392,10 @@ final class WebmentionAnswersTest extends PermalinkSiteCase
         // The home page of a multi-user site has no page of its own to take a mention, and on a single-user site (the default) the root is its owner's profile
         $root = $base;
         $this->runInSite('$config = \Idno\Core\Idno::site()->config(); $config->single_user = false; $config->save(); return true;');
+        $this->fetched();
         $this->post('home-multi-user', ['source' => $this->source('home-multi', $root), 'target' => $root]);
         $this->post('content-multi-user', ['source' => $this->source('content-multi', $this->targets()['mention-content-address']), 'target' => $this->targets()['mention-content-address']]);
+        $this->assertSame([], $this->fetched(), 'a multi-user site\'s home page takes no mention: nothing is fetched');
         $this->runInSite('$config = \Idno\Core\Idno::site()->config(); $config->single_user = true; $config->save(); return true;');
         $this->post('home-single-user', ['source' => $this->source('home-single', $root), 'target' => $root]);
         $this->post('content-single-user', ['source' => $this->source('content-single', $this->targets()['mention-content-address']), 'target' => $this->targets()['mention-content-address']]);

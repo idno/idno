@@ -137,6 +137,7 @@ final class LegacyWebmentionTargets implements WebmentionTargets
             // queues the headers every legacy page sends: what the request being served had made of them is put back, whatever the page does
             $site = Idno::site();
             $current = $site->currentPage();
+            $handler = self::exceptionHandler();
             $built = false;
             try {
                 $page = new $class();
@@ -146,8 +147,11 @@ final class LegacyWebmentionTargets implements WebmentionTargets
 
                 return (bool) $page->webmentionContent($mention->source, $mention->target, $mention->sourceResponse, $mention->sourceMf2);
             } finally {
-                if ($built) {
+                // (a constructor that failed after it installed its handler left that behind too)
+                if (self::exceptionHandler() !== $handler) {
                     restore_exception_handler();
+                }
+                if ($built) {
                     $headers = new PhpHeaders();
                     foreach (['X-Powered-By', 'X-Clacks-Overhead', 'X-Idno-Build-Fingerprint'] as $name) {
                         $headers->remove($name);
@@ -158,6 +162,18 @@ final class LegacyWebmentionTargets implements WebmentionTargets
                 }
             }
         });
+    }
+
+    /**
+     * The process's exception handler, as it is now.
+     */
+    private static function exceptionHandler(): mixed
+    {
+        $handler = set_exception_handler(static function (): void {
+        });
+        restore_exception_handler();
+
+        return $handler;
     }
 
     /**

@@ -79,6 +79,20 @@ namespace Tests\Characterisation {
         }
 
         /**
+         * A target that names nothing (a post that is not there) is refused as such, before the source is looked at.
+         */
+        public function testATargetThatNamesNoPostIsTargetNotFound(): void
+        {
+            $r = $this->site()->request('POST', 'webmention/', [], [
+                'source' => 'https://remote.invalid/a',
+                'target' => $this->site()->baseUrl() . '2000/does-not-exist',
+            ]);
+
+            $this->assertSame(400, $r->status);
+            $this->assertSame('target_not_found', json_decode($r->body, true)['error']);
+        }
+
+        /**
          * The target is a page of the site and the source is one the site may not fetch: the refusal says so (the legacy endpoint answered it with the
          * self-mention error).
          */
@@ -87,7 +101,7 @@ namespace Tests\Characterisation {
             $base = $this->site()->baseUrl();
             $r    = $this->site()->request('POST', 'webmention/', [], [
                 'source' => 'https://remote.invalid/a',
-                'target' => $base . '2000/does-not-exist',
+                'target' => $base . 'profile/' . $this->user()->getHandle(),
             ]);
 
             $this->assertSame(400, $r->status);

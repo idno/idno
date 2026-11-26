@@ -148,6 +148,17 @@ final class PermalinkPages implements ReceivesWebmentions
         return $route === 'idno_permalink';
     }
 
+    public function accepts(string $route, array $arguments): bool
+    {
+        $key = (string) ($arguments[0] ?? '');
+        if (!$this->receivesFor($route) || in_array($key, ['', '0'], true)) {
+            return false;
+        }
+        $entity = $this->permalinks->find($key);
+
+        return $entity !== null && $this->permalinks->canRead($entity);
+    }
+
     /**
      * A webmention to a post: added to the post's annotations, unless it comes from the post itself (its own address as the source, or the source the
      * target). A post that is not there takes nothing. Whether the mention was taken.

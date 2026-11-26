@@ -64,7 +64,7 @@ final class RemoteDocumentController
     {
         $directory = rtrim(sys_get_temp_dir(), '/') . '/idno-test-remote-' . substr(hash('sha256', (string) realpath(dirname(__DIR__, 2))), 0, 12);
         if (!is_dir($directory)) {
-            @mkdir($directory, 0777, true);
+            @mkdir($directory, 0700, true);
         }
 
         return $directory;

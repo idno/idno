@@ -16,11 +16,13 @@ final class WebmentionLegacyPageTest extends PrivateSiteTestCase
 {
     private string $record = '';
 
+    private string $cookie = '';
+
     protected function setUp(): void
     {
         $this->record = (string) tempnam(sys_get_temp_dir(), 'idno-mention-record');
         parent::setUp();
-        $this->registerUser('ada');
+        $this->cookie = $this->registerUser('ada');
     }
 
     protected function tearDown(): void
@@ -60,6 +62,35 @@ final class WebmentionLegacyPageTest extends PrivateSiteTestCase
         $this->assertSame('http://93.184.216.34/legacy-source', $recorded[0]['source']);
         $this->assertSame($this->baseUrl() . '_test/mentionable/abc/', $recorded[0]['target'], 'the fragment is taken off');
         $this->assertSame(200, $recorded[0]['response']['response']);
+    }
+
+    private function token(): string
+    {
+        $answer = $this->site()->request('GET', 'service/security/csrftoken/', ['Cookie' => $this->cookie, 'X-Requested-With' => 'XMLHttpRequest']);
+        $this->assertSame(200, $answer->status);
+
+        return (string) json_decode($answer->body, true)['token'];
+    }
+
+    /**
+     * The endpoint takes a request that carries a member's cookie as nobody's, and leaves the browser's session as it was: the same session, the same user and the same
+     * form token afterwards, and no cookie set.
+     */
+    public function testABrowsersSessionSurvivesAPostToTheEndpoint(): void
+    {
+        $token = $this->token();
+        $target = $this->baseUrl() . '_test/mentionable/abc/';
+        $html = '<!doctype html><html><body><div class="h-entry"><a class="u-url" href="http://93.184.216.34/session-source">permalink</a><a class="u-in-reply-to" href="' . $target . '">a page</a></div></body></html>';
+        $this->assertSame(204, $this->site()->request('PUT', '_test/remote/session-source', ['Content-Type' => 'text/html'], $html)->status);
+
+        $answer = $this->site()->request('POST', 'webmention/', ['Cookie' => $this->cookie], ['source' => 'http://93.184.216.34/session-source', 'target' => $target]);
+
+        $this->assertSame(202, $answer->status);
+        $this->assertSame([], $answer->lines('Set-Cookie'), 'no session cookie is set, replaced or expired');
+        $this->assertSame($token, $this->token(), 'the form token is the one it was');
+        $this->assertSame(200, $this->site()->request('GET', 'admin/', ['Cookie' => $this->cookie])->status, 'the administrator is still signed in');
+        $recorded = json_decode(trim((string) file_get_contents($this->record)), true);
+        $this->assertSame(['abc'], $recorded['arguments']);
     }
 
     public function testBuildingTheLegacyPageSendsNoHeaderTwice(): void

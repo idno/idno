@@ -103,6 +103,16 @@ final class ProfilePages implements ReceivesWebmentions
         return $route === 'idno_profile';
     }
 
+    public function accepts(string $route, array $arguments): bool
+    {
+        $handle = (string) ($arguments[0] ?? '');
+        if (!$this->receivesFor($route) || in_array($handle, ['', '0'], true)) {
+            return false;
+        }
+
+        return $this->profiles->byHandle($handle) !== null;
+    }
+
     /**
      * A webmention to a profile means someone mentioned the account. The mention is accepted and NOT stored (a profile has nowhere to keep one): the
      * answer is true for an account that exists, and a mention whose source did not answer 200 (a deleted page, say) is accepted with nothing done. False

@@ -86,8 +86,8 @@ EOD;
     }
 
     /**
-     * The endpoint as the site builds it, with the real resolver and the real check of what is this site's own address: a receiver is never reached by
-     * these cases (a self-mention is refused before the source is looked at).
+     * The endpoint as the site builds it, with the real resolver and the real check of what is this site's own address: the permalink's receiver says whether the target names a post (a
+     * self-mention is refused before the source is looked at).
      */
     private function endpoint(): \Idno\Http\Webmention\WebmentionEndpoint
     {
@@ -101,7 +101,7 @@ EOD;
         return new \Idno\Http\Webmention\WebmentionEndpoint(
             Idno::container()->get(\Idno\Http\Webmention\WebmentionTargets::class),
             Idno::container()->get(\Idno\Http\Webmention\WebmentionSources::class),
-            new \Symfony\Component\DependencyInjection\ServiceLocator([]),
+            new \Symfony\Component\DependencyInjection\ServiceLocator(['Idno\\Pages\\Entity\\View' => static fn () => Idno::container()->get(\Idno\Http\Controller\Permalink\PermalinkPages::class)]),
             Idno::container()->get(\Idno\Http\Page\PageRenderer::class),
             $translation
         );
@@ -141,10 +141,16 @@ EOD;
      */
     function testSelfWebmentionTrailingSlash()
     {
-        $base = Idno::site()->config()->getURL();
+        $entity = new GenericDataItem();
+        $entity->setDatatype('webmention-test');
+        $entity->setOwner($this->user());
+        $entity->title = "Post that mentions itself with a slash";
+        $entity->publish();
+        $this->toDelete[] = $entity;
+        $url = $entity->getURL();
 
-        $this->assertSame([400, 'target_not_supported'], $this->answerTo($base . '2024/my-post', $base . '2024/my-post/'));
-        $this->assertSame([400, 'target_not_supported'], $this->answerTo($base . '2024/my-post/', $base . '2024/my-post'));
+        $this->assertSame([400, 'target_not_supported'], $this->answerTo($url, $url . '/'));
+        $this->assertSame([400, 'target_not_supported'], $this->answerTo($url . '/', $url));
     }
 
     /**
@@ -153,9 +159,25 @@ EOD;
      */
     function testDifferentPostsPassSelfCheck()
     {
+        $entity = new GenericDataItem();
+        $entity->setDatatype('webmention-test');
+        $entity->setOwner($this->user());
+        $entity->title = "Original post for the self check";
+        $entity->publish();
+        $this->toDelete[] = $entity;
         $base = Idno::site()->config()->getURL();
 
-        $this->assertSame([400, 'source_not_allowed'], $this->answerTo($base . '2024/reply-post', $base . '2024/original-post'));
+        $this->assertSame([400, 'source_not_allowed'], $this->answerTo($base . '2024/reply-post', $entity->getURL()));
+    }
+
+    /**
+     * Test that a target that names no post is refused as one that is not there, whatever the source.
+     */
+    function testATargetThatNamesNoPostIsNotFound()
+    {
+        $base = Idno::site()->config()->getURL();
+
+        $this->assertSame([400, 'target_not_found'], $this->answerTo($base . '2024/reply-post', $base . '2024/original-post'));
     }
 
     /**

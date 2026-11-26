@@ -257,6 +257,17 @@ final class ProfilePagesTest extends TestCase
         ], $this->logger->lines);
     }
 
+    public function testAProfileAcceptsAMentionOnlyForAnAccountThatExists(): void
+    {
+        $this->assertTrue($this->pages->accepts('idno_profile', ['ada']));
+        $this->assertFalse($this->pages->accepts('idno_profile', []));
+        $this->assertFalse($this->pages->accepts('idno_profile', ['']));
+        $this->assertFalse($this->pages->accepts('idno_home', ['ada']));
+
+        $this->site->user = null;
+        $this->assertFalse($this->pages->accepts('idno_profile', ['nobody']));
+    }
+
     public function testAMentionWithNoArgumentsOrForAHandleNobodyHasIsNotTaken(): void
     {
         $this->assertFalse($this->pages->receiveWebmention('idno_profile', [], $this->mention()));

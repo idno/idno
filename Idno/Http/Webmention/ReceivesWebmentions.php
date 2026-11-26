@@ -20,6 +20,15 @@ interface ReceivesWebmentions
     public function receivesFor(string $route): bool;
 
     /**
+     * Whether a mention aimed at this route with these arguments names something that is there: a post, a shortlink's post or an account that exists, and that
+     * a visitor may see, since the sender is nobody. It is asked BEFORE the sender's page is fetched, so a mention of an address that names nothing costs no
+     * request. What is not there and what a visitor may not see (a private post, a draft, a deleted one) are one answer: false, with nothing logged.
+     *
+     * @param list<string> $arguments the route's parameters, in order
+     */
+    public function accepts(string $route, array $arguments): bool;
+
+    /**
      * Takes the mention: whether the page accepted it. A route the receiver does not take is refused.
      *
      * @param list<string> $arguments the route's parameters, in order

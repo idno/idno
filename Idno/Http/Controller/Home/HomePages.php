@@ -199,6 +199,20 @@ final class HomePages implements ReceivesWebmentions
     }
 
     /**
+     * The home page of a single-user site takes a mention where the profile of its owner does; a multi-user site's home page has nothing that receives one.
+     * Nothing is logged: this is asked before the source is fetched.
+     */
+    public function accepts(string $route, array $arguments): bool
+    {
+        if (!$this->receivesFor($route) || !$this->stream->isSingleUser()) {
+            return false;
+        }
+        $user = $this->stream->firstAdministrator();
+
+        return $user !== null && $this->receivers->get('Idno\Pages\User\View')->accepts('idno_profile', [(string) $user->getHandle()]);
+    }
+
+    /**
      * A webmention to the home page means someone mentioned the site's root. On a single-user site the root is its owner's profile, so the
      * mention is passed on to the page of the profile; a multi-user site has no page there to take it. A route that takes no mention is refused.
      */

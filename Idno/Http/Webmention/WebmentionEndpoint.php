@@ -82,6 +82,14 @@ final class WebmentionEndpoint
 
             return $this->refusal('target_not_found', 'The target page ' . $target . ' does not exist.');
         }
+        // A page of the site that takes mentions, and a target that names something there (a visitor may see): a mention of an address that names nothing, or
+        // something a visitor may not see, is refused as one answer, before the source is looked at (a private post, a draft, a deleted post and a missing one are the same)
+        $receiver = $resolved->isLegacy() ? null : ($this->receivers->has($resolved->page) ? $this->receivers->get($resolved->page) : null);
+        if (!$resolved->isLegacy() && (!$receiver instanceof ReceivesWebmentions || !$receiver->receivesFor($resolved->route) || !$receiver->accepts($resolved->route, $resolved->arguments))) {
+            $this->sources->log('error', 'Could not find handler for ' . self::line($target));
+
+            return $this->refusal('target_not_found', 'The target page ' . $target . ' does not exist.');
+        }
         if ($this->mentionsItself($source, $target)) {
             return $this->refusal('target_not_supported', 'A page can\'t webmention itself.');
         }
@@ -104,20 +112,9 @@ final class WebmentionEndpoint
         }
 
         $mention = new ReceivedWebmention($source, $target, $answer, $this->sources->parse($content, $source));
-        if ($resolved->isLegacy()) {
-            $taken = $resolved->receiveLegacy($mention);
-        } else {
-            // (the resolver finds only pages that have a receiver for their route: a target with none is one that does not exist)
-            $receiver = $this->receivers->has($resolved->page) ? $this->receivers->get($resolved->page) : null;
-            if (!$receiver instanceof ReceivesWebmentions || !$receiver->receivesFor($resolved->route)) {
-                $this->sources->log('error', 'Could not find a receiver for ' . self::line($target));
+        $taken = $receiver === null ? $resolved->receiveLegacy($mention) : $receiver->receiveWebmention($resolved->route, $resolved->arguments, $mention);
 
-                return $this->refusal('target_not_found', 'The target page ' . $target . ' does not exist.');
-            }
-            $taken = $receiver->receiveWebmention($resolved->route, $resolved->arguments, $mention);
-        }
-
-        return $taken ? new Response('', 202) : $this->refusal('source_not_supported', 'Could not interpret source as a comment.');
+        return $taken ? new Response('', 202, ['X-Content-Type-Options' => 'nosniff']) : $this->refusal('source_not_supported', 'Could not interpret source as a comment.');
     }
 
     /**
@@ -136,7 +133,8 @@ final class WebmentionEndpoint
 
     private function refusal(string $error, string $text): Response
     {
-        return new Response((string) json_encode(['error' => $error, 'error_text' => $text]), 400, ['Content-Type' => 'application/json']);
+        // (what the sender wrote is in the text: nothing of it is markup, in a browser that is made to show the answer)
+        return new Response((string) json_encode(['error' => $error, 'error_text' => $text], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT), 400, ['Content-Type' => 'application/json', 'X-Content-Type-Options' => 'nosniff']);
     }
 
     /**

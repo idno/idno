@@ -316,6 +316,23 @@ final class PermalinkPagesTest extends TestCase
         $this->assertSame([], $this->site->calls);
     }
 
+    public function testAPermalinkAcceptsAMentionOnlyForAPostAVisitorMayRead(): void
+    {
+        $this->assertFalse($this->pages->accepts('idno_permalink', ['a-note']), 'no such post');
+
+        $this->site->entity = $this->entity();
+        $this->assertTrue($this->pages->accepts('idno_permalink', ['a-note']));
+
+        $this->site->readable = false;
+        $this->assertFalse($this->pages->accepts('idno_permalink', ['a-note']), 'a post the viewer may not read is answered as one that is not there');
+
+        $this->site->readable = true;
+        foreach ([[], ['0'], ['']] as $arguments) {
+            $this->assertFalse($this->pages->accepts('idno_permalink', $arguments));
+        }
+        $this->assertFalse($this->pages->accepts('idno_feed', ['a-note']));
+    }
+
     public function testAMentionIsAddedToThePost(): void
     {
         $this->site->entity = $this->entity();

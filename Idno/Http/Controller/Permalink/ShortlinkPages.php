@@ -49,6 +49,16 @@ final class ShortlinkPages implements ReceivesWebmentions
         return $route === 'idno_shortlink';
     }
 
+    public function accepts(string $route, array $arguments): bool
+    {
+        if (!$this->receivesFor($route)) {
+            return false;
+        }
+        $entity = $this->entityOf((string) ($arguments[0] ?? ''));
+
+        return $entity !== null && $this->permalinks->canRead($entity);
+    }
+
     /**
      * A webmention to a shortlink: added to the post's annotations. A code no post has takes nothing. Whether the mention was taken.
      */

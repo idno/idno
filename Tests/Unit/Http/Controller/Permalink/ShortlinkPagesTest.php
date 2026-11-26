@@ -141,6 +141,23 @@ final class ShortlinkPagesTest extends TestCase
         $this->assertSame([], $this->asked);
     }
 
+    public function testAShortlinkAcceptsAMentionOnlyForACodeThatNamesAPostAVisitorMayRead(): void
+    {
+        $this->assertFalse($this->pages->accepts('idno_shortlink', ['nosuch']));
+
+        $this->entity = $this->entity();
+        $this->assertTrue($this->pages->accepts('idno_shortlink', ['abc123']));
+
+        $this->readable = false;
+        $this->assertFalse($this->pages->accepts('idno_shortlink', ['abc123']), 'a post the viewer may not read is answered as one that is not there');
+
+        $this->readable = true;
+        foreach ([[], ['0'], ['']] as $arguments) {
+            $this->assertFalse($this->pages->accepts('idno_shortlink', $arguments));
+        }
+        $this->assertFalse($this->pages->accepts('idno_permalink', ['abc123']));
+    }
+
     public function testAWebmentionToAShortlinkIsAddedToThePost(): void
     {
         $this->entity = $this->entity();

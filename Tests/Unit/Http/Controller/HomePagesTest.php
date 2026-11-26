@@ -477,6 +477,35 @@ final class HomePagesTest extends TestCase
         $this->assertSame([], $this->logger->lines);
     }
 
+    public function testTheHomePageAcceptsAMentionOnlyWhereTheProfileOfItsOwnerDoes(): void
+    {
+        $this->stream->single = true;
+        $this->stream->administrator = $this->account();
+        $this->profileReceiver->exists = true;
+        $this->assertTrue($this->pages->accepts('idno_home', []));
+        $this->assertTrue($this->pages->accepts('idno_content', ['all']));
+        $this->assertSame([['idno_profile', ['ada']], ['idno_profile', ['ada']]], $this->profileReceiver->asked, 'the profile of the owner is what is asked');
+
+        $this->profileReceiver->exists = false;
+        $this->assertFalse($this->pages->accepts('idno_home', []), 'the profile says there is none');
+
+        $this->profileReceiver->exists = true;
+        $this->assertFalse($this->pages->accepts('idno_tag', ['books']));
+    }
+
+    public function testTheHomePageOfAMultiUserSiteOrOneWithNoAdministratorAcceptsNothing(): void
+    {
+        $this->profileReceiver->exists = true;
+        $this->stream->single = false;
+        $this->assertFalse($this->pages->accepts('idno_home', []), 'nothing receives a mention of a multi-user site\'s home page');
+
+        $this->stream->single = true;
+        $this->stream->administrator = null;
+        $this->assertFalse($this->pages->accepts('idno_home', []));
+        $this->assertSame([], $this->profileReceiver->asked);
+        $this->assertSame([], $this->logger->lines, 'asking logs nothing');
+    }
+
     public function testARootWebmentionOnASingleUserSiteGoesToTheProfilesReceiver(): void
     {
         $owner = $this->account();
@@ -715,8 +744,20 @@ final class ProfileReceiverDouble implements ReceivesWebmentions
 {
     public bool $accepts = false;
 
+    public bool $exists = false;
+
+    /** @var list<array{0: string, 1: list<string>}> */
+    public array $asked = [];
+
     /** @var list<array{0: string, 1: list<string>, 2: ReceivedWebmention}> */
     public array $received = [];
+
+    public function accepts(string $route, array $arguments): bool
+    {
+        $this->asked[] = [$route, $arguments];
+
+        return $this->exists;
+    }
 
     public function receivesFor(string $route): bool
     {
