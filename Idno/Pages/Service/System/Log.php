@@ -9,11 +9,16 @@ namespace Idno\Pages\Service\System {
         {
 
             $this->xhrGatekeeper();
+            // Only a signed-in member writes to the site's log
+            $this->gatekeeper();
 
+            // What the client sent is text: one line, no control characters, a bounded length
             $message = $this->getInput('message');
+            $message = is_string($message) ? $message : '';
             $level = $this->getInput('level', 'INFO');
+            $level = is_string($level) ? $level : 'INFO';
 
-            $message = 'Client Runtime: ' . $message;
+            $message = 'Client Runtime: ' . substr((string) preg_replace('/[\x00-\x1F\x7F]/', '?', $message), 0, 500);
 
             $stats = \Idno\Core\Idno::site()->statistics();
 
@@ -29,12 +34,7 @@ namespace Idno\Pages\Service\System {
                         $stats->increment("javascript.error");
                     }
 
-                    // Since this is likely to be unattended, we should also log an oops.
-                    try {
-                        \Idno\Core\Logging::oopsAlert($message, 'Javascript Error');
-                    } catch (Exception $ex) {
-                        error_log($ex->getMessage());
-                    }
+                    // No mail: the text is the client's, and anyone signed in could send the administrators any number of them
                     break;
 
                 case 'WARN':
