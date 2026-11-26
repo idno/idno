@@ -53,9 +53,10 @@ final class WebmentionAnnotationKeysTest extends PermalinkSiteCase
 
     /**
      * Sends the post a webmention through the endpoint from the source page `$source` (a name, fetched from `SOURCES`), whose h-entry declares `$declared` as its own
-     * address, for the kind, written by an author whose h-card names `$author`. Returns whether the endpoint took it (202).
+     * address, for the kind, written by an author whose h-card names `$author`. Returns whether the endpoint took it (202). `$query` is added to the source's
+     * address as it is sent (the page is the same).
      */
-    private function mention(string $kind, string $source, string $declared, string $author, string $text, int $status = 200): bool
+    private function mention(string $kind, string $source, string $declared, string $author, string $text, int $status = 200, string $query = ''): bool
     {
         $class = self::KINDS[$kind];
         $target = $this->baseUrl() . ltrim($this->note(), '/');
@@ -64,7 +65,7 @@ final class WebmentionAnnotationKeysTest extends PermalinkSiteCase
             . '<div class="p-author h-card"><a class="p-name u-url" href="' . $author . '">Mallory</a></div>' . $verb . '<div class="e-content">' . $text . '</div></div></body></html>';
         $this->assertSame(204, $this->site()->request('PUT', '_test/remote/' . $source . '?status=' . $status, ['Content-Type' => 'text/html'], $html)->status);
 
-        return $this->site()->request('POST', 'webmention/', [], ['source' => self::SOURCES . $source, 'target' => $target])->status === 202;
+        return $this->site()->request('POST', 'webmention/', [], ['source' => self::SOURCES . $source . $query, 'target' => $target])->status === 202;
     }
 
     /** @return array{0: string, 1: array<string, mixed>}|null the key and the annotation whose permalink is the address */
@@ -206,5 +207,50 @@ final class WebmentionAnnotationKeysTest extends PermalinkSiteCase
         $key = array_key_first($stored['reply']);
         $this->assertTrue($this->mention('reply', 'gone-forged', $key, 'https://remote.example/', '', 410));
         $this->assertCount(1, $this->stored()['reply']);
+    }
+
+    /**
+     * Bridgy's mentions (a like, a share or an RSVP sent by its server) are known by their source and the address they carry, which is the one
+     * place the address is rewritten before it is judged: a source that says it is from Bridgy still cannot declare the address of an annotation made here.
+     *
+     * @dataProvider bridgyKinds
+     */
+    public function testASourceThatSaysItIsBridgyStillCannotDeclareTheAddressOfAMembersAnnotation(string $kind): void
+    {
+        $this->carolWrites($this->note(), 'like', 'Carol likes this herself.');
+        $before = $this->stored();
+        $key = (string) array_key_first($before['like']);
+        $source = $kind . '-bridgy';
+
+        $this->assertTrue($this->mention($kind, $source, $key, $this->carolsUrl(), 'Bridgy says so.', 200, '?from=https://brid-gy.appspot.com/'));
+        $after = $this->stored();
+
+        $this->assertSame($before['like'][$key], $after['like'][$key], 'the member\'s like is byte-identical');
+        $mine = $this->byPermalink($after, self::SOURCES . $source . '?from=https://brid-gy.appspot.com/');
+        $this->assertNotNull($mine, 'the mention is stored under its source');
+        $this->assertFalse($mine[1]['made_here'] ?? null);
+    }
+
+    public function testTheAddressOfABridgyMentionCarriesWhereItCameFrom(): void
+    {
+        $this->note();
+        $query = '?from=https://brid-gy.appspot.com/';
+
+        $this->assertTrue($this->mention('like', 'like-bridgy-known', 'https://remote.example/liked-by', 'https://remote.example/', '', 200, $query));
+
+        $found = null;
+        foreach ($this->stored()['like'] ?? [] as $annotation) {
+            if (str_starts_with((string) ($annotation['permalink'] ?? ''), 'https://remote.example/liked-by')) {
+                $found = $annotation['permalink'];
+            }
+        }
+        $this->assertNotNull($found, 'the page\'s own address is kept');
+        $this->assertStringContainsString('known_from=', (string) $found, 'with the source Bridgy sent it from, which keeps its likes apart');
+    }
+
+    /** @return array<string, array{string}> */
+    public static function bridgyKinds(): array
+    {
+        return ['like' => ['like'], 'share' => ['share'], 'rsvp' => ['rsvp']];
     }
 }

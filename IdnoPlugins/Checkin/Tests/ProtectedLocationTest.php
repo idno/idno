@@ -30,7 +30,7 @@ final class ProtectedLocationTest extends PrivateSiteTestCase
     /** @var array<string, string> the cookies of the people who read: owner, other (a member) and admin */
     private static array $cookies = [];
 
-    /** @var array<string, string> the check-ins: protected, second, open, older (path of the permalink) */
+    /** @var array<string, string> the check-ins: protected, second, open, edge (a little less than a day old), older (path of the permalink) */
     private static array $paths = [];
 
     private static string $place = '';
@@ -59,6 +59,7 @@ final class ProtectedLocationTest extends PrivateSiteTestCase
         self::$paths['protected'] = $this->checkIn([]);
         self::$paths['second'] = $this->checkIn(['placename' => 'Another ' . self::$place]);
         self::$paths['open'] = $this->checkIn(['placename' => self::$openPlace, 'anonymity' => ''] + $this->openPlace());
+        self::$paths['edge'] = $this->checkIn(['placename' => 'Edge ' . self::$place, 'created' => date('c', time() - 86400 + 600)]);
         self::$paths['older'] = $this->checkIn(['placename' => 'Older ' . self::$openPlace, 'created' => date('c', time() - 86400 - 600)] + $this->openPlace());
     }
 
@@ -210,6 +211,45 @@ final class ProtectedLocationTest extends PrivateSiteTestCase
             $positions[$object['latitude'] . ',' . $object['longitude']] = true;
         }
         $this->assertCount(1, $positions, 'asking again gives the same position: ' . implode(' ', array_keys($positions)));
+    }
+
+    /**
+     * The position is the stored one rounded to two decimal places, in every form that gives one: not cut to four places (51.7523), which would
+     * tell a visitor a house.
+     */
+    public function testAVisitorsPositionIsRoundedToTwoDecimalPlacesInEveryFormThatGivesOne(): void
+    {
+        $path = self::$paths['protected'];
+
+        $object = $this->get($path . '?_t=json')->json()['object'];
+        $this->assertSame('51.75', $object['latitude']);
+        $this->assertSame('-1.26', $object['longitude']);
+
+        $rss = $this->get($path . '?_t=rss')->body;
+        $this->assertStringContainsString('51.75', $rss);
+        $this->assertStringContainsString('-1.26', $rss);
+
+        $this->assertStringContainsString('-1.26,51.75', $this->get($path . '?_t=kml')->body);
+        $this->assertStringContainsString('setView([51.75, -1.26], 16)', $this->get($path)->body);
+
+        foreach (['', '?_t=rss', '?_t=kml', '?_t=json', '?_t=jsonfeed', '?_t=markdown'] as $form) {
+            $body = $this->get($path . $form)->body;
+            $this->assertStringNotContainsString('51.7523', $body, $path . $form . ' is not cut to four places');
+            $this->assertStringNotContainsString('1.2577', $body, $path . $form . ' is not cut to four places');
+        }
+    }
+
+    /**
+     * The 24 hours' edge on the inside: a check-in made a little less than a day ago is still protected.
+     */
+    public function testACheckinMadeJustLessThanADayAgoIsStillProtected(): void
+    {
+        $path = self::$paths['edge'];
+
+        $answer = $this->get($path . '?_t=json');
+        $this->assertSame(200, $answer->status);
+        $this->assertHidesThePlace($answer->body, $path . ' made 23 hours 50 minutes ago');
+        $this->assertStringNotContainsString('Edge', $answer->body);
     }
 
     public function testTheMapAndTheMicroformatsOfAVisitorHoldNumbersAndNoPlace(): void

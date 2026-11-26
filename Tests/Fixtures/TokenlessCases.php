@@ -17,7 +17,7 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
  * Test-environment only: what the pages that take a request with no form token (`SitePageFixtureController::tokenless()` and the shell
  * `FixtureTokenlessShell`, through `FixtureShellPages::receive()`) answer for each `case` of the request, so that the controller's path and
  * the shell's are held to the same answers: who made the request as the legacy session says (the default, JSON); a drawn page in the shell that
- * prints the form token (`draw`) and adds a session message of its own (`message`); the 500 (`throw`), 403 (`denied`) and 404 (`notfound`) pages;
+ * prints the form token (`draw`) and adds a session message of its own (`message`, and `quietmessage`, which does not draw the page); the 500 (`throw`), 403 (`denied`) and 404 (`notfound`) pages;
  * and a redirect.
  */
 final class TokenlessCases
@@ -30,6 +30,11 @@ final class TokenlessCases
         $session = Idno::site()->session();
         $token = Idno::container()->get(FormToken::class)->value();
         switch ((string) $page->input('case', '')) {
+            case 'quietmessage':
+                // (answers without drawing: nothing takes the message from the session, so a session that were written back would keep it)
+                $session->addErrorMessage(self::MESSAGE);
+
+                return new JsonResponse(['quiet' => true]);
             case 'message':
                 $session->addErrorMessage(self::MESSAGE);
                 // no break: and draws it

@@ -739,9 +739,15 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
             'a check-in with no coordinates' => ['placename' => 'Nowhere', 'body' => 'No map'],
             'a check-in with a hostile place' => ['placename' => '"><script>alert(1)</script>', 'lat' => 1.5, 'long' => 2.5, 'body' => '<script>alert(2)</script>'],
             'a check-in with hostile coordinates' => ['placename' => 'Odd', 'lat' => '1);alert(1', 'long' => '2);alert(2'],
+            // (made long ago: the protection of its location is over, so the place is drawn)
             'an anonymous check-in' => ['placename' => 'Hidden', 'lat' => 10.0, 'long' => 20.0, 'anonymity' => 'Yes'],
+            // (not saved yet, so made now: the place is not drawn, and the position is the inexact one)
+            'a check-in with its location protected' => ['placename' => 'Hidden now', 'address' => '2 Secret Lane', 'lat' => 10.012345, 'long' => 20.067891, 'anonymity' => 'Yes', 'body' => 'Somewhere'],
         ] as $label => $fields) {
             $entity = $post(new \IdnoPlugins\Checkin\Checkin(), $fields);
+            if ($label === 'a check-in with its location protected') {
+                $entity->created = null;
+            }
             $entity->_id = '00000000-0000-4000-8000-0000000000aa';
             $each($label, 'entity/Checkin', $entity);
         }

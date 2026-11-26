@@ -17,7 +17,10 @@ final class AccountEmailPrivateTest extends RenderedSiteTestCase
 
     private const PUBLIC_ADDRESS = 'bob.contact@example.org';
 
-    /** The viewers: name => the handle that is logged in (null: a visitor). */
+    /**
+     * The viewers: name => the handle that is logged in (null: a visitor). Ada is the site's administrator: on her own pages she is the owner, and on
+     * Bob's (his profile, his post) she is an administrator who is not the owner, which is what the targets of the tests below make her.
+     */
     private const VIEWERS = ['visitor' => null, 'member' => 'bob', 'owner' => 'ada', 'admin' => 'ada'];
 
     protected function seedSharedSite(): void
@@ -71,7 +74,9 @@ final class AccountEmailPrivateTest extends RenderedSiteTestCase
                     $asked++;
                     foreach (['ada@example.com', 'bob@example.com', 'carol@example.com'] as $address) {
                         $this->assertStringNotContainsStringIgnoringCase($address, $answer->body, $viewer . ' asks ' . $target . ' as ' . $form);
-                        $this->assertStringNotContainsStringIgnoringCase(str_replace('@', '%40', $address), $answer->body, $viewer . ' asks ' . $target . ' as ' . $form);
+                        foreach (['%40', '&#64;', '&#x40;', '&commat;'] as $at) {
+                            $this->assertStringNotContainsStringIgnoringCase(str_replace('@', $at, $address), $answer->body, $viewer . ' asks ' . $target . ' as ' . $form . ' (spelled ' . $at . ')');
+                        }
                     }
                 }
             }

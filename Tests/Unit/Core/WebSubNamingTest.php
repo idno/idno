@@ -25,14 +25,11 @@ final class WebSubNamingTest extends TestCase
         'Tests/Unit/Core/WebSubNamingTest.php' => 'this test',
     ];
 
-    /** Names given out or stored before the change, which keep their spelling wherever they appear, and why. */
+    /** Names given out or stored before the change, which keep their spelling wherever they appear (each a pattern that ends where the name does), and why. */
     private const KEPT = [
-        'pubsub/callback' => 'the callback address: hubs hold it for every subscription already made',
-        'pubsub_pending' => 'a field stored on members: no data is migrated',
-        'pubsub_self' => 'a field stored on members: no data is migrated',
-        'pubsub_hub' => 'a field stored on members: no data is migrated',
-        'pubsub_secrets' => 'a field stored on members: no data is migrated',
-        'page-pubsub' => 'the body classes of a page are made from its address, and the callback page\'s address is kept',
+        '~pubsub/callback(?![A-Za-z0-9_])~i' => 'the callback address: hubs hold it for every subscription already made',
+        '~pubsub_(?:pending|self|hub|secrets)(?![A-Za-z0-9_])~i' => 'the fields stored on members: no data is migrated',
+        '~page-pubsub(?![A-Za-z0-9_])~i' => 'the body classes of a page are made from its address, and the callback page\'s address is kept',
     ];
 
     /** The one historical mention, which says what the protocol used to be called. */
@@ -63,12 +60,17 @@ final class WebSubNamingTest extends TestCase
         return $status === 0 ? $output : [];
     }
 
+    private static function withoutKeptNames(string $text): string
+    {
+        return (string) preg_replace(array_keys(self::KEPT), '', $text);
+    }
+
     /** @return list<string> the lines of a text that hold an earlier name, as "line number: what was found" */
     public static function findings(string $text): array
     {
         $found = [];
         foreach (explode("\n", $text) as $number => $line) {
-            $line = str_ireplace(array_merge([self::HISTORY], array_keys(self::KEPT)), '', $line);
+            $line = self::withoutKeptNames(str_ireplace(self::HISTORY, '', $line));
             foreach (self::EARLIER_NAMES as $what => $pattern) {
                 if (preg_match($pattern, $line, $match)) {
                     $found[] = ($number + 1) . ': ' . $what . ' ("' . $match[0] . '")';
@@ -92,7 +94,7 @@ final class WebSubNamingTest extends TestCase
             if (isset(self::MAY_NAME_IT[$file]) || preg_match(self::SKIPPED, $file)) {
                 continue;
             }
-            if (preg_match('/pubsub/i', str_ireplace(array_keys(self::KEPT), '', $file))) {
+            if (preg_match('/pubsub/i', self::withoutKeptNames($file))) {
                 $problems[] = $file . ': the name of the file';
             }
             $path = self::root() . '/' . $file;
@@ -149,6 +151,11 @@ final class WebSubNamingTest extends TestCase
         $this->assertCount(1, self::findings('<!-- Pub' . 'subhubbub -->'));
         $this->assertCount(1, self::findings('idno_pages_pub' . 'subhubbub_callback'));
         $this->assertSame(['2: the name ("Pub' . 'sub")'], self::findings("fine\nPub" . 'sub: ping'));
+        // a kept spelling is kept only as it is: the earlier name that merely begins with one is still found
+        $this->assertCount(1, self::findings('<body class="page-pub' . 'subhubbub-callback">'));
+        $this->assertCount(1, self::findings('$user->pub' . 'sub_hubbub = 1;'));
+        $this->assertCount(1, self::findings("'pub" . "sub/callbacks/'"));
+        $this->assertCount(1, self::findings('$user->pub' . 'sub_pending_list'));
     }
 
     public function testTheScanLeavesOtherThingsAlone(): void

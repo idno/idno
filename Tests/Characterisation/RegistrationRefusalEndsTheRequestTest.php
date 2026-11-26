@@ -37,4 +37,44 @@ final class RegistrationRefusalEndsTheRequestTest extends PrivateSiteTestCase
             $this->assertFalse($found, ($script ? 'a script\'s request' : 'an ordinary request') . ' registered nobody');
         }
     }
+
+    /**
+     * An invitation is for one address and one code: a wrong code, and the code of another address's invitation, register nobody either (a valid invitation
+     * does, so that the refusal is the invitation's and not the form's).
+     */
+    public function testAnInvitationForAnotherAddressOrWithAnotherCodeRegistersNobody(): void
+    {
+        $this->addUser('ada', 'correct-horse-battery-9', null, true);
+        $this->runInSite(<<<'PHP'
+            $config = \Idno\Core\Idno::site()->config();
+            $config->open_registration = false;
+            $config->save();
+            foreach (['invited@example.com' => 'aaaaaaaaaaaaaaaa', 'other@example.com' => 'bbbbbbbbbbbbbbbb'] as $email => $code) {
+                $invitation = new \Idno\Entities\Invitation();
+                $invitation->email = $email;
+                $invitation->code = $code;
+                $invitation->save(true);
+            }
+            return true;
+        PHP);
+        $cookie = self::sessionCookie($this->site()->request('GET', '/'));
+        $token = $this->site()->request('GET', '/service/security/csrftoken/', ['Cookie' => $cookie] + self::XHR)->json()['token'];
+
+        $attempts = [
+            'a wrong code' => ['wrong1', 'invited@example.com', 'cccccccccccccccc'],
+            'the code of another address' => ['wrong2', 'invited@example.com', 'bbbbbbbbbbbbbbbb'],
+            'an address that has no invitation' => ['wrong3', 'nobody@example.com', 'aaaaaaaaaaaaaaaa'],
+        ];
+        foreach ($attempts as $label => [$handle, $email, $code]) {
+            foreach ([false, true] as $script) {
+                $name = $handle . ($script ? 'x' : '');
+                $this->site()->request('POST', '/account/register', ['Cookie' => $cookie] + ($script ? self::XHR : []), ['name' => 'Eve', 'handle' => $name, 'email' => $email, 'code' => $code, 'password' => 'correct-horse-battery-9', 'password2' => 'correct-horse-battery-9', '__bTk' => $token]);
+                $found = $this->runInSite('return !empty(\Idno\Entities\User::getByHandle(' . $this->literal($name) . '));');
+                $this->assertFalse($found, $label . ($script ? ', by a script' : '') . ' registered nobody');
+            }
+        }
+
+        $this->site()->request('POST', '/account/register', ['Cookie' => $cookie], ['name' => 'Eve', 'handle' => 'invitedeve', 'email' => 'invited@example.com', 'code' => 'aaaaaaaaaaaaaaaa', 'password' => 'correct-horse-battery-9', 'password2' => 'correct-horse-battery-9', '__bTk' => $token]);
+        $this->assertTrue($this->runInSite('return !empty(\Idno\Entities\User::getByHandle("invitedeve"));'), 'the invited address with its own code does register');
+    }
 }

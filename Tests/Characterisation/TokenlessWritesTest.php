@@ -39,4 +39,28 @@ final class TokenlessWritesTest extends PrivateSiteTestCase
             }
         }
     }
+
+    /**
+     * The same refusal for a script's request: an XHR one, and one that asks for JSON. Neither falls through to the work of the page, and neither is reported.
+     */
+    public function testAScriptsPutOrDeleteWithNoTokenIsRefusedToo(): void
+    {
+        $cookie = $this->registerUser('ada');
+        $this->mailAlertsToAnAdministrator();
+        $note = (string) parse_url($this->publishStatus($cookie, 'A note a script writes to.'), PHP_URL_PATH);
+
+        foreach (['an XHR request' => ['X-Requested-With' => 'XMLHttpRequest'], 'a request for JSON' => ['Accept' => 'application/json']] as $kind => $extra) {
+            foreach (['a permalink' => $note, 'the home page' => '/', 'a legacy page' => '/_test/legacy-plain'] as $where => $path) {
+                foreach (['PUT', 'DELETE'] as $method) {
+                    $before = $this->logOffset();
+                    $answer = $this->site()->request($method, $path . ($kind === 'a request for JSON' ? '?_t=json' : ''), ['Cookie' => $cookie] + $extra);
+                    $label = $method . ' to ' . $where . ' as ' . $kind;
+                    $this->assertSame(403, $answer->status, $label . ' ' . substr($answer->body, 0, 300));
+                    $this->assertDoesNotMatchRegularExpression('/critical/i', $this->logSince($before), $label . ': nothing is reported');
+                    $this->assertSame([], $this->site()->request('GET', '_test/mail/log')->json(), $label . ': nobody is mailed');
+                }
+            }
+        }
+        $this->assertSame(200, $this->site()->request('GET', $note, ['Cookie' => $cookie])->status, 'and the note is still there');
+    }
 }

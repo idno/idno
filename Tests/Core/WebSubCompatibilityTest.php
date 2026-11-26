@@ -94,6 +94,36 @@ namespace Tests\Core {
             $this->assertSame([1, 2], $heard);
         }
 
+        public function testAListenerAddedUnderTheNewNameIsRemovedUnderTheEarlierOne()
+        {
+            $events   = new EventDispatcher();
+            $heard    = 0;
+            $listener = function (Event $event) use (&$heard) {
+                $heard++;
+            };
+            $events->addListener(WebSub::PING_EVENT, $listener);
+
+            $events->removeListener(self::OLD_EVENT, $listener);
+            $events->triggerEvent(WebSub::PING_EVENT, []);
+
+            $this->assertSame(0, $heard, 'the one listener is registered under the one name, which both spellings reach');
+        }
+
+        public function testAListenerAddedUnderTheEarlierNameIsRemovedUnderTheNewOne()
+        {
+            $events   = new EventDispatcher();
+            $heard    = 0;
+            $listener = function (Event $event) use (&$heard) {
+                $heard++;
+            };
+            $events->addListener(self::OLD_EVENT, $listener);
+
+            $events->removeListener(WebSub::PING_EVENT, $listener);
+            $events->triggerEvent(self::OLD_EVENT, []);
+
+            $this->assertSame(0, $heard);
+        }
+
         public function testListenerForBothNamesRunsOnce()
         {
             $events   = new EventDispatcher();

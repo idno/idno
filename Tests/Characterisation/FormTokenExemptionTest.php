@@ -170,7 +170,7 @@ final class FormTokenExemptionTest extends PrivateSiteTestCase
     }
 
     /** What each `case` of the fixture answers: the status (null: any below 400) for a POST. */
-    private const CASES = ['' => 200, 'draw' => 200, 'message' => 200, 'throw' => 500, 'denied' => 403, 'notfound' => 404, 'redirect' => null];
+    private const CASES = ['' => 200, 'draw' => 200, 'message' => 200, 'quietmessage' => 200, 'throw' => 500, 'denied' => 403, 'notfound' => 404, 'redirect' => null];
 
     private const BROWSERS_MESSAGE = 'A message to be shown once';
 

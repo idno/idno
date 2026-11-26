@@ -402,8 +402,8 @@ final class SitePageLifecycleTest extends PrivateSiteTestCase
 
     /**
      * A PUT (or any method but GET and POST) without the form token is an ordinary refusal: the site's 403 page, never reported as
-     * a failure (no critical line, so no alert mail to the administrator), so a stranger cannot make the site mail its owner. A legacy
-     * PUT threw, and was the reported 500 page. A POST without its token is not reported either: it is sent away, as before.
+     * a failure (no critical line, so no alert mail to the administrator), so a stranger cannot make the site mail its owner, as a legacy
+     * page refuses it. A POST without its token is not reported either: it is sent away.
      */
     public function testAPutNeedsTheFormTokenTooAndItsRefusalIsNotReported(): void
     {
