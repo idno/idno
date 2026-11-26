@@ -12,12 +12,23 @@ namespace Tests\Characterisation {
 
         public function testEndpointIsAdvertisedInBodyAndNotInLinkHeader(): void
         {
-            $base = $this->site()->baseUrl();
-            $r    = $this->site()->request('GET', '');
+            // The Link header advertises the endpoint only on a site that has a hub (a fresh site has one): the case here is a site with none, which the test
+            // sets up itself and puts back.
+            $config = \Idno\Core\Idno::site()->config();
+            $hub    = $config->hub;
+            $config->hub = '';
+            $config->save();
+            try {
+                $base = $this->site()->baseUrl();
+                $r    = $this->site()->request('GET', '');
 
-            $this->assertSame(200, $r->status);
-            $this->assertStringContainsString('<link href="' . $base . 'webmention/" rel="webmention"/>', $r->body);
-            $this->assertStringNotContainsString('rel="webmention"', (string)$r->header('Link'));
+                $this->assertSame(200, $r->status);
+                $this->assertStringContainsString('<link href="' . $base . 'webmention/" rel="webmention"/>', $r->body);
+                $this->assertStringNotContainsString('rel="webmention"', (string)$r->header('Link'));
+            } finally {
+                $config->hub = $hub;
+                $config->save();
+            }
         }
 
         public function testGetEndpointIs200AndServesHtmlPage(): void

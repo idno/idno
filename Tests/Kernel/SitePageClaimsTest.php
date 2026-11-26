@@ -278,6 +278,20 @@ final class SitePageClaimsTest extends TestCase
             '/event/([A-Za-z0-9\\-]+)/.*' => 'IdnoPlugins\Event: the address of an event',
             '/rsvp/([A-Za-z0-9\\-]+)/.*' => 'IdnoPlugins\Event: the address of an RSVP',
         ],
+        // (core registers `/actor/...` for the profile page too: in a site with the ActivityPub plugin enabled that plugin replaces the handler of the key in place, so
+        // the key is not the profile's there; it is listed so that a site without the plugin, which holds it, is not a violation either: see OPTIONAL_KNOWN_KEYS)
+        \Idno\Pages\User\View::class => [
+            '/actor/([^\\/]+)/?' => 'IdnoPlugins\ActivityPub replaces the handler of core\'s key for an actor address, in place, when it is enabled',
+        ],
+    ];
+
+    /**
+     * The known keys that a site need not hold, because the plugin that takes them is not always enabled.
+     *
+     * @var array<class-string, list<string>>
+     */
+    private const OPTIONAL_KNOWN_KEYS = [
+        \Idno\Pages\User\View::class => ['/actor/([^\\/]+)/?'],
     ];
 
     /**
@@ -340,6 +354,27 @@ final class SitePageClaimsTest extends TestCase
     }
 
     /**
+     * The known plugin registrations in the shape `routedViolations()` reads: class => [key as the table keys it => reason].
+     *
+     * @param array<class-string, array<string, string>> $known as `KNOWN_PLUGIN_KEYS` is written
+     *
+     * @return array<class-string, array<string, string>>
+     */
+    private static function knownTableKeys(array $known): array
+    {
+        $permalink = \Idno\Common\Entity::getPermalinkRoute();
+
+        return array_map(static function (array $keys) use ($permalink): array {
+            $mapped = [];
+            foreach ($keys as $key => $reason) {
+                $mapped[self::keyOf(str_replace('{permalink}', $permalink, $key))] = $reason;
+            }
+
+            return $mapped;
+        }, $known);
+    }
+
+    /**
      * The booted table with the fixture pages routed by the table registered as the fixtures register them: the real table, and the namers of the
      * fixtures in it, so the check runs on a table that has a page that names a routed action before any page of core does.
      *
@@ -384,14 +419,15 @@ final class SitePageClaimsTest extends TestCase
 
         $this->assertContains(\Tests\Fixtures\RoutedPlaceholder::class, $namers, 'the fixtures name routed actions, so the check runs on the real table with namers in it');
         $this->assertContains(\Tests\Fixtures\RoutedFixtureShell::class, $namers);
-        $this->assertSame([], self::routedViolations($table, $namers, self::tableKeys(self::ROUTED_KEYS) + $fixtures, self::tableKeys(array_map(static fn (array $keys): array => array_keys($keys), self::KNOWN_PLUGIN_KEYS))), 'the real table');
+        $this->assertSame([], self::routedViolations($table, $namers, self::tableKeys(self::ROUTED_KEYS) + $fixtures, self::knownTableKeys(self::KNOWN_PLUGIN_KEYS)), 'the real table');
     }
 
     public function testThePinnedKeysOfTheKeptShellsAreTheBootedTables(): void
     {
         $table = Idno::site()->routes();
         $required = self::tableKeys(self::ROUTED_KEYS);
-        $known = self::tableKeys(array_map(static fn (array $keys): array => array_keys($keys), self::KNOWN_PLUGIN_KEYS));
+        $known = self::knownTableKeys(self::KNOWN_PLUGIN_KEYS);
+        $optional = self::tableKeys(self::OPTIONAL_KNOWN_KEYS);
         $checked = 0;
         foreach ($required as $class => $keys) {
             if (str_contains($class, '\\Placeholder\\')) {
@@ -404,9 +440,35 @@ final class SitePageClaimsTest extends TestCase
                     $held[] = (string) $key;
                 }
             }
-            $this->assertEqualsCanonicalizing(array_merge($keys, $known[$class] ?? []), $held, $class . ': the keys core and the bundled plugins register it under');
+            // every key core registers for it is held, and every other key it is held under is a listed plugin registration; the listed ones that are held
+            // are exactly the ones the enabled plugins register (those that need a plugin that is not always enabled may be absent)
+            $expected = array_merge($keys, array_diff(array_keys($known[$class] ?? []), $optional[$class] ?? []));
+            $this->assertEqualsCanonicalizing($expected, array_values(array_diff($held, $optional[$class] ?? [])), $class . ': the keys core and the bundled plugins register it under');
+            $this->assertSame([], array_values(array_diff($held, $keys, array_keys($known[$class] ?? []))), $class . ': nothing else');
         }
         $this->assertSame(2, $checked, 'the two pages core registers under their own classes');
+    }
+
+    /**
+     * A kept shell that names a routed action, as the permalink page will: core registers it under its snapshot keys and the bundled plugins under
+     * patterns of their own, which `KNOWN_PLUGIN_KEYS` lists (in the shape the constant is written, passed through the helper the real-table test uses).
+     */
+    public function testAKeptShellWithListedPluginRegistrationsPassesAndAnUnlistedOneFails(): void
+    {
+        $shell = \Tests\Fixtures\RoutedFixtureShell::class;
+        $required = self::tableKeys([$shell => ['/core/:id/?', '{permalink}/?']]);
+        $listed = [$shell => ['/plugin-a/:id/.*' => 'a plugin\'s content type', '/plugin-b/:id/.*' => 'another']];
+        $table = new PageHandler();
+        foreach (['/core/:id/?', \Idno\Common\Entity::getPermalinkRoute() . '/?', '/plugin-a/:id/.*', '/plugin-b/:id/.*'] as $pattern) {
+            $table->addRoute($pattern, $shell);
+        }
+
+        $this->assertSame([], self::routedViolations($table, [$shell], $required, self::knownTableKeys($listed)));
+
+        $table->addRoute('/plugin-c/:id/.*', $shell);
+        $found = self::routedViolations($table, [$shell], $required, self::knownTableKeys($listed));
+        $this->assertCount(1, $found);
+        $this->assertStringContainsString(self::keyOf('/plugin-c/:id/.*') . ', which is neither', $found[0]);
     }
 
     public function testAnyWayARoutedHandlerCanLoseItsPlaceIsFound(): void
