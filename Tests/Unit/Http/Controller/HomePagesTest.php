@@ -12,6 +12,7 @@ use Idno\Http\Page\PageContext;
 use Idno\Http\Page\PageDrawer;
 use Idno\Http\Page\PageRenderer;
 use Idno\Http\Page\SitePage;
+use Idno\Http\Webmention\ReceivedWebmention;
 use Idno\Templating\TemplateTranslation;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\AbstractLogger;
@@ -426,6 +427,33 @@ final class HomePagesTest extends TestCase
         $this->assertSame(503, $this->pages->tag($this->sent('/tag/books'))->getStatusCode());
     }
 
+    private function mention(string $source = 'https://a.example/post', string $target = 'https://example.com/', array $response = [], array $mf2 = []): ReceivedWebmention
+    {
+        return new ReceivedWebmention($source, $target, $response, $mf2);
+    }
+
+    public function testOnlyTheHomeAndContentRoutesReceive(): void
+    {
+        foreach (['idno_home', 'idno_content'] as $route) {
+            $this->assertTrue($this->pages->receivesFor($route), $route);
+        }
+        foreach (['idno_feed_xml', 'idno_feed', 'idno_rss_xml', 'idno_search', 'idno_tag', 'idno_permalink', ''] as $route) {
+            $this->assertFalse($this->pages->receivesFor($route), $route);
+        }
+    }
+
+    public function testAMentionToARouteThatDoesNotReceiveIsRefusedWithoutAsking(): void
+    {
+        $this->stream->single = true;
+        $this->stream->administrator = (new \ReflectionClass(User::class))->newInstanceWithoutConstructor();
+        $this->stream->profileAccepts = true;
+
+        $this->assertFalse($this->pages->receiveWebmention('idno_tag', ['books'], $this->mention()));
+
+        $this->assertSame([], $this->stream->profile);
+        $this->assertSame([], $this->logger->lines);
+    }
+
     public function testARootWebmentionOnASingleUserSiteGoesToTheProfile(): void
     {
         $owner = (new \ReflectionClass(User::class))->newInstanceWithoutConstructor();
@@ -433,7 +461,7 @@ final class HomePagesTest extends TestCase
         $this->stream->administrator = $owner;
         $this->stream->profileAccepts = true;
 
-        $accepted = $this->pages->receiveWebmention('https://a.example/post', 'https://example.com/', ['response' => 200], ['items' => []]);
+        $accepted = $this->pages->receiveWebmention('idno_home', [], $this->mention(response: ['response' => 200], mf2: ['items' => []]));
 
         $this->assertTrue($accepted);
         $this->assertSame([['profile', $owner, 'https://a.example/post', 'https://example.com/', ['response' => 200], ['items' => []]]], $this->stream->profile);
@@ -444,7 +472,7 @@ final class HomePagesTest extends TestCase
     {
         $this->stream->single = false;
 
-        $this->assertFalse($this->pages->receiveWebmention('https://a.example/post', 'https://example.com/', [], []));
+        $this->assertFalse($this->pages->receiveWebmention('idno_home', [], $this->mention()));
 
         $this->assertSame([], $this->stream->profile);
         $this->assertSame([['info', 'received homepage mention from https://a.example/post'], ['debug', 'disregarding mention to multi-user site']], $this->logger->lines);
@@ -455,7 +483,7 @@ final class HomePagesTest extends TestCase
         $this->stream->single = true;
         $this->stream->administrator = null;
 
-        $this->assertFalse($this->pages->receiveWebmention('https://a.example/post', 'https://example.com/', [], []));
+        $this->assertFalse($this->pages->receiveWebmention('idno_home', [], $this->mention()));
 
         $this->assertSame([], $this->stream->profile);
         $this->assertSame([['info', 'received homepage mention from https://a.example/post'], ['debug', 'query for an admin-user failed to find one']], $this->logger->lines);
@@ -467,7 +495,7 @@ final class HomePagesTest extends TestCase
         $this->stream->administrator = (new \ReflectionClass(User::class))->newInstanceWithoutConstructor();
         $this->stream->profileAccepts = false;
 
-        $this->assertFalse($this->pages->receiveWebmention('s', 't', [], []));
+        $this->assertFalse($this->pages->receiveWebmention('idno_content', ['note'], $this->mention('s', 't')));
     }
 }
 

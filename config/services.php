@@ -44,7 +44,7 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         'Config' => ['BootConfig.php'],
         // FrontController: static methods only, used by index.php before the container exists. Client/: the
         // HTTP client factory and the bounded body reader, static helpers (the clients are wired below).
-        'Http' => ['Client', 'FrontController.php', 'Page/AddedHeaders.php', 'Page/ConditionalRequest.php', 'Page/DrawnPage.php', 'Page/HttpDate.php', 'Page/SitePage.php', 'Page/PageContext.php', 'Page/PageError.php', 'Page/PageNotModified.php', 'Page/PageRedirect.php', 'Page/RoutedByLegacyTable.php'],
+        'Http' => ['Client', 'FrontController.php', 'Page/AddedHeaders.php', 'Page/ConditionalRequest.php', 'Page/DrawnPage.php', 'Page/HttpDate.php', 'Page/SitePage.php', 'Page/PageContext.php', 'Page/PageError.php', 'Page/PageNotModified.php', 'Page/PageRedirect.php', 'Page/RoutedByLegacyTable.php', 'Webmention/ReceivedWebmention.php', 'Webmention/WebmentionTarget.php'],
         // Takes the kernel (so cannot be a container service); functions.php is not a class.
         'Console' => ['Application.php', 'functions.php'],
         // Value and helper classes (a query tree and its nodes, an entity query, the record index
@@ -397,6 +397,9 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
     $services->alias(\Idno\Http\Controller\Home\HomeStream::class, \Idno\Legacy\LegacyHomeStream::class)->public();
     // The home page itself; public: the deprecated legacy page (Idno\Pages\Homepage) draws it through the service, as the controller does
     $services->set(\Idno\Http\Controller\Home\HomePages::class)->public();
+    // The page of this site an address is, for a webmention aimed at it (found as a GET of it is routed); public: the endpoint asks for it with Idno::container()->get()
+    $services->set(\Idno\Legacy\LegacyWebmentionTargets::class)->public();
+    $services->alias(\Idno\Http\Webmention\WebmentionTargets::class, \Idno\Legacy\LegacyWebmentionTargets::class)->public();
     // The small public endpoints (robots.txt, the manifest, the service worker, WebFinger, the mention search): their services take these
     // interfaces, implemented over the legacy application and read only when a request asks
     $services->alias(\Idno\Http\Controller\Discovery\SiteIcons::class, \Idno\Legacy\LegacySiteIcons::class);

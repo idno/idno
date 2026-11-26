@@ -373,7 +373,8 @@ Idno/
                                HomepageController, with Home/HomePages, the one implementation of the home page, the feeds, the search
                                and the tag pages, and HomeStream, the interface of what it lists, see "Querying entities in new code";
                                SiteFilesController, WebfingerController, MentionSearchController and FormTokenController, with
-                               Discovery/ holding the services of the small public endpoints and the interfaces of what they ask the site)
+                               Discovery/ holding the services of the small public endpoints and the interfaces of what they ask the site; Webmention/:
+                               WebmentionTargets, the page an address is for a webmention, with its value objects and ReceivesWebmentions, see "Legacy pages and routes")
   Console/                     Idno\Console\Application, the CLI application (see Entry points), and the
                                commands: UpgradeCommand, ImportMongoCommand, QueueWorkCommand, InstallCommand,
                                AdminCreateCommand, SetupLinkCommand
@@ -384,7 +385,7 @@ Idno/
                                BarePage, ControllerRoute (the placeholder in the legacy route table), LegacyRouteOverride, LegacyRoutedPages (and Placeholder/, the placeholders of pages routed by the legacy table),
                                LegacyPageLifecycle, LegacyPageDrawer, LegacyHeaderReconciler (with HeaderQueue and PhpHeaders:
                                the headers of a site page), the adapters of what the controllers' services ask the site
-                               (LegacyHomeStream, LegacySiteIcons, LegacyWebfingerDirectory, LegacyMentionCandidates) and
+                               (LegacyHomeStream, LegacySiteIcons, LegacyWebfingerDirectory, LegacyMentionCandidates, LegacyWebmentionTargets) and
                                PageShell (the base of the deprecated shells)
   start.php                    Boots the legacy application for code that includes it (tests, scripts)
   Common/                      Legacy base classes (Entity, Page, Plugin, ContentType, Theme)
@@ -1260,6 +1261,30 @@ WebFinger answers a `resource` that is not text with the 404 page (was a 500 pag
 `target_not_found` (`WebmentionToADeletedPageTest`); an XHR GET gets the headers of the same request that is not XHR. A plugin that extends a deleted class stops the site booting until it is disabled (`docs/install/upgrade.md`,
 `docs/developers/plugins/upgrading.md`). `Tests\Fixtures\LegacyPlainPage` (`/_test/legacy-plain`, `?throw=1` to fail) is the legacy page the lifecycle tests hold a controller's page to.
 
+**Webmention targets.** The webmention endpoint finds the page an address belongs to through `Idno\Http\Webmention\WebmentionTargets::resolve(string $target): ?WebmentionTarget`
+(a public alias of `Idno\Legacy\LegacyWebmentionTargets`: `RouterInterface`, the legacy dispatcher as a service closure, the kernel and `BootConfig`, for the `url`), which asks what serves the address as a GET of it is
+routed and builds no page class (`PageHandler::getRoute()`, which the endpoint used, built the class with its constructor's side effects and cannot find a page that has no class). In order:
+1. WHOSE ADDRESS. The target must be an http or https address whose host equals the `url` setting's host (case-insensitive). The scheme is NOT compared: the `http://` and `https://` spellings of the
+   site's pages are both the site's (the legacy lookup looked at the path alone). A port matters only when the target names one that is not its scheme's default (`:443` on https and `:80` on http are written-out
+   defaults and are ignored): it must equal the `url`'s effective port (its explicit one, else its scheme's default); a target that names no port is on the host whatever port the site is served from. Another host, another
+   explicit port, a host-less address (`/view/abc`), another scheme (`ftp:`, `mailto:`), a host that only starts like the site's (`example.com.evil.example`, `example.com@evil.example`) and, for a site in a subdirectory (the `url`'s
+   path), an address outside that directory are not the site's: null. A site with no `url` setting has nothing to compare with and finds no target (the queue worker needs one too).
+2. A PAGE A CONTROLLER SERVES. A GET `Request::create()` for the address (the `url`'s path as the front controller's directory) is matched by Symfony's router, the router's `RequestContext` set from it and restored in a
+   `finally`, whatever the match does. A route whose controller is a site page (`#[SitePage]`) and that `LegacyRouteOverride::handsBack()` (the listener's own rule) does not hand back is the target: `page` is the `#[SitePage]` name,
+   `route` the route's name, `arguments` the route's parameters but `lead` and `slash`, in order (`Idno\Pages\Homepage` / `idno_content` / `['note/article']`).
+3. A PAGE THE LEGACY TABLE SERVES. `PageHandler::routedFor($routes, 'GET', toroPath)` (the legacy router's own lookup) gives the class and the arguments. A class that names a routed action in its own `ACTION` (`LegacyRoutedPages::actionOf()`
+   and `routedBy()`: a placeholder of its own or a kept shell, never a subclass) is that action's page and route (`#[RoutedByLegacyTable]`). Any other class that is a `Page` is a LEGACY target (a plugin's page, a subclass of a
+   shell, StaticPages' `Pages\View`, a page of core that is still a class): `isLegacy()`, `page` the class, `route` `''`, and `receiveLegacy($mention)` builds it as the
+   router would (the class built, `arguments` set, `setPermalink()`, `webmentionContent($source, $target, $response, $mf2)`), only then. A placeholder, which is no page, is no target.
+4. Otherwise null.
+A target that is not legacy goes to the service tagged `idno.webmention_receiver` (`Idno\Http\Webmention\ReceivesWebmentions`, tagged by `#[AutoconfigureTag]` on the interface) whose index is the page's name
+(`#[AsTaggedItem(index: 'Idno\Pages\Homepage')]`): `receivesFor($route)` says whether the route takes mentions (`HomePages`: `idno_home` and `idno_content`, not the feeds, the search or the tags, which resolve to
+`idno_feed_xml`, `idno_search`, `idno_tag`, ... and are refused) and `receiveWebmention($route, $arguments, ReceivedWebmention)` takes it. A page with no receiver, or a route its receiver does not take, is a target that
+does not exist. `Idno\Pages\Homepage` (the shell) takes a mention through the same method with the route `idno_home`. Differences from the lookup the endpoint made: an address outside the site's host is refused (the host was
+not looked at), and an address with a trailing `.md` of a Markdown permalink is the permalink (the lookup did not strip it). The matching is pinned by `Tests/Kernel/WebmentionTargetsTest` (every address kind against the
+legacy lookup's own answer, the host and port rules, a plugin's page in a process of its own through `Tests/Kernel/webmention_targets.php` and `Tests\Fixtures\MentionablePage`, a site in a subdirectory, no page built, the router's
+context restored, the tagged receivers through `Tests\Fixtures\WebmentionReceiverProbe`) and `Tests/Unit/Http/Webmention/WebmentionTargetTest`; the endpoint itself still uses `getRoute()`.
+
 **Replacing the home page: the event `homepage/replace`.** A plugin that wants the site's root to be something other than the stream does not extend a shell or
 `hijackRoute()` the root: it listens to the event `homepage/replace`, which `HomePages::home($page, root: true)` triggers FIRST, through `EventTrigger::trigger('homepage/replace',
 ['page' => $page, 'renderer' => $renderer], $keepResponse)` (an `Idno\Queue\EventTrigger` taken as a service closure, like the logger, so the service is built in a kernel with no
@@ -2114,7 +2139,7 @@ the tag pages and the small public endpoints are served through them (and the fi
     permission checks and side effects stay in `Entity::save()` / `Entity::delete()`.
 - What the home page lists is one interface, `Idno\Http\Controller\Home\HomeStream` (a public alias of `Idno\Legacy\LegacyHomeStream`). `Idno\Http\Controller\Home\HomePages`
   (a public service on `HomeStream`, `PageRenderer`, and the logger and the event trigger, which it takes as service closures and fetches only when it logs, so the service is built in a kernel with no legacy application: `PageListenersWithoutLegacyTest`) is the home page: `home($page, root: true)` (which first offers the root to the event `homepage/replace`: see "Replacing the home page", under "Legacy pages and routes") and `content($page, $types)` return its `Response`, and
-  `receiveWebmention()` takes a webmention of the site's root. `HomepageController` calls them, and so does the deprecated `Idno\Pages\Homepage` (and so a page that
+  `receivesFor($route)` and `receiveWebmention($route, $arguments, $mention)` take a webmention of the site's root (`idno_home`) or a stream under `/content/` (`idno_content`; any other route is refused: HomePages is a `ReceivesWebmentions`, see "Webmention targets"). `HomepageController` calls them, and so does the deprecated `Idno\Pages\Homepage` (and so a page that
   extends it): one implementation, which is also the feeds', the search's and the tags'. The stream holds what the legacy
   `Homepage::getContent()` asked the site, moved unchanged, so the database statements (and their order), the events and the template variables are what they
   were: `siteHasUsers()` (`User::get()`), `singleUserOwner()` (the one administrator of a `single_user` site, else null, with the warning logged when there is not

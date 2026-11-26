@@ -50,6 +50,12 @@ final class TestEventHooks
                 Idno::site()->routes()->addRoute('/_test/fixture-shell-public/?', FixturePublicShell::class);
             });
         }
+        // With IDNO_TEST_MENTIONABLE=1 a plugin's legacy page that takes webmentions (MentionablePage), at `/_test/mentionable/:id/?`
+        if (getenv('IDNO_TEST_MENTIONABLE') === '1') {
+            $dispatcher->addListener('plugins/loaded', static function (): void {
+                Idno::site()->routes()->addRoute('/_test/mentionable/:id/?', MentionablePage::class);
+            });
+        }
         // With IDNO_TEST_ROUTED=1 the pages routed by the legacy table (RoutedFixtureController): a placeholder at an address that holds a stored setting (the
         // permalink structure is one), and a shell, registered as core registers what it keeps
         if (getenv('IDNO_TEST_ROUTED') === '1') {

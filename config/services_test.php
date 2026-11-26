@@ -27,6 +27,11 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         ->defaults()->autowire()->autoconfigure()
         ->set(LoggerConsumer::class)->public();
 
+    // The services tagged as webmention receivers, by the page each is indexed under (Tests\Kernel\WebmentionTargetsTest).
+    $container->services()
+        ->defaults()->autowire()->autoconfigure()
+        ->set(\Tests\Fixtures\WebmentionReceiverProbe::class)->public();
+
     // A new-style console command: autoconfigure tags it from its #[AsCommand] attribute.
     $container->services()
         ->defaults()->autowire()->autoconfigure()

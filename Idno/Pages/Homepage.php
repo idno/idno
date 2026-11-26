@@ -9,6 +9,7 @@ namespace Idno\Pages {
     use Idno\Core\Idno;
     use Idno\Http\Controller\Home\HomePages;
     use Idno\Http\Page\PageContext;
+    use Idno\Http\Webmention\ReceivedWebmention;
     use Symfony\Component\HttpFoundation\Response;
 
     /**
@@ -38,7 +39,7 @@ namespace Idno\Pages {
          */
         function webmentionContent($source, $target, $source_response, $source_mf2)
         {
-            return $this->delegateWebmention(fn (): bool => Idno::container()->get(HomePages::class)->receiveWebmention($source, $target, $source_response, $source_mf2));
+            return $this->delegateWebmention(fn (): bool => Idno::container()->get(HomePages::class)->receiveWebmention('idno_home', [], new ReceivedWebmention($source, $target, $source_response, $source_mf2)));
         }
 
     }

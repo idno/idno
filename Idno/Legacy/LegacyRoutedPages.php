@@ -93,7 +93,7 @@ final class LegacyRoutedPages
      *
      * @return array{0: class-string, 1: string}|null
      */
-    private static function actionOf(string $class): ?array
+    public static function actionOf(string $class): ?array
     {
         if (array_key_exists($class, self::$actions)) {
             return self::$actions[$class];
@@ -123,7 +123,7 @@ final class LegacyRoutedPages
      *
      * @param array{0: class-string, 1: string} $action
      */
-    private static function routedBy(array $action): ?RoutedByLegacyTable
+    public static function routedBy(array $action): ?RoutedByLegacyTable
     {
         if (!class_exists($action[0]) || !method_exists($action[0], $action[1])) {
             return null;

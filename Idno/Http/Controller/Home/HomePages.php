@@ -7,8 +7,11 @@ namespace Idno\Http\Controller\Home;
 use Idno\Http\Page\PageContext;
 use Idno\Install\InstallPage;
 use Idno\Http\Page\PageRenderer;
+use Idno\Http\Webmention\ReceivedWebmention;
+use Idno\Http\Webmention\ReceivesWebmentions;
 use Idno\Queue\EventTrigger;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\DependencyInjection\Attribute\AsTaggedItem;
 use Symfony\Component\DependencyInjection\Attribute\AutowireServiceClosure;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -19,7 +22,8 @@ use Symfony\Component\HttpFoundation\Response;
  * the stream's own search). The one implementation of all of them: `HomepageController` answers the requests the router gives it, and
  * the deprecated `Idno\Pages\Homepage` (and so a plugin's page that extends it) draws it through the same methods.
  */
-final class HomePages
+#[AsTaggedItem(index: 'Idno\Pages\Homepage')]
+final class HomePages implements ReceivesWebmentions
 {
     /**
      * @param \Closure(): LoggerInterface $logger the site's logger, fetched when something is logged: it needs the legacy application, which a
@@ -181,20 +185,29 @@ final class HomePages
     }
 
     /**
-     * A webmention to the home page means someone mentioned the site's root. On a single-user site the root is its owner's profile, so the
-     * mention is passed on to the page of the profile; a multi-user site has no page there to take it.
-     *
-     * @param array<mixed> $sourceResponse the fetched source (`response`, `content`)
-     * @param array<mixed> $sourceMf2      its parsed microformats
+     * The routes of the home page that take a webmention: the root and the streams under `/content/`. The feeds, the search and the tag pages are the same
+     * stream under other addresses, and are no page a mention is made to.
      */
-    public function receiveWebmention(string $source, string $target, array $sourceResponse, array $sourceMf2): bool
+    public function receivesFor(string $route): bool
     {
-        ($this->logger)()->info("received homepage mention from $source");
+        return in_array($route, ['idno_home', 'idno_content'], true);
+    }
+
+    /**
+     * A webmention to the home page means someone mentioned the site's root. On a single-user site the root is its owner's profile, so the
+     * mention is passed on to the page of the profile; a multi-user site has no page there to take it. A route that takes no mention is refused.
+     */
+    public function receiveWebmention(string $route, array $arguments, ReceivedWebmention $mention): bool
+    {
+        if (!$this->receivesFor($route)) {
+            return false;
+        }
+        ($this->logger)()->info("received homepage mention from {$mention->source}");
 
         if ($this->stream->isSingleUser()) {
             $user = $this->stream->firstAdministrator();
             if ($user !== null) {
-                return $this->stream->profilePageWebmention($user, $source, $target, $sourceResponse, $sourceMf2);
+                return $this->stream->profilePageWebmention($user, $mention->source, $mention->target, $mention->sourceResponse, $mention->sourceMf2);
             }
             ($this->logger)()->debug('query for an admin-user failed to find one');
         } else {
