@@ -63,8 +63,12 @@ final class WebSubCallbackTest extends PermalinkSiteCase
         'delete-visitor' => self::METHOD_WHY,
         'malformed-host' => self::METHOD_WHY,
         'walled-get-subscribe' => self::WALLED_WHY,
+        'subscribe-wrong-topic' => self::TOPIC_WHY,
+        'subscribe-no-challenge' => self::TOPIC_WHY,
         'walled-get-nothing-pending' => 'a request the callback refuses on a private site is the page of the site that refuses it, with the headers every page of the site carries (the legacy page was refused by the walled garden before its page began)',
     ];
+
+    private const TOPIC_WHY = 'a verification must name the topic the site subscribed to (the legacy page did not look at it, so anyone who knew the address could confirm a subscription to any topic)';
 
     /** @var array<string, array{int, string|null}> what the changed cases answer: the status and the body of a 200 (null: any) */
     private const EXPECTED = [
@@ -90,6 +94,8 @@ final class WebSubCallbackTest extends PermalinkSiteCase
         'malformed-host' => [404, null],
         'walled-get-subscribe' => [200, 'challenge-1234'],
         'walled-get-nothing-pending' => [403, null],
+        'subscribe-wrong-topic' => [403, null],
+        'subscribe-no-challenge' => [403, null],
     ];
 
     /**
@@ -102,15 +108,15 @@ final class WebSubCallbackTest extends PermalinkSiteCase
         'subscribe-pending' => '{"subscribe":[]}',
         'subscribe-pending-with-others' => '{"subscribe":["{bob-uuid}"],"unsubscribe":["{ada-id}"]}',
         'subscribe-hub-underscore' => '{"subscribe":[]}',
-        'subscribe-wrong-topic' => '{"subscribe":[]}',
-        'subscribe-no-challenge' => '{"subscribe":[]}',
+        'subscribe-wrong-topic' => '{"subscribe":["{ada-uuid}"]}',
+        'subscribe-no-challenge' => '{"subscribe":["{ada-uuid}"]}',
         'subscribe-hostile-challenge' => '{"subscribe":[]}',
         'subscribe-pending-trailing-slash' => '{"subscribe":[]}',
         'subscribe-pending-member-cookie' => '{"subscribe":[]}',
         'subscribe-pending-by-id' => '{"subscribe":[]}',
         'unsubscribe-pending-uuid' => '{"unsubscribe":[]}',
         'unsubscribe-pending-id' => '{"unsubscribe":[]}',
-        'head-pending' => '{"subscribe":[]}',
+        'head-pending' => '{"subscribe":["{ada-uuid}"]}',
         'walled-get-subscribe' => '{"subscribe":[]}',
         'walled-get-member' => '{"subscribe":[]}',
     ];
@@ -162,6 +168,13 @@ final class WebSubCallbackTest extends PermalinkSiteCase
         $ada = \Idno\Entities\User::getByHandle('ada');
         $bob = \Idno\Entities\User::getByHandle('bob');
         $values = ['uuid' => $ada->getUUID(), 'id' => $ada->getID(), 'bob' => $bob->getUUID()];
+        // What makes the subscription a real one: Ada's feed and hub, and Bob following her
+        $ada->pubsub_self = 'https://ada.example/feed';
+        $ada->pubsub_hub = 'https://hub.example/';
+        if (!$ada->save(true)) {
+            throw new \RuntimeException('ada not saved');
+        }
+        $bob->following = [$ada->getUUID() => ['name' => 'Ada Admin']];
         $raw = json_decode(%RAW%, true);
         if ($raw !== null) {
             $bob->pubsub_pending = $raw;
@@ -220,6 +233,29 @@ final class WebSubCallbackTest extends PermalinkSiteCase
         $message = preg_match('/(Undefined array key &quot;[a-z]+&quot;|Attempt to read property[^<]*?on [a-z]+|Undefined (?:array key|property)[^<]*)/', $response->body, $found) === 1 ? preg_replace('/ in \/.*\z/s', '', html_entity_decode($found[1])) : 'no message found';
 
         return new SiteResponse(500, ['Content-Type' => (string) $response->header('Content-Type')], "(the 500 page: " . $message . ")\n");
+    }
+
+    /**
+     * The answer compared with its recording, but for the `Link: rel="self"` line: the legacy page's carried the whole request address, the hub's challenge
+     * in its query included, and the page's now carries its path alone (the challenge is answered once and is reflected nowhere but in the plain-text body).
+     */
+    private function assertAnswer(string $case, SiteResponse $response): void
+    {
+        if (static::captureMode() !== 'compare' || isset(self::CHANGED[$case])) {
+            $this->assertRecordedAnswer(static::GROUP, $case, $response);
+
+            return;
+        }
+        $file = self::recordedAnswersDirectory() . '/' . static::GROUP . '/' . $case . '.txt';
+        $this->assertFileExists($file, $case);
+        $actual = self::normalise($response, $this->baseUrl());
+        foreach (explode("\n", $actual) as $line) {
+            if (str_ends_with($line, '; rel="self"') && str_starts_with($line, 'link: ')) {
+                $this->assertStringNotContainsString('?', $line, $case . ': the page\'s own address has no query');
+            }
+        }
+        $neutral = static fn (string $text): string => (string) preg_replace('/^link: <[^>]*>; rel="self"$/m', 'link: <{self}>; rel="self"', $text);
+        $this->assertSame($neutral((string) file_get_contents($file)), $neutral($actual), $case);
     }
 
     /** A case in `CHANGED` answers what `EXPECTED` says. */
@@ -313,7 +349,7 @@ final class WebSubCallbackTest extends PermalinkSiteCase
             $this->pend($subscribe, $unsubscribe, $raw);
             $this->events();
             $response = $this->site()->request($method, $path, $this->asViewer($viewer, $headers), $body);
-            $this->assertRecordedAnswer(static::GROUP, $case, $this->withoutTheTrace($response));
+            $this->assertAnswer($case, $this->withoutTheTrace($response));
             if (isset(self::CHANGED[$case])) {
                 $this->assertChanged($case, $response);
             }
@@ -414,7 +450,6 @@ final class WebSubCallbackTest extends PermalinkSiteCase
     public function testWhatTheCallbackAnswersToEachRequest(): void
     {
         $this->scenario();
-        $this->assertChangedCases();
     }
 
     /** The same on another site (the second recording of each case in a verified capture). */
@@ -429,12 +464,5 @@ final class WebSubCallbackTest extends PermalinkSiteCase
     public function testWhatTheCallbackAnswersOnAPrivateSite(): void
     {
         $this->walledScenario();
-        $this->assertChangedCases();
-    }
-
-    /** The cases that are not the legacy page's answer, on purpose, held to what they answer now (see the tests of the service for the rest). */
-    private function assertChangedCases(): void
-    {
-        $this->addToAssertionCount(1);
     }
 }

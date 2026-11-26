@@ -16,6 +16,9 @@ namespace Tests\Pages\Pubsubhubbub {
         /// A challenge that would run a script if it were served as HTML
         const CHALLENGE = '<script>alert(document.domain)</script>';
 
+        /// The topic the site subscribed to, which the hub repeats
+        const TOPIC = 'http://example.com/feed';
+
         /**
          * Record whether the test user is waiting for a hub to verify a subscription to the
          * test admin's feed.
@@ -28,6 +31,11 @@ namespace Tests\Pages\Pubsubhubbub {
             $user = $this->user();
             $user->pubsub_pending = serialize($pending);
             $this->assertNotEmpty($user->save(true), 'The subscriber should have been saved.');
+
+            // The topic the site subscribed to: a hub that names another is not verified
+            $admin = $this->admin();
+            $admin->pubsub_self = $isPending ? self::TOPIC : '';
+            $this->assertNotEmpty($admin->save(true), 'The followed user should have been saved.');
         }
 
         /**
@@ -37,7 +45,7 @@ namespace Tests\Pages\Pubsubhubbub {
         {
             $url = Idno::site()->config()->getDisplayURL()
                 . 'pubsub/callback/' . $this->user()->getID() . '/' . $this->admin()->getID()
-                . '?' . http_build_query(['hub.mode' => 'subscribe', 'hub.topic' => 'http://example.com/feed', 'hub.challenge' => self::CHALLENGE]);
+                . '?' . http_build_query(['hub.mode' => 'subscribe', 'hub.topic' => self::TOPIC, 'hub.challenge' => self::CHALLENGE]);
 
             return Webservice::get($url);
         }

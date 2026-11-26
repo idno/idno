@@ -54,7 +54,13 @@ namespace Idno\Core {
                     if (!empty(site()->config()->hub)) {
                         $eventdata = $event->data();
                         header('Link: <' . site()->config()->hub . '>; rel="hub"', false);
-                        header('Link: <' . site()->template()->getCurrentURL() . '>; rel="self"', false);
+                        $self = site()->template()->getCurrentURL();
+                        // The WebSub callback is asked with a challenge in its query, which is answered once and is no part of the page's address
+                        $page = Idno::site()->currentPage();
+                        if (is_object($page) && method_exists($page, 'pageClassName') && $page->pageClassName() === 'Idno\\Pages\\Pubsubhubbub\\Callback') {
+                            $self = strtok($self, '?');
+                        }
+                        header('Link: <' . $self . '>; rel="self"', false);
                     }
 
                 }
@@ -79,31 +85,34 @@ namespace Idno\Core {
 
                             if ($hubs = $this->discoverHubs($url)) {
 
-                                $pending = unserialize($user->pubsub_pending);
-                                if (!$pending) {
-                                    $pending = new \stdClass();
-                                }
-                                if (!is_array($pending->subscribe)) {
-                                    $pending->subscribe = array();
-                                }
-
-                                $pending->subscribe[] = $following->getUUID();
+                                // The pending list is read by the one rule (an earlier release left lists of other shapes) and the entry is dated: it expires
+                                $pending = \Idno\Http\Controller\WebSub\PendingList::read($user->pubsub_pending);
+                                \Idno\Http\Controller\WebSub\PendingList::add($pending, 'subscribe', $following->getUUID(), time());
                                 $user->pubsub_pending = serialize($pending);
+
+                                $request = array(
+                                    'hub.callback' => Idno::site()->config()->url . 'pubsub/callback/' . $user->getID() . '/' . $following->getID(), // Callback, unique to each subscriber
+                                    'hub.mode'     => 'subscribe',
+                                    'hub.verify'   => 'async', // Backwards compatibility with v0.3 hubs
+                                    'hub.topic'    => $feed, // Subscribe to rss
+                                );
+                                // A hub signs what it delivers with the secret it is given (WebSub: only over https, never over plain http). The secret
+                                // is kept on the subscriber, by the subscription, and is never logged or printed
+                                if (stripos($hubs[0], 'https://') === 0) {
+                                    $secret  = bin2hex(random_bytes(32));
+                                    $secrets = is_array($user->pubsub_secrets) ? $user->pubsub_secrets : array();
+                                    $secrets[$following->getID()] = $secret;
+                                    $user->pubsub_secrets = $secrets;
+                                    $request['hub.secret'] = $secret;
+                                }
                                 $user->save();
 
                                 $following->pubsub_hub = $hubs[0];
                                 $following->save();
 
-                                $return = Webservice::safeSend(
-                                    'post', $following->pubsub_hub, array(
-                                    'hub.callback' => Idno::site()->config()->url . 'pubsub/callback/' . $user->getID() . '/' . $following->getID(), // Callback, unique to each subscriber
-                                    'hub.mode'     => 'subscribe',
-                                    'hub.verify'   => 'async', // Backwards compatibility with v0.3 hubs
-                                    'hub.topic'    => $feed, // Subscribe to rss
-                                    )
-                                );
+                                $return = Webservice::safeSend('post', $following->pubsub_hub, $request);
 
-                                Idno::site()->logging()->info("Pubsub subscribed", ['response' => $return]);
+                                Idno::site()->logging()->info("Pubsub subscribed", ['response' => $return['response'] ?? 0]);
                             } else {
                                 Idno::site()->logging()->info("Pubsub: No hubs found");
                             }
@@ -125,15 +134,8 @@ namespace Idno\Core {
 
                         $url = $following->getURL();
 
-                        $pending = unserialize($user->pubsub_pending);
-                        if (!$pending) {
-                            $pending = new \stdClass();
-                        }
-                        if (!isset($pending->unsubscribe) || !is_array($pending->unsubscribe)) {
-                            $pending->unsubscribe = array();
-                        }
-
-                        $pending->unsubscribe[] = $following->getID();
+                        $pending = \Idno\Http\Controller\WebSub\PendingList::read($user->pubsub_pending);
+                        \Idno\Http\Controller\WebSub\PendingList::add($pending, 'unsubscribe', (string) $following->getID(), time());
                         $user->pubsub_pending   = serialize($pending);
                         $user->save();
 
@@ -146,7 +148,7 @@ namespace Idno\Core {
                             )
                         );
 
-                        Idno::site()->logging()->info("Pubsub unsubscribed.", ['response' => $return]);
+                        Idno::site()->logging()->info("Pubsub unsubscribed.", ['response' => $return['response'] ?? 0]);
                     }
                 }
             );

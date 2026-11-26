@@ -19,10 +19,21 @@ interface Subscriptions
     /** The entity with this id, or null. */
     public function entity(string $id): ?Entity;
 
+    /** The topic the site asked a hub to subscribe the subscription's followers to (the feed it is subscribed to), or '' when there is none. */
+    public function topic(Entity $subscription): string;
+
+    /** Whether the subscriber follows the subscription and the subscription has a hub: the only deliveries there is anyone to receive. */
+    public function isSubscribed(User $subscriber, User $subscription): bool;
+
+    /** The secret the site sent the hub for the subscriber's subscription to the subscription's feed, or '' when it sent none (it is never printed or logged). */
+    public function secret(User $subscriber, User $subscription): string;
+
+    /** The time now, as a Unix timestamp. */
+    public function now(): int;
+
     /**
-     * The subscriber's pending subscriptions: an object with a list `subscribe` of the uuids of the users they asked a hub to subscribe them to, and a list
-     * `unsubscribe` of the ids of those they asked it to unsubscribe them from. A new, empty object when none is stored or what is stored is not an
-     * object of that class (no other class is ever unserialised).
+     * The subscriber's pending subscriptions, read by `PendingList::read()`: an object with the lists `subscribe` and `unsubscribe`, a new, empty one when
+     * what is stored is none.
      */
     public function pending(User $subscriber): \stdClass;
 

@@ -28,12 +28,16 @@ final class WebSubController
         name: 'Idno\Pages\Pubsubhubbub\Callback',
         publicOnPrivateSite: true,
         methods: ['GET', 'POST'],
-        formTokenReplacedBy: 'WebSub content distribution: the hub posts to a callback address unique to one subscriber and one subscription, and the body is only handed to the listeners of websub/received'
+        formTokenReplacedBy: 'WebSub content distribution: the hub is another server with no session; a delivery is accepted only for a subscription the subscriber really has, and one made with a secret only with a valid X-Hub-Signature; the body is only handed to the listeners of websub/received'
     )]
     public function __invoke(PageContext $page, string $subscriber, string $subscription): Response
     {
-        return $page->request()->isMethod('POST')
-            ? $this->callbacks->distribute($page, $subscriber, $subscription)
-            : $this->callbacks->verify($page, $subscriber, $subscription);
+        $request = $page->request();
+        if ($request->isMethod('POST')) {
+            return $this->callbacks->distribute($page, $subscriber, $subscription);
+        }
+
+        // A HEAD answers as the GET does and consumes nothing
+        return $this->callbacks->verify($page, $subscriber, $subscription, !$request->isMethod('HEAD'));
     }
 }

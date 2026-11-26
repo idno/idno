@@ -9,21 +9,31 @@ use Idno\Http\Page\PageRenderer;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * The WebSub callback a hub talks to, `/pubsub/callback/<subscriber>/<subscription>`: the address is unique to one subscriber and one subscription, and a hub
- * that is not the site's own calls it with no session and no form token.
+ * The WebSub callback a hub talks to, `/pubsub/callback/<subscriber>/<subscription>`. A hub is another server: it has no session and no form token.
  *
- * A GET verifies a subscription (or an unsubscription): the hub repeats a challenge it made up, and the callback gives it back when the site really asked
- * for what the hub says, that is, when the subscription is in the subscriber's list of pending subscriptions for that mode. The challenge comes from the
- * request, so it is answered as plain text that a browser is told not to guess the type of, never as a page.
+ * A GET verifies a subscription (or an unsubscription): the hub repeats a challenge it made up, and the callback gives it back only when the site asked for
+ * what the hub says: the subscription is in the subscriber's list of pending subscriptions for that mode (`PendingList`: not older than its lease) AND the
+ * hub's `hub.topic` is the feed the site subscribed to (`Subscriptions::topic()`, compared with `hash_equals()`). Anything else is refused and changes nothing.
+ * The challenge comes from the request, so it is answered as plain text that a browser is told not to guess the type of, never as a page, at most
+ * `MAX_CHALLENGE` bytes of it. A HEAD gets the answer of the GET and consumes nothing.
  *
- * A POST delivers the content of a feed the subscriber follows: the body (at most `Subscriptions::maxBody()` bytes, trimmed) is handed to the listeners of
- * `websub/received` and nothing else is done with it. The hub does not sign it: WebSub gives a hub a `hub.secret` to sign deliveries with, and the
- * site sends none when it subscribes, so what authenticates a delivery is the address it is posted to.
+ * A POST delivers the content of a feed the subscriber follows. The member ids in an address are public, so the address is no secret: a delivery is accepted
+ * only for a subscription that exists (the subscriber follows the subscription, and the subscription has a hub), and, when the site sent the hub a secret
+ * (`hub.secret`, for a hub that is https), only with a valid `X-Hub-Signature` (`sha256`, `sha384` or `sha512`: the HMAC of the raw body with the secret,
+ * compared with `hash_equals()`). A delivery that fails the signature is answered as an accepted one is (WebSub: the subscriber does not tell the sender) and
+ * triggers nothing. A subscription made before the site sent secrets has none and is held to the first rule alone. The body (at most `Subscriptions::maxBody()`
+ * bytes, trimmed) is handed to the listeners of `websub/received` and nothing else is done with it.
  */
 final class WebSubCallbacks
 {
     /** The longest part of the hub's request that is written to the log, in bytes. */
     private const LOGGED = 100;
+
+    /** The longest challenge that is answered, in bytes: a hub's are short random strings. */
+    public const MAX_CHALLENGE = 512;
+
+    /** The signature methods a delivery may use. SHA-1 is not one. */
+    private const SIGNATURE_METHODS = ['sha256', 'sha384', 'sha512'];
 
     public function __construct(
         private readonly Subscriptions $subscriptions,
@@ -33,9 +43,9 @@ final class WebSubCallbacks
     }
 
     /**
-     * A hub's verification of a subscription.
+     * A hub's verification of a subscription. `$consume` is false for a HEAD, which answers as the GET does and removes nothing.
      */
-    public function verify(PageContext $page, string $subscriberId, string $subscriptionId): Response
+    public function verify(PageContext $page, string $subscriberId, string $subscriptionId, bool $consume = true): Response
     {
         $subscriber = $this->subscriptions->user($subscriberId);
         $subscription = $this->subscriptions->entity($subscriptionId);
@@ -45,16 +55,18 @@ final class WebSubCallbacks
 
         $mode = $this->text($page, 'mode');
         $challenge = $this->text($page, 'challenge');
+        $topic = $this->text($page, 'topic');
         $this->subscriptions->log('WebSub: ' . self::line($mode) . ' verification ping');
 
-        if ($mode === 'subscribe' || $mode === 'unsubscribe') {
+        $expected = $this->subscriptions->topic($subscription);
+        if (($mode === 'subscribe' || $mode === 'unsubscribe') && strlen($challenge) <= self::MAX_CHALLENGE && $expected !== '' && hash_equals($expected, $topic)) {
             $pending = $this->subscriptions->pending($subscriber);
-            $list = isset($pending->$mode) && is_array($pending->$mode) ? $pending->$mode : [];
             $wanted = [$subscription->getUUID(), $subscription->getID()];
-            $remaining = array_values(array_filter($list, static fn (mixed $entry): bool => !in_array($entry, $wanted, true)));
-            if (count($remaining) < count($list)) {
-                $pending->$mode = $remaining;
-                $this->subscriptions->savePending($subscriber, $pending);
+            if (PendingList::isPending($pending, $mode, $wanted, $this->subscriptions->now())) {
+                if ($consume) {
+                    PendingList::remove($pending, $mode, $wanted);
+                    $this->subscriptions->savePending($subscriber, $pending);
+                }
                 $this->subscriptions->log('WebSub: ' . $mode . ' verified');
 
                 // The challenge is taken from the request: plain text, and browsers are told not to guess another type, so it is never run as HTML
@@ -72,7 +84,7 @@ final class WebSubCallbacks
     {
         $subscriber = $this->subscriptions->user($subscriberId);
         $subscription = $this->subscriptions->user($subscriptionId);
-        if ($subscriber === null || $subscription === null) {
+        if ($subscriber === null || $subscription === null || !$this->subscriptions->isSubscribed($subscriber, $subscription)) {
             return $this->renderer->gone($page);
         }
 
@@ -85,6 +97,14 @@ final class WebSubCallbacks
             return new Response('', 413);
         }
 
+        $secret = $this->subscriptions->secret($subscriber, $subscription);
+        if ($secret !== '' && !self::signedWith($secret, $content, $page->request()->headers->get('X-Hub-Signature'))) {
+            // Answered as an accepted delivery is: the sender is not told, and nothing is done with the content
+            $this->subscriptions->log('WebSub: a delivery with no valid signature was ignored');
+
+            return new Response('', 200);
+        }
+
         $this->subscriptions->log('WebSub: content received');
         $this->subscriptions->trigger('websub/received', [
             'subscriber' => $subscriber,
@@ -93,6 +113,21 @@ final class WebSubCallbacks
         ]);
 
         return new Response('', 200);
+    }
+
+    /** Whether the header is `<method>=<hex digest>` of one of the methods and the digest is the HMAC of the body with the secret. */
+    private static function signedWith(string $secret, string $body, ?string $header): bool
+    {
+        if ($header === null || !str_contains($header, '=')) {
+            return false;
+        }
+        [$method, $digest] = explode('=', $header, 2);
+        $method = strtolower($method);
+        if (!in_array($method, self::SIGNATURE_METHODS, true)) {
+            return false;
+        }
+
+        return hash_equals(hash_hmac($method, $body, $secret), strtolower($digest));
     }
 
     /** A field of the hub's request, as `hub.x` or `hub_x` (PHP writes a dot in a name as an underscore): its text, or '' when it is missing or is not text. */

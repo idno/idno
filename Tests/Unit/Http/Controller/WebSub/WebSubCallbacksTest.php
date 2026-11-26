@@ -28,6 +28,10 @@ final class WebSubCallbacksTest extends TestCase
 
     private const ID = '00000000-0000-4000-8000-000000000001';
 
+    private const TOPIC = 'https://ada.example/feed';
+
+    private const NOW = 1_800_000_000;
+
     /** @var array<string, User> the members, by id */
     public array $users = [];
 
@@ -47,6 +51,14 @@ final class WebSubCallbacksTest extends TestCase
 
     public int $limit = 1000;
 
+    public string $topic = self::TOPIC;
+
+    public bool $subscribed = true;
+
+    public string $secret = '';
+
+    public int $now = self::NOW;
+
     private WebSubCallbacks $callbacks;
 
     protected function setUp(): void
@@ -58,6 +70,10 @@ final class WebSubCallbacksTest extends TestCase
         $this->triggered = [];
         $this->logged = [];
         $this->limit = 1000;
+        $this->topic = self::TOPIC;
+        $this->subscribed = true;
+        $this->secret = '';
+        $this->now = self::NOW;
         $test = $this;
         $subscriptions = new class($test) implements Subscriptions {
             public function __construct(private readonly WebSubCallbacksTest $test)
@@ -87,6 +103,26 @@ final class WebSubCallbacksTest extends TestCase
             public function trigger(string $event, array $data): void
             {
                 $this->test->triggered[] = [$event, $data];
+            }
+
+            public function topic(Entity $subscription): string
+            {
+                return $this->test->topic;
+            }
+
+            public function isSubscribed(User $subscriber, User $subscription): bool
+            {
+                return $this->test->subscribed;
+            }
+
+            public function secret(User $subscriber, User $subscription): string
+            {
+                return $this->test->secret;
+            }
+
+            public function now(): int
+            {
+                return $this->test->now;
             }
 
             public function maxBody(): int
@@ -123,9 +159,10 @@ final class WebSubCallbacksTest extends TestCase
         return new PageContext(Request::create('/pubsub/callback/bob/ada', $method, $query, [], [], [], $body), new SitePage('Idno\Pages\Pubsubhubbub\Callback', methods: ['GET', 'POST'], formTokenReplacedBy: 'a test'));
     }
 
-    private function verify(array $query): Response
+    /** @param array<string, mixed> $query the hub's request; the topic of the subscription is added unless it is given */
+    private function verify(array $query, bool $consume = true): Response
     {
-        return $this->callbacks->verify($this->context($query), 'bob', self::ID);
+        return $this->callbacks->verify($this->context($query + ['hub_topic' => self::TOPIC]), 'bob', self::ID, $consume);
     }
 
     private function pend(?array $subscribe, ?array $unsubscribe = null): void
@@ -137,6 +174,22 @@ final class WebSubCallbacksTest extends TestCase
         if ($unsubscribe !== null) {
             $this->pending->unsubscribe = $unsubscribe;
         }
+    }
+
+    private function signed(string $body, string $method = 'sha256', ?string $secret = null): string
+    {
+        return $method . '=' . hash_hmac($method, $body, $secret ?? $this->secret);
+    }
+
+    /** @param array<string, string> $headers */
+    private function deliver(string $body, array $headers = []): Response
+    {
+        $request = Request::create('/pubsub/callback/bob/ada', 'POST', [], [], [], [], $body);
+        foreach ($headers as $name => $value) {
+            $request->headers->set($name, $value);
+        }
+
+        return $this->callbacks->distribute(new PageContext($request, new SitePage('Idno\Pages\Pubsubhubbub\Callback', methods: ['GET', 'POST'], formTokenReplacedBy: 'a test')), 'bob', self::ID);
     }
 
     public function testAPendingSubscriptionIsVerifiedWithThePlainTextChallenge(): void
@@ -167,6 +220,7 @@ final class WebSubCallbacksTest extends TestCase
         $context = $this->context();
         $context->setInput('hub.mode', 'subscribe');
         $context->setInput('hub.challenge', 'dotted');
+        $context->setInput('hub.topic', self::TOPIC);
 
         $this->assertSame('dotted', $this->callbacks->verify($context, 'bob', self::ID)->getContent());
     }
@@ -335,6 +389,164 @@ final class WebSubCallbacksTest extends TestCase
         $this->callbacks->distribute($this->context([], 'POST', 'x'), 'bob', self::ID);
 
         $this->assertNotContains('pubsubhubbub/ping', array_column($this->triggered, 0));
+    }
+
+    public function testTheTopicMustBeTheSubscriptionsOwnForBothModes(): void
+    {
+        foreach (['subscribe', 'unsubscribe'] as $mode) {
+            $this->pend([self::UUID], [self::ID]);
+            $this->saved = [];
+
+            $wrong = $this->callbacks->verify($this->context(['hub_mode' => $mode, 'hub_challenge' => 'abc', 'hub_topic' => 'https://elsewhere.example/feed']), 'bob', self::ID);
+            $missing = $this->callbacks->verify($this->context(['hub_mode' => $mode, 'hub_challenge' => 'abc']), 'bob', self::ID);
+            $array = $this->callbacks->verify($this->context(['hub_mode' => $mode, 'hub_challenge' => 'abc', 'hub_topic' => [self::TOPIC]]), 'bob', self::ID);
+
+            foreach ([$wrong, $missing, $array] as $response) {
+                $this->assertSame(403, $response->getStatusCode(), $mode);
+                $this->assertStringNotContainsString('abc', (string) $response->getContent());
+            }
+            $this->assertSame([], $this->saved, $mode . ': the entry is untouched');
+            $this->assertSame(200, $this->verify(['hub_mode' => $mode, 'hub_challenge' => 'abc'])->getStatusCode(), $mode . ': the right topic');
+        }
+    }
+
+    public function testASubscriptionThatHasNoTopicIsNeverVerified(): void
+    {
+        $this->topic = '';
+        $this->pend([self::UUID]);
+
+        $this->assertSame(403, $this->callbacks->verify($this->context(['hub_mode' => 'subscribe', 'hub_challenge' => 'abc', 'hub_topic' => '']), 'bob', self::ID)->getStatusCode());
+        $this->assertSame(403, $this->callbacks->verify($this->context(['hub_mode' => 'subscribe', 'hub_challenge' => 'abc']), 'bob', self::ID)->getStatusCode());
+    }
+
+    public function testAHeadRequestAnswersAsAGetDoesAndConsumesNothing(): void
+    {
+        $this->pend([self::UUID]);
+
+        $response = $this->verify(['hub_mode' => 'subscribe', 'hub_challenge' => 'abc'], false);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertSame([], $this->saved);
+        $this->assertSame([self::UUID], $this->pending->subscribe);
+    }
+
+    public function testAnEntryThatHasExpiredIsNotVerified(): void
+    {
+        $this->pending = new \stdClass();
+        \Idno\Http\Controller\WebSub\PendingList::add($this->pending, 'subscribe', self::UUID, self::NOW);
+        $this->now = self::NOW + \Idno\Http\Controller\WebSub\PendingList::LEASE_SECONDS + 1;
+
+        $this->assertSame(403, $this->verify(['hub_mode' => 'subscribe', 'hub_challenge' => 'abc'])->getStatusCode());
+        $this->assertSame([], $this->saved);
+
+        $this->now = self::NOW + 60;
+        $this->assertSame(200, $this->verify(['hub_mode' => 'subscribe', 'hub_challenge' => 'abc'])->getStatusCode());
+    }
+
+    public function testAChallengeLongerThanTheCapIsRefused(): void
+    {
+        $this->pend([self::UUID]);
+
+        $this->assertSame(200, $this->verify(['hub_mode' => 'subscribe', 'hub_challenge' => str_repeat('a', WebSubCallbacks::MAX_CHALLENGE)])->getStatusCode());
+        $this->pend([self::UUID]);
+        $over = $this->verify(['hub_mode' => 'subscribe', 'hub_challenge' => str_repeat('a', WebSubCallbacks::MAX_CHALLENGE + 1)]);
+        $this->assertSame(403, $over->getStatusCode());
+        $this->assertSame([self::UUID], $this->pending->subscribe);
+    }
+
+    public function testADeliveryIsAcceptedOnlyForARealSubscription(): void
+    {
+        $this->subscribed = false;
+
+        $response = $this->deliver('<feed/>');
+
+        $this->assertSame(410, $response->getStatusCode());
+        $this->assertSame([], $this->triggered);
+    }
+
+    public function testASubscriberThatPostsToItselfIsRefusedByTheSameRule(): void
+    {
+        $this->subscribed = false;
+
+        $this->assertSame(410, $this->callbacks->distribute($this->context([], 'POST', 'x'), 'bob', 'bob')->getStatusCode());
+        $this->assertSame([], $this->triggered);
+    }
+
+    public function testARefusedDeliveryReadsNoBody(): void
+    {
+        $this->subscribed = false;
+        $this->limit = 1;
+
+        $this->assertSame(410, $this->deliver(str_repeat('a', 1000))->getStatusCode());
+    }
+
+    public function testASubscriptionWithNoSecretTakesAnUnsignedDelivery(): void
+    {
+        $this->assertSame(200, $this->deliver('<feed/>')->getStatusCode());
+        $this->assertCount(1, $this->triggered);
+    }
+
+    /** @return array<string, array{0: string}> */
+    public static function methods(): array
+    {
+        return ['sha256' => ['sha256'], 'sha384' => ['sha384'], 'sha512' => ['sha512']];
+    }
+
+    /** @dataProvider methods */
+    public function testASignedDeliveryIsAcceptedAndTriggersOnce(string $method): void
+    {
+        $this->secret = str_repeat('ab', 32);
+
+        $response = $this->deliver(" <feed/>\n", ['X-Hub-Signature' => $this->signed(" <feed/>\n", $method)]);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertCount(1, $this->triggered);
+        $this->assertSame('<feed/>', $this->triggered[0][1]['data']);
+    }
+
+    /** @return array<string, array{0: string|null}> */
+    public static function badSignatures(): array
+    {
+        $good = hash_hmac('sha256', '<feed/>', str_repeat('ab', 32));
+
+        return [
+            'missing' => [null],
+            'empty' => [''],
+            'no method' => [$good],
+            'the wrong secret' => ['sha256=' . hash_hmac('sha256', '<feed/>', 'another secret')],
+            'another body' => ['sha256=' . hash_hmac('sha256', 'another body', str_repeat('ab', 32))],
+            'sha1' => ['sha1=' . hash_hmac('sha1', '<feed/>', str_repeat('ab', 32))],
+            'an unknown method' => ['md5=' . hash_hmac('md5', '<feed/>', str_repeat('ab', 32))],
+            'a method that is not text' => ['=' . $good],
+            'a signature that is too short' => ['sha256=' . substr($good, 0, 40)],
+            'a signature that is too long' => ['sha256=' . $good . '00'],
+            'the method of another length' => ['sha512=' . $good],
+            'upper case hex of another body' => ['sha256=' . strtoupper(hash_hmac('sha256', 'x', str_repeat('ab', 32)))],
+        ];
+    }
+
+    /** @dataProvider badSignatures */
+    public function testABadSignatureAnswersAsAnAcceptedDeliveryDoesAndTriggersNothing(?string $signature): void
+    {
+        $this->secret = str_repeat('ab', 32);
+
+        $response = $this->deliver('<feed/>', $signature === null ? [] : ['X-Hub-Signature' => $signature]);
+
+        $this->assertSame(200, $response->getStatusCode(), 'the spec: do not tell whoever sent it');
+        $this->assertSame('', $response->getContent());
+        $this->assertSame([], $this->triggered);
+    }
+
+    public function testTheSecretIsNeverLogged(): void
+    {
+        $this->secret = 'S3CRET-' . str_repeat('ab', 28);
+
+        $this->deliver('<feed/>', ['X-Hub-Signature' => 'sha256=' . str_repeat('0', 64)]);
+        $this->deliver('<feed/>', ['X-Hub-Signature' => $this->signed('<feed/>')]);
+
+        $this->assertNotSame([], $this->logged);
+        $this->assertStringNotContainsString($this->secret, implode("\n", $this->logged));
+        $this->assertStringNotContainsString(str_repeat('0', 64), implode("\n", $this->logged));
     }
 }
 
