@@ -898,6 +898,17 @@ draft or published. On for new sites (`Config`); not federated; not a content ty
   authenticates a request to any page, and `User::isAdmin()` is false for every API
   request, so neither credential passes `adminGatekeeper()`.
   `IdnoPlugins/IndiePub/Tests/AccessTokenReachTest.php` checks this over HTTP.
+- An API request keeps no session: a request authenticated by an API signature or an access
+  token (`Session::isAPIRequest()`) is its member only while it lasts. Its session is never
+  written: wherever a session would be written and closed (`Session::finishEarly()`, which a
+  page calls before it is drawn and `forward()` before a redirect), an API request's is
+  destroyed instead (`discardStoredSession()`), what the request holds stays in memory, and the
+  session cookie is taken off the answer. It used to be destroyed only when the request ended,
+  by which time a drawn page had already written and closed it, so the session stayed stored
+  and its id was accepted afterwards, without a signature, as the member. A stored session that
+  is marked as an API request is emptied when it is next presented. Don't call
+  `session_write_close()` directly; call `finishEarly()`. `Tests/API/SignedRequestSessionTest.php`
+  checks this over HTTP.
 - A page that must take POSTs without a form token (the ActivityPub inboxes, for example)
   overrides `post()` itself and authenticates the request another way. Never get the same
   effect by calling `Session::setIsAPIRequest(true)` for a request that has not presented a

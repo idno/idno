@@ -72,6 +72,13 @@ namespace Idno\Core {
             session_name(Idno::site()->config()->sessionname);
             session_start();
 
+            // A request signed with an API key is authenticated by its signature and keeps no
+            // session (see discardStoredSession()). A stored session that says it is one was
+            // left behind by an earlier version, and is never taken up again.
+            if (!empty($_SESSION['is_api_request'])) {
+                $_SESSION = [];
+            }
+
             // Flag insecure sessions (so we can check state changes etc)
             if (!isset($_SESSION['secure'])) {
                 $_SESSION['secure'] = \Idno\Common\Page::isSSL();
@@ -128,6 +135,7 @@ namespace Idno\Core {
                     $session = Idno::site()->session();
                     if ($session && $session->isAPIRequest()) {
                         $session->logUserOff();
+                        $session->removeSessionCookie();
                     }
                 }
             );
@@ -147,7 +155,60 @@ namespace Idno\Core {
          */
         function finishEarly()
         {
+            if ($this->isAPIRequest()) {
+                $this->discardStoredSession();
+
+                return;
+            }
             session_write_close();
+        }
+
+        /**
+         * End the session of a request that was authenticated by an API signature or an
+         * access token, without storing it: such a request is its member only for as long as
+         * it lasts. This is called where a session would otherwise be written and closed
+         * (before a page is drawn, before a redirect); once a session is closed it can no
+         * longer be destroyed, and the stored session would be accepted afterwards, by its id
+         * alone, as the member. What the request holds stays in memory until it ends, and the
+         * session's cookie is taken off the answer.
+         */
+        function discardStoredSession()
+        {
+            if (session_status() === PHP_SESSION_ACTIVE) {
+                $held = $_SESSION;
+                @session_destroy();
+                $_SESSION = $held;
+            }
+            $this->removeSessionCookie();
+        }
+
+        /**
+         * Take the session's cookie off the answer, if the headers have not been sent yet.
+         * Other cookies are left as they are.
+         */
+        function removeSessionCookie()
+        {
+            if (headers_sent()) {
+                return;
+            }
+            $keep = [];
+            $found = false;
+            foreach (headers_list() as $header) {
+                if (stripos($header, 'Set-Cookie:') !== 0) {
+                    continue;
+                }
+                if (strpos(ltrim(substr($header, strlen('Set-Cookie:'))), session_name() . '=') === 0) {
+                    $found = true;
+                } else {
+                    $keep[] = $header;
+                }
+            }
+            if ($found) {
+                header_remove('Set-Cookie');
+                foreach ($keep as $header) {
+                    header($header, false);
+                }
+            }
         }
 
         /**

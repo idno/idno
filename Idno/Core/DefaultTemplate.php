@@ -159,8 +159,8 @@ namespace Idno\Core {
             // Get messages and flush session
             $this->messages = \Idno\Core\Idno::site()->session()->getAndFlushMessages();
 
-            // End session BEFORE we output any data
-            session_write_close();
+            // End session BEFORE we output any data (an API request's is not stored)
+            \Idno\Core\Idno::site()->session()->finishEarly();
 
             return parent::drawPage($echo, $shell);
 
