@@ -30,6 +30,8 @@ final class ShortlinkPagesTest extends TestCase
 
     private bool $taken = true;
 
+    private bool $readable = true;
+
     /** @var list<ReceivedWebmention> */
     private array $mentions = [];
 
@@ -52,6 +54,7 @@ final class ShortlinkPagesTest extends TestCase
 
             return $this->entity;
         });
+        $permalinks->method('canRead')->willReturnCallback(fn (): bool => $this->readable);
         $permalinks->method('displayUrl')->willReturn('https://example.com/2026/a-note');
         $permalinks->method('addWebmentions')->willReturnCallback(function (Entity $entity, ReceivedWebmention $mention): bool {
             $this->mentions[] = $mention;
@@ -95,6 +98,17 @@ final class ShortlinkPagesTest extends TestCase
 
         $this->assertSame(301, $response->getStatusCode(), 'the legacy page set the status before it forwarded');
         $this->assertSame('{"location":"https:\/\/example.com\/2026\/a-note"}', $response->getContent());
+    }
+
+    public function testAPostTheFinderReturnsButTheViewerMayNotReadIsGoneAsAMissingPostIs(): void
+    {
+        $this->entity = $this->entity();
+        $this->readable = false;
+
+        $response = $this->pages->go($this->context('abc123'), 'abc123');
+
+        $this->assertSame(410, $response->getStatusCode());
+        $this->assertNull($response->headers->get('Location'), 'the post\'s address is not revealed');
     }
 
     public function testACodeThatNamesNoPostIsGone(): void

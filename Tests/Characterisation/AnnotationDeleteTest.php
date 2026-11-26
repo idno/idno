@@ -84,6 +84,9 @@ final class AnnotationDeleteTest extends PermalinkSiteCase
         $public = $store->findById('entities', '00000000000040008000000000000041');
         $own = \Idno\Core\Idno::site()->config()->getURL() . %PUBLIC% . '/annotations/' . md5('local');
         $public['annotations']['like'][$own] = ['permalink' => $own, 'owner_name' => 'Erin', 'owner_url' => 'https://example.org/erin', 'owner_image' => '', 'content' => '', 'time' => (int) strtotime('2026-03-15 15:00:00 UTC'), 'title' => ''];
+        // a mention that stays: the cases of the methods the page does not take aim at it, and it must survive each
+        $kept = \Idno\Core\Idno::site()->config()->getURL() . %PUBLIC% . '/annotations/' . md5('kept');
+        $public['annotations']['mention'][$kept] = ['permalink' => 'https://example.org/kept', 'owner_name' => 'Kept', 'owner_url' => 'https://example.org/kept', 'owner_image' => '', 'content' => 'A mention that is never deleted.', 'time' => (int) strtotime('2026-03-15 16:00:00 UTC'), 'title' => ''];
         $store->save('entities', $public);
 
         return true;
@@ -107,6 +110,14 @@ final class AnnotationDeleteTest extends PermalinkSiteCase
     protected static function passes(): int
     {
         return 1;
+    }
+
+    /** Whether the mention the cases of the other methods aim at is still stored. */
+    private function keptIsStored(): bool
+    {
+        $stored = $this->runInSite("\$r = \\Idno\\Core\\Idno::container()->get(\\Idno\\Storage\\RecordStore::class)->findById('entities', '00000000000040008000000000000041'); return array_values(array_map('strval', array_column(array_values(\$r['annotations']['mention'] ?? []), 'content')));");
+
+        return in_array('A mention that is never deleted.', $stored, true);
     }
 
     private function keyOf(string $note, string $name): string
@@ -140,7 +151,7 @@ final class AnnotationDeleteTest extends PermalinkSiteCase
         // another member, who did not write it: nothing is deleted, and the page forwards to the post's comments
         $this->record('delete-token-member', 'POST', $this->deleteAddress($note, 'like'), [], 'member', $tokens('member'), $scrub);
         $this->record('delete-token-member-then', 'GET', $list, [], 'owner');
-        // the member who wrote an annotation of their own: the post is Bob's and saving it is refused to Carol, so it stays
+        // the member who wrote an annotation of their own removes it (recorded again on purpose: the legacy page refused the save, and it stayed)
         $this->record('delete-token-author', 'POST', $this->deleteAddress($note, self::BY_CAROL), [], 'member', $tokens('member'), $scrub);
         $this->record('delete-token-author-then', 'GET', $list, [], 'owner');
         // the post that is not there, and one the requester may not read
@@ -181,11 +192,13 @@ final class AnnotationDeleteTest extends PermalinkSiteCase
             'delete-put' => ['PUT', $tokens('owner')],
             'delete-delete' => ['DELETE', null],
         ] as $case => [$method, $body]) {
-            $answer = $this->record($case, $method, $this->deleteAddress($note, 'like'), [], 'owner', $body, $scrub);
+            $answer = $this->record($case, $method, $this->deleteAddress($public, 'kept'), [], 'owner', $body, $scrub);
             $this->assertSame(404, $answer->status, $case);
+            $this->assertTrue($this->keptIsStored(), $case . ' removed nothing');
         }
-        $answer = $this->record('delete-override-delete', 'POST', $this->deleteAddress($note, 'like'), ['X-HTTP-Method-Override' => 'DELETE'], 'owner', $tokens('owner'), $scrub);
+        $answer = $this->record('delete-override-delete', 'POST', $this->deleteAddress($public, 'kept'), ['X-HTTP-Method-Override' => 'DELETE'], 'owner', $tokens('owner'), $scrub);
         $this->assertSame(404, $answer->status, 'a POST that asks to be handled as a DELETE: the page takes POST alone, as the real method and the one the header names');
+        $this->assertTrue($this->keptIsStored(), 'the override removed nothing');
         $this->record('delete-token-owner-final', 'GET', $list, [], 'owner');
         $this->addToAssertionCount(1);
     }

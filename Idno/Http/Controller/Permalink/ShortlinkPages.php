@@ -27,12 +27,13 @@ final class ShortlinkPages implements ReceivesWebmentions
 
     /**
      * The post the code names, moved permanently to the address it has; a code no post has (or that the finders leave out for this viewer: a private post, a
-     * draft that is not theirs) is the site's missing-content page (410), so the address says nothing about which posts exist.
+     * draft that is not theirs, a post whose `canRead()` refuses them) is the site's missing-content page (410), so the address says nothing about which posts exist.
      */
     public function go(PageContext $page, string $code): Response
     {
         $entity = $this->entityOf($code);
-        if ($entity === null) {
+        // a post the viewer may not read is the answer a missing one is (the finders already leave it out; this is asked again, as for the permalink)
+        if ($entity === null || !$this->permalinks->canRead($entity)) {
             return $this->renderer->gone($page);
         }
 

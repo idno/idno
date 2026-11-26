@@ -226,8 +226,27 @@ final class AnnotationPagesTest extends TestCase
 
         $this->assertSame([], $this->site->removed);
         $this->assertSame(['find:a-note', 'canRead', 'canEditAnnotation:k1', 'url'], $this->site->calls);
+        $this->assertSame([], $this->site->removedAsAuthor);
         $this->assertSame(302, $response->getStatusCode());
         $this->assertSame('https://example.com/2026/a-note#comments', $response->headers->get('Location'));
+    }
+
+    public function testTheEditorRemovesAsTheViewerAndAnAuthorWhoMayNotEditThePostRemovesAsTheAuthor(): void
+    {
+        $this->pages->delete($this->context(['a-note'], 'POST', ['permalink' => $this->encoded('k1')]));
+        $this->assertSame(['k1'], $this->site->removed);
+        $this->assertSame([], $this->site->removedAsAuthor);
+
+        $this->site->removed = [];
+        $this->site->mayEditPost = false;
+        $this->pages->delete($this->context(['a-note'], 'POST', ['permalink' => $this->encoded('k2')]));
+        $this->assertSame([], $this->site->removed);
+        $this->assertSame(['k2'], $this->site->removedAsAuthor);
+
+        $this->site->removedAsAuthor = [];
+        $this->site->editable = false;
+        $this->pages->delete($this->context(['a-note'], 'POST', ['permalink' => $this->encoded('k3')]));
+        $this->assertSame([], $this->site->removedAsAuthor, 'one who is neither removes nothing');
     }
 
     public function testWithNoPermalinkTheAnnotationTheAddressNamesIsRemovedWhereverItIsStored(): void
@@ -401,6 +420,23 @@ final class AnnotationsDouble implements Annotations
     public function all(Entity $entity): array
     {
         return $this->annotations;
+    }
+
+    public bool $mayEditPost = true;
+
+    /** @var list<string> */
+    public array $removedAsAuthor = [];
+
+    public function canEdit(Entity $entity): bool
+    {
+        return $this->mayEditPost;
+    }
+
+    public function removeAsAuthor(Entity $entity, string $permalink): bool
+    {
+        $this->removedAsAuthor[] = $permalink;
+
+        return true;
     }
 
     public function canEditAnnotation(Entity $entity, string $permalink): bool

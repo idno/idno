@@ -38,14 +38,6 @@ x-powered-by: https://idno.co
       <description><![CDATA[Carol replies to Bob.]]></description>
     </item>
     <item>
-      <title>By: Carol Member</title>
-      <link>{site}/2025/bobs-note-that-people-reacted-to/annotations/f37f655d224f6f6090c28333786c34a4</link>
-      <guid>{site}/2025/bobs-note-that-people-reacted-to/annotations/f37f655d224f6f6090c28333786c34a4</guid>
-      <pubDate>Thu, 11 Dec 2025 17:00:00 +0000</pubDate>
-      <dc:creator>Carol Member</dc:creator>
-      <description><![CDATA[Carol comments on Bob's note herself.]]></description>
-    </item>
-    <item>
       <title>By: Dave</title>
       <link>https://example.org/dave/like</link>
       <guid>https://example.org/dave/like</guid>

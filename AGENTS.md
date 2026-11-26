@@ -1223,17 +1223,20 @@ for classes that extend `PageShell`, and holds each to the rule); it is `Idno\Pa
   `AnnotationController` has no `#[Route]` (a post's address is registered at boot by content types and plugins): `show()` (`#[SitePage(name: 'Idno\Pages\Annotation\View')]`, `idno_annotations`), `delete()`
   (`#[SitePage(name: 'Idno\Pages\Annotation\Delete', methods: ['POST'])]`, `idno_annotation_delete`, `#[IsGranted('ROLE_USER')]`; the form token is the lifecycle's) and `otherLayout()` (`idno_annotation_other_layout`).
   `Permalink\ShortlinkPages` (a receiver tagged `Idno\Pages\Entity\Shortlink`, taking the route `idno_shortlink`; `Permalinks::byShortUrl()`) answers a code that names a post (the finders leave out what the viewer may not read) with
-  a 301 to `displayUrl()` (the page's status is 301 too, so a signed request is told where to go in the JSON at that status, as the legacy page was) and any other with the 410 page; a webmention to a shortlink is added to the post.
+  a 301 to `displayUrl()` (a post the viewer may not read is the 410 page too: `canRead()` is asked again; the page's status is 301 too, so a signed request is told where to go in the JSON at that status, as the legacy page was) and any other with the 410 page; a webmention to a shortlink is added to the post.
   `Permalink\AnnotationPages` asks the interface `Annotations` (`Idno\Legacy\LegacyAnnotations`): the post by id, else slug, then `canRead()` AGAIN (a post the finders return and the viewer may not read is the 410 page,
   never a 403 that says it exists), the single annotation with the template variables the legacy page passed (they stay on the page's template: a JSON page prints `annotation`, `subtype`, `permalink` and `object`), or the
   list: each annotation drawn in the shell and the variables the shell left taken off the page again (`Annotations::forgetTemplateVariables()`), the `annotations` variable for the `rss` type, and the title through the
-  site's translation (`Annotations::listTitle()`, `Annotations on: %s`: it was the English words whatever the language). `delete()` establishes who may before it removes anything: the post's editor or the annotation's author
-  (`canEditAnnotation()`), and the removal saves the post AS THE VIEWER, so an author who is not the post's editor removes nothing (the save refuses): the delete link is drawn for them and fails closed. The answer is
+  site's translation (`Annotations::listTitle()`, `Annotations on: %s`: it was the English words whatever the language). `delete()` establishes who may before it removes anything: the post's editor (who saves the post as themselves) or the annotation's AUTHOR
+  (`Entity::canEditAnnotation()` is `canEdit() || isAnnotationAuthor()`, the one check the delete asks and the annotation templates ask when they draw the delete link, so the link is drawn exactly for those for whom it works). The author is the logged-in member whose own
+  profile address is the annotation's stored `owner_url` AND whose annotation the site made itself: the annotation's stored `permalink` equals the key it is stored under (the address `addAnnotation()` invents for what a member writes; a
+  webmention keeps the remote page as its `permalink` and takes `owner_url` from that page's h-card, so no remote party can make a member an author by naming their profile). Only the author branch saves the post with override
+  (`Annotations::removeAsAuthor()`: `removeAnnotation()` and `save(true)`, which fires `updated` as an editor's delete does); a signed request of the author acts as the member, as for the post's owner. The answer is
   always the forward to the post's comments. Deliberate differences, each in both upgrade documents: the other methods and a request with a malformed `Host` are the legacy router's 404 page (the legacy pages answered the
   invalid-token redirect, the 403 page or the 501 page; a POST that asks to be handled as a DELETE with `X-HTTP-Method-Override` was served as the POST it is, and is a 404 now), a signed request's JSON is
   `application/json`, an XHR GET gets the headers of the plain request, the list's title is translated, an annotation made under another layout is found and its address redirected, and a `permalink` field that is not
   text is none (it was a 500 page). Pinned by `Tests/Characterisation/AnnotationAnswersTest` and `AnnotationDeleteTest` (recordings from the legacy pages: `fixtures/answers/annotations/`, `shortlink/`, `annotation-delete/`),
-  `AnnotationOtherLayoutTest` and `AnnotationOtherLayoutDeleteTest` (stored old-layout keys), `Tests/Common/AnnotationLayoutTest`, `ShortlinkWebmentionTest` and the unit tests `ShortlinkPagesTest` and `AnnotationPagesTest`. The
+  `AnnotationOtherLayoutTest` and `AnnotationOtherLayoutDeleteTest` (stored old-layout keys), `AnnotationAuthorDeleteTest` (the author's delete), `Tests/Common/AnnotationLayoutTest`, `ShortlinkWebmentionTest` and the unit tests `ShortlinkPagesTest` and `AnnotationPagesTest`. The
   French title is shown by `Tests\Fixtures\TestCatalogue`, registered by `TestEventHooks` when `IDNO_TEST_TRANSLATIONS` (JSON: locale => {string => translation}) is set.
 - `PageShell::delegate(\Closure $serve)` runs `$serve(PageContext): Response` on the request being served as a controller would. The context is built from the
   request on Symfony's `RequestStack` (which `LegacyResponse` pushes while legacy code runs; the process's request where there is none) and from what the shell
@@ -5632,8 +5635,6 @@ no installer writes one.
   - Five POST handlers skip the form token check (`Idno/Pages/File/Upload.php`, `Idno/Pages/File/Picker.php`, `Idno/Pages/Entity/Autosave.php`,
     `IdnoPlugins/StaticPages/Pages/Admin/ReorderCategory.php`, `ReorderPage.php`) and rely on `SameSite=Lax` on the session cookie.
   - IndieAuth access tokens are stored in plain text, never expire, and their scope is not enforced by the Micropub endpoint.
-  - A member who wrote an annotation on another member's post (a comment, a like) cannot remove it: `canEditAnnotation()` allows its author, but the removal saves the post as the viewer and the save refuses a
-    viewer who may not edit it, so only the post's editor removes annotations.
   - `Page::isSSL()` trusts `X-Forwarded-Proto` from any client (there are no trusted proxies), and the login throttle counts by account
     for that reason.
   - Registration and the password reset request let someone learn whether a handle or an email address has an account.

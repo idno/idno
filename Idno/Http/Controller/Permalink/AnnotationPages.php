@@ -44,8 +44,8 @@ final class AnnotationPages
     }
 
     /**
-     * What a POST to an annotation's delete address does: the post's editor, or the annotation's author, removes the annotation (the post is saved as the
-     * viewer: an author who is not the post's editor is refused by the save, and nothing is removed); whoever asked is sent back to the post's comments.
+     * What a POST to an annotation's delete address does: the post's editor, or the annotation's author, removes the annotation (the editor saves the post
+     * as themselves, an author who may not edit it saves it for that removal alone); whoever asked is sent back to the post's comments.
      * Nothing is changed before the rights are known, and a post the viewer may not read is answered as a missing one is.
      */
     public function delete(PageContext $page): Response
@@ -63,7 +63,12 @@ final class AnnotationPages
             $permalink = $this->annotations->keyOf($entity, $id) ?? $this->annotations->url($entity) . '/annotations/' . $id;
         }
         if ($this->annotations->canEditAnnotation($entity, $permalink)) {
-            $this->annotations->remove($entity, $permalink);
+            // the post's editor saves the post as themselves; an author who may not edit it saves it for the removal of their own annotation alone
+            if ($this->annotations->canEdit($entity)) {
+                $this->annotations->remove($entity, $permalink);
+            } else {
+                $this->annotations->removeAsAuthor($entity, $permalink);
+            }
         }
 
         return $this->renderer->redirect($page, $this->annotations->url($entity) . '#comments');

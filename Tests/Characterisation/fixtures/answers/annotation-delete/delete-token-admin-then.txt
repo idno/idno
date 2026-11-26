@@ -158,6 +158,8 @@ Fixture Site
 <div id="page-messages">
 </div>
 <a name="pagecontent"></a>
+<div class="idno-content">
+</div>
 </div>
 </main>
 <div class="idno-spacer" aria-hidden="true"></div>

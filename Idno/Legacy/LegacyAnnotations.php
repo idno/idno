@@ -68,7 +68,8 @@ final class LegacyAnnotations implements Annotations
         $suffix = '/annotations/' . $id;
         foreach ($entity->getAllAnnotations() as $list) {
             foreach (is_array($list) ? array_keys($list) : [] as $key) {
-                if (str_ends_with((string) $key, $suffix)) {
+                // only a key that is this post's own address (the one it has now or one of the layouts it had)
+                if (str_ends_with((string) $key, $suffix) && $entity->canonicalAnnotationAddress((string) $key) === $own) {
                     return (string) $key;
                 }
             }
@@ -101,6 +102,11 @@ final class LegacyAnnotations implements Annotations
         return $all;
     }
 
+    public function canEdit(Entity $entity): bool
+    {
+        return (bool) $entity->canEdit();
+    }
+
     public function canEditAnnotation(Entity $entity, string $permalink): bool
     {
         return (bool) $entity->canEditAnnotation($permalink);
@@ -109,6 +115,11 @@ final class LegacyAnnotations implements Annotations
     public function remove(Entity $entity, string $permalink): bool
     {
         return (bool) $entity->removeAnnotation($permalink) && (bool) $entity->save();
+    }
+
+    public function removeAsAuthor(Entity $entity, string $permalink): bool
+    {
+        return (bool) $entity->removeAnnotation($permalink) && (bool) $entity->save(true);
     }
 
     public function templateType(): string

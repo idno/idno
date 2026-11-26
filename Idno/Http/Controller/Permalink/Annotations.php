@@ -67,7 +67,13 @@ interface Annotations
     public function all(Entity $entity): array;
 
     /**
-     * Whether the viewer may remove the annotation (the post's editor, or the annotation's author).
+     * Whether the viewer may edit the post.
+     */
+    public function canEdit(Entity $entity): bool;
+
+    /**
+     * Whether the viewer may remove the annotation: the post's editor, or the annotation's author (the member the site recorded as having made it HERE: not
+     * whoever a remote page claimed to be).
      */
     public function canEditAnnotation(Entity $entity, string $permalink): bool;
 
@@ -75,6 +81,12 @@ interface Annotations
      * Removes the annotation and saves the post, as the viewer. Whether it was removed and saved.
      */
     public function remove(Entity $entity, string $permalink): bool;
+
+    /**
+     * Removes the annotation and saves the post with the author's right to its own annotation (the viewer may not edit the post): nothing else of the post is
+     * changed. Whether it was removed and saved.
+     */
+    public function removeAsAuthor(Entity $entity, string $permalink): bool;
 
     /**
      * The request's template type (`default`, `json`, `rss`, ...).

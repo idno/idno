@@ -153,29 +153,6 @@ Fixture Site
 </div>
 <a name="pagecontent"></a>
 <div class="idno-content">
-<div class="idno-annotation h-cite" id="annotation-f37f655d224f6f6090c28333786c34a4">
-<div class="idno-annotation-content">
-<div>
-<a href="{site}/profile/carol" class="p-name u-url p-author h-card" rel="nofollow" style="font-weight:600;color:var(--color-text-strong)">
-Carol Member
-</a>
-<span class="idno-entry-meta">
-<a href="#annotation-f37f655d224f6f6090c28333786c34a4" rel="nofollow" class="u-url">
-<time class="dt-published" datetime="2025-12-11T17:00:00+00:00">
-Dec 11, 2025
-</time>
-</a>
-</span>
-</div>
-<div class="e-content" style="margin-top:0.25rem">
-<p>Carol comments on Bob&#039;s note herself.</p>
-</div>
-</div>
-<span class="idno-annotation-delete">
-<a data-form-id="{form-2}"   href="{site}/2025/bobs-note-that-people-reacted-to/annotation/delete?permalink={base64:{site}/2025/bobs-note-that-people-reacted-to/annotations/f37f655d224f6f6090c28333786c34a4}" onclick="document.getElementById('{form-2}').submit(); return false; ">Delete</a>
-</span>
-</div>
-</div><div class="idno-content">
 <div class="idno-annotation">
 <img class="idno-annotation-avatar"
                  src="https://example.org/dave.png"
@@ -195,7 +172,7 @@ on
 </span>
 </div>
 <span class="idno-annotation-delete">
-<a data-form-id="{form-3}"   href="{site}/2025/bobs-note-that-people-reacted-to/annotation/delete?permalink={base64:{site}/2025/bobs-note-that-people-reacted-to/annotations/be1ab1632e4285edc3733b142935c60b}" onclick="document.getElementById('{form-3}').submit(); return false; ">Delete</a>
+<a data-form-id="{form-2}"   href="{site}/2025/bobs-note-that-people-reacted-to/annotation/delete?permalink={base64:{site}/2025/bobs-note-that-people-reacted-to/annotations/be1ab1632e4285edc3733b142935c60b}" onclick="document.getElementById('{form-2}').submit(); return false; ">Delete</a>
 </span>
 </div>
 </div>
@@ -305,14 +282,7 @@ Search
 </div>
 <script src="{site}/js/idno-2026.min.js" defer></script>
 <div class="blank-footer">
-</div><form action="{site}/2025/bobs-note-that-people-reacted-to/annotation/delete?permalink={base64:{site}/2025/bobs-note-that-people-reacted-to/annotations/f37f655d224f6f6090c28333786c34a4}" style="display: none; margin: 0; padding: 0" id="{form-2}" method="POST">
-<textarea name="json">[]</textarea>
-<span class="known-security-token" style="display: none;" id="tid{id}"></span>
-<input type="hidden" name="__bTs" value="{token-time}" />
-<input type="hidden" name="__bTk" value="{token}" />
-<input type="hidden" name="__bTa" value="{site}/2025/bobs-note-that-people-reacted-to/annotation/delete?permalink={base64:{site}/2025/bobs-note-that-people-reacted-to/annotations/f37f655d224f6f6090c28333786c34a4}" />
-</form>
-<form action="{site}/2025/bobs-note-that-people-reacted-to/annotation/delete?permalink={base64:{site}/2025/bobs-note-that-people-reacted-to/annotations/be1ab1632e4285edc3733b142935c60b}" style="display: none; margin: 0; padding: 0" id="{form-3}" method="POST">
+</div><form action="{site}/2025/bobs-note-that-people-reacted-to/annotation/delete?permalink={base64:{site}/2025/bobs-note-that-people-reacted-to/annotations/be1ab1632e4285edc3733b142935c60b}" style="display: none; margin: 0; padding: 0" id="{form-2}" method="POST">
 <textarea name="json">[]</textarea>
 <span class="known-security-token" style="display: none;" id="tid{id}"></span>
 <input type="hidden" name="__bTs" value="{token-time}" />

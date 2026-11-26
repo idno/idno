@@ -43,10 +43,8 @@ final class ShortlinkWebmentionTest extends \Tests\IdnoTestCase
         $this->post = new Status();
         $this->post->body = 'A post that is mentioned at its shortlink';
         $this->post->setAccess('PUBLIC');
-        // (a code of its own: `Entity::setShortURL()` declares a function inside the method, which a second call in one process cannot do, and the suite is one process)
-        $code = 'wmtest' . random_int(1000, 9999);
-        $this->post->shorturl = $code;
         $this->post->save();
+        $code = $this->post->getShortURL(false);
         $target = Idno::site()->config()->getURL() . 's/' . $code;
         $source = 'http://remote.example/mentions-it';
         $html = '<!doctype html><html><body><div class="h-entry"><a class="u-url" href="' . $source . '">permalink</a><div class="p-author h-card"><a class="p-name u-url" href="http://remote.example/">Remote Author</a></div><a href="' . htmlspecialchars($target, ENT_QUOTES) . '">a link</a>'

@@ -1670,27 +1670,32 @@ namespace Idno\Common {
         }
 
         /**
+         * A number written with the letters and digits a short address is made of.
+         *
+         * @param int $id
+         * @return string
+         */
+        private static function shortenNumber($id, $alphabet = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ')
+        {
+            $base  = strlen($alphabet);
+            $short = '';
+            while ($id) {
+                $id    = ($id - ($r = $id % $base)) / $base;
+                $short = $alphabet[$r] . $short;
+            }
+
+            return $short;
+        }
+
+        /**
          * Sets the short URL for this entity.
          * @return string
          */
         function setShortURL()
         {
-            function shorten($id, $alphabet = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ')
-            {
-                $base = strlen($alphabet);
-                $short = '';
-                while ($id) {
-                    $id = ($id - ($r = $id % $base)) / $base;
-                    $short = $alphabet[$r] . $short;
-                };
-
-                return $short;
-            }
-
-            $seed = mt_rand(); //rand(0, 99999999);
-            $code = shorten($seed);
+            $code = self::shortenNumber(random_int(1, mt_getrandmax()));
             while ($entity = static::getByShortURL($code)) {
-                $code = shorten(mt_rand()); //shorten(rand(0, 99999999));
+                $code = self::shortenNumber(random_int(1, mt_getrandmax()));
             }
             $this->shorturl = $code;
             $this->save();
@@ -2798,14 +2803,43 @@ namespace Idno\Common {
             if ($this->canEdit()) {
                 return true;
             }
-            if ($user = \Idno\Core\Idno::site()->session()->currentUser()) {
-                if (!is_array($annotation)) {
-                    $annotation = $this->getAnnotation($annotation);
-                }
-                if (!empty($annotation['owner_url'])) {
-                    if ($annotation['owner_url'] == $user->getURL()) {
-                        return true;
+
+            return $this->isAnnotationAuthor($annotation);
+        }
+
+        /**
+         * Whether the logged-in member wrote the annotation on this site. The annotation records its owner as the member's own
+         * profile address, and the annotation was made here only when its `permalink` is its own key, the address the site invents for
+         * what a member writes on a post (`addAnnotation()` with no address of its own). A webmention keeps the remote page as its
+         * `permalink`, and its owner is whatever that page's h-card claimed: no remote party can name a member as an author.
+         *
+         * @param array|string $annotation The key the annotation is stored under (or its address as shown), or the annotation
+         * @return bool
+         */
+        function isAnnotationAuthor($annotation)
+        {
+            $user = \Idno\Core\Idno::site()->session()->currentUser();
+            if (empty($user)) {
+                return false;
+            }
+            if (is_array($annotation)) {
+                $annotation = $annotation['permalink'] ?? '';
+            }
+            $annotation = (string)$annotation;
+            if ($annotation === '' || empty($this->annotations) || !is_array($this->annotations)) {
+                return false;
+            }
+            foreach ($this->annotations as $list) {
+                foreach (is_array($list) ? $list : [] as $key => $stored) {
+                    if (!is_array($stored) || empty($stored['owner_url']) || !isset($stored['permalink'])) {
+                        continue;
                     }
+                    $key = (string)$key;
+                    if ($key !== $annotation && $this->canonicalAnnotationAddress($key) !== $this->canonicalAnnotationAddress($annotation)) {
+                        continue;
+                    }
+
+                    return $stored['permalink'] === $key && $stored['owner_url'] === $user->getURL();
                 }
             }
 
@@ -2870,17 +2904,17 @@ namespace Idno\Common {
          * @param string $address
          * @return string
          */
-        function canonicalAnnotationAddress($address)
+        function canonicalAnnotationAddress($address, $base = null, $own = null)
         {
             $address = (string)$address;
-            $base    = \Idno\Core\Idno::site()->config()->getURL();
+            $base    = $base ?? \Idno\Core\Idno::site()->config()->getURL();
             if ($base === '' || !str_starts_with($address, $base)) {
                 return $address;
             }
             if (preg_match('#^[0-9]{4}/(?:[0-9]{2}/){1,2}([^/.]+)/annotations/([A-Za-z0-9\-]+)$#', substr($address, strlen($base)), $matches) !== 1) {
                 return $address;
             }
-            $own = $this->getURL();
+            $own = $own ?? $this->getURL();
             if (basename((string)parse_url($own, PHP_URL_PATH)) !== $matches[1]) {
                 return $address;
             }
@@ -2897,9 +2931,11 @@ namespace Idno\Common {
          */
         function withCanonicalAnnotationAddresses($annotations)
         {
+            $base = \Idno\Core\Idno::site()->config()->getURL();
+            $own  = $this->getURL();
             foreach ($annotations as $key => $annotation) {
                 if (is_array($annotation) && isset($annotation['permalink']) && is_string($annotation['permalink'])) {
-                    $annotations[$key]['permalink'] = $this->canonicalAnnotationAddress($annotation['permalink']);
+                    $annotations[$key]['permalink'] = $this->canonicalAnnotationAddress($annotation['permalink'], $base, $own);
                 }
             }
 

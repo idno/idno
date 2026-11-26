@@ -102,4 +102,44 @@ final class AnnotationLayoutTest extends \Tests\IdnoTestCase
         $this->assertFalse((clone $post)->removeAnnotation($this->base() . '2026/a-note/annotations/other'), 'an address that names no annotation removes none');
         $this->assertFalse((clone $post)->removeAnnotation($this->base() . '2026/another/annotations/abc123'));
     }
+
+    public function testAnAnnotationIsFoundByTheKeyOfThisPostAlone(): void
+    {
+        $post = $this->post();
+        $old = $this->base() . '2026/03/a-note/annotations/abc123';
+        $foreign = $this->base() . '2026/03/another-note/annotations/def456';
+        $post->annotations = ['like' => [
+            $old => ['permalink' => $old, 'owner_name' => 'Ada', 'owner_url' => 'https://example.org/ada', 'owner_image' => '', 'content' => '', 'time' => 1, 'title' => ''],
+            $foreign => ['permalink' => $foreign, 'owner_name' => 'Bob', 'owner_url' => 'https://example.org/bob', 'owner_image' => '', 'content' => '', 'time' => 2, 'title' => ''],
+        ]];
+        $annotations = new \Idno\Legacy\LegacyAnnotations();
+
+        $this->assertSame($old, $annotations->keyOf($post, 'abc123'));
+        $this->assertNull($annotations->keyOf($post, 'def456'), 'a key of another post\'s address is not this post\'s annotation');
+        $this->assertNull($annotations->keyOf($post, 'nothing'));
+    }
+
+    public function testTheAuthorIsTheMemberTheSiteRecordedAsHavingMadeTheAnnotationHere(): void
+    {
+        $member = $this->swapUser($this->admin());
+        $mine = $member instanceof \Idno\Entities\User ? $member : \Idno\Core\Idno::site()->session()->currentUser();
+        $post = $this->post();
+        $key = $this->base() . '2026/03/a-note/annotations/own1';
+        $remote = $this->base() . '2026/a-note/annotations/own2';
+        $make = static fn (string $permalink, string $owner): array => ['permalink' => $permalink, 'owner_name' => 'X', 'owner_url' => $owner, 'owner_image' => '', 'content' => '', 'time' => 1, 'title' => ''];
+        $post->annotations = ['reply' => [
+            $key => $make($key, $mine->getURL()),
+            $remote => $make('https://remote.example/claim', $mine->getURL()),
+            $this->base() . '2026/a-note/annotations/own3' => $make($this->base() . '2026/a-note/annotations/own3', 'https://example.org/someone'),
+        ]];
+
+        $this->assertTrue($post->isAnnotationAuthor($key), 'made here, by this member');
+        $this->assertTrue($post->isAnnotationAuthor($this->base() . '2026/a-note/annotations/own1'), 'by the address it is shown at');
+        $this->assertTrue($post->isAnnotationAuthor(['permalink' => $this->base() . '2026/a-note/annotations/own1']), 'by the annotation as a template holds it');
+        $this->assertFalse($post->isAnnotationAuthor($remote), 'a webmention that names the member\'s profile is not theirs');
+        $this->assertFalse($post->isAnnotationAuthor(['permalink' => 'https://remote.example/claim']));
+        $this->assertFalse($post->isAnnotationAuthor($this->base() . '2026/a-note/annotations/own3'), 'another member\'s');
+        $this->assertFalse($post->isAnnotationAuthor(''));
+        $this->assertFalse($post->isAnnotationAuthor('https://remote.example/nothing'));
+    }
 }
