@@ -20,6 +20,23 @@ final class FileWalledAnswersTest extends FileSiteCase
     protected const GROUP = 'files-walled';
 
     /**
+     * The cases the page that replaced the legacy one answers differently ON PURPOSE, with why: the recordings are the legacy page's and are kept as
+     * they were, and each case is held to the recording but for what changed.
+     */
+    private const CHANGED = [
+        'html-visitor' => self::WHY_DOWNLOAD,
+        'restricted-admin' => self::WHY_DOWNLOAD,
+        'recorded-admin' => self::WHY_DOWNLOAD,
+    ];
+
+    /** @var array<string, array<string, mixed>> what changed in each of them */
+    private const KINDS = [
+        'html-visitor' => ['name' => 'x.bin'],
+        'restricted-admin' => ['name' => 'x.bin'],
+        'recorded-admin' => ['name' => 'x.bin'],
+    ];
+
+    /**
      * case => [the file, the viewer, the range or an empty string].
      *
      * @var array<string, array{string, string, string}>
@@ -63,19 +80,18 @@ final class FileWalledAnswersTest extends FileSiteCase
     public function testAVisitorAndAMemberOfAPrivateSite(): void
     {
         foreach (self::CASES as $case => [$file, $viewer, $range]) {
-            $this->record($case, 'GET', $this->fileAddress($file, '/x.bin'), $range === '' ? [] : ['Range' => $range], $viewer, null, self::withTheRequestTimeMarked(...));
+            $this->recordFile($case, 'GET', $this->fileAddress($file, '/x.bin'), $range === '' ? [] : ['Range' => $range], $viewer);
         }
         $this->addToAssertionCount(1);
     }
 
     public function testAHeadAnOptionsAndAMissingFileOfAPrivateSite(): void
     {
-        $mark = self::withTheRequestTimeMarked(...);
-        $this->record('head-image-visitor', 'HEAD', $this->fileAddress('image'), [], 'visitor', null, $mark);
-        $this->record('head-restricted-visitor', 'HEAD', $this->fileAddress('restricted'), [], 'visitor', null, $mark);
-        $this->record('options-image-visitor', 'OPTIONS', $this->fileAddress('image'), [], 'visitor', null, $mark);
-        $this->record('missing-visitor', 'GET', '/file/' . str_repeat('0', 32), [], 'visitor', null, $mark);
-        $this->record('missing-member', 'GET', '/file/' . str_repeat('0', 32), [], 'member', null, $mark);
+        $this->recordFile('head-image-visitor', 'HEAD', $this->fileAddress('image'), [], 'visitor');
+        $this->recordFile('head-restricted-visitor', 'HEAD', $this->fileAddress('restricted'), [], 'visitor');
+        $this->recordFile('options-image-visitor', 'OPTIONS', $this->fileAddress('image'), [], 'visitor');
+        $this->recordFile('missing-visitor', 'GET', '/file/' . str_repeat('0', 32), [], 'visitor');
+        $this->recordFile('missing-member', 'GET', '/file/' . str_repeat('0', 32), [], 'member');
         $this->addToAssertionCount(1);
     }
 }

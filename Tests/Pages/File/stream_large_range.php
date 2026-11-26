@@ -25,8 +25,8 @@ if ($argc !== 4 || !is_file($argv[1])) {
 $hash  = hash_init('sha256');
 $count = 0;
 $stream = fopen($file, 'rb');
-\Idno\Pages\File\View::seekTo($stream, $start);
-\Idno\Pages\File\View::streamRange(
+\Idno\Http\Controller\File\FileStream::seekTo($stream, $start);
+\Idno\Http\Controller\File\FileStream::streamRange(
     $stream, $start, $end, static function (string $chunk) use (&$count, $hash): void {
         $count += strlen($chunk);
         hash_update($hash, $chunk);

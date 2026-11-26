@@ -372,7 +372,7 @@ final class SitePageDrawingTest extends PrivateSiteTestCase
 
     public function testAFileASitePageServesKeepsWhatTheLegacyFilePageSent(): void
     {
-        // `Idno\Pages\File\View` sent one of three sets of lines by `header()`, and `Last-Modified` of the entity, and no `ETag`: the page asks
+        // The page of a stored file sent one of three sets of lines by `header()` (`FileCaching`), and `Last-Modified` of the entity, and no `ETag`: a page asks
         // for them the supported way, also on a `BinaryFileResponse`, which sets its own `Last-Modified` and `public`
         $expected = [
             'file-public' => ['Cache-Control' => ['public'], 'Pragma' => ['public'], 'Expires' => ['Fri, 01 Jan 2027 00:00:00 GMT']],

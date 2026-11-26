@@ -192,7 +192,7 @@ namespace Idno\Core {
             $this->routes()->addRoute('/file/upload/?', '\Idno\Pages\File\Upload', true);
             $this->routes()->addRoute('/file/picker/?', '\Idno\Pages\File\Picker', true);
             $this->routes()->addRoute('/filepicker/?', '\Idno\Pages\File\Picker', true);
-            $this->routes()->addRoute('/file/(:id)(/.*)?', '\Idno\Pages\File\View', true);
+            $this->routes()->addRoute('/file/(:id)(/.*)?', \Idno\Legacy\ControllerRoute::class, true);
 
             /**
              * Users

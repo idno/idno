@@ -30,7 +30,7 @@ namespace Idno\Pages\Admin\Export {
                 header('Content-disposition: attachment; filename=export.xml');
                 header('Content-Length: ' . $stats['size']);
 
-                \Idno\Pages\File\View::endOutputBuffers(); // so that the document is sent as it is read, not held
+                \Idno\Http\Controller\File\FileStream::endOutputBuffers(); // so that the document is sent as it is read, not held
                 fpassthru($f);
 
                 fclose($f);

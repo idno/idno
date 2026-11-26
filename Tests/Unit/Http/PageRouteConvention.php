@@ -19,10 +19,15 @@ final class PageRouteConvention
         'idno_test_site_page_undeclared' => true,
     ];
 
-    /** Routes whose last parameter takes the rest of the path, a trailing slash included, so they have no `{slash}`, each with why */
+    /**
+     * Routes whose last parameter takes the rest of the path, a trailing slash included, so they have no `{slash}`, each with why and a path the last
+     * parameter must be able to take
+     */
     private const NO_TRAILING_SLASH = [
         // the tag is what follows `/tag/`: a trailing slash is the tag page's to take off the tag (one slash, as it always did)
-        'idno_tag' => true,
+        'idno_tag' => 'a/b',
+        // what follows a file's id is the name a download is given, a slash and any path: the legacy pattern `(/.*)?` took them all, a trailing slash too
+        'idno_file' => '/a/b/',
     ];
 
     /**
@@ -57,7 +62,7 @@ final class PageRouteConvention
                 }
                 if ($last === '' || !str_ends_with($path, '{' . $last . '}')) {
                     $found[] = $name . ': an exempt route ends with its last parameter';
-                } elseif (preg_match('~^(?:' . (string) $route->getRequirement($last) . ')$~', 'a/b') !== 1) {
+                } elseif (preg_match('~^(?:' . (string) $route->getRequirement($last) . ')$~', self::NO_TRAILING_SLASH[$name]) !== 1) {
                     $found[] = $name . ': the last parameter of an exempt route takes the rest of the path, slashes included';
                 }
             }

@@ -245,7 +245,7 @@ final class SitePageFixtureController
                 return new \Symfony\Component\HttpFoundation\StreamedResponse(static function (): void {
                     echo 'streamed';
                 });
-            // What the legacy file page (`Idno\Pages\File\View`) sent, by the supported way: a file anyone may keep; one restricted to
+            // What the page of a stored file sends (`FileCaching`), by the supported way: a file anyone may keep; one restricted to
             // those who may read it; one for administrators only. `Last-Modified` is the entity's, through the context.
             case 'file-public':
                 $context->setCaching(['Pragma' => 'public', 'Cache-Control' => 'public', 'Expires' => 'Fri, 01 Jan 2027 00:00:00 GMT']);

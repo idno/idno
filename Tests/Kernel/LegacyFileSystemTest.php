@@ -7,7 +7,7 @@ namespace Tests\Kernel;
 use Idno\Core\Idno;
 use Idno\Legacy\FlysystemFile;
 use Idno\Legacy\FlysystemFileSystem;
-use Idno\Pages\File\View;
+use Idno\Http\Controller\File\FileStream;
 use Idno\Storage\Files\FilesystemFactory;
 use Idno\Storage\Files\FileStore;
 use League\Flysystem\FilesystemOperator;
@@ -460,7 +460,7 @@ final class LegacyFileSystemTest extends IdnoTestCase
             fclose($stream);
 
             $stream = fopen('idno-test-noseek://file', 'r');
-            View::seekTo($stream, 100);
+            FileStream::seekTo($stream, 100);
             $range = fread($stream, 100);
             fclose($stream);
         } finally {
@@ -474,7 +474,7 @@ final class LegacyFileSystemTest extends IdnoTestCase
     {
         $stream = fopen('php://temp', 'w+b');
         fwrite($stream, '0123456789');
-        View::seekTo($stream, 4);
+        FileStream::seekTo($stream, 4);
 
         $this->assertSame('456', fread($stream, 3));
         fclose($stream);
@@ -485,7 +485,7 @@ final class LegacyFileSystemTest extends IdnoTestCase
         $stream = fopen('php://temp', 'w+b');
         fwrite($stream, '0123456789');
         rewind($stream);
-        View::seekTo($stream, 2);
+        FileStream::seekTo($stream, 2);
 
         // Both positions of a range are inclusive: bytes 2 to 5 are four bytes, the number the response's
         // Content-Length announces. The file page used to read $end bytes (five here) and rely on the
@@ -494,11 +494,11 @@ final class LegacyFileSystemTest extends IdnoTestCase
         fclose($stream);
     }
 
-    /** The bytes View::streamRange() writes for a range, collected. */
+    /** The bytes FileStream::streamRange() writes for a range, collected. */
     private function streamed($stream, int $start, int $end): string
     {
         $out = '';
-        View::streamRange($stream, $start, $end, function (string $chunk) use (&$out): void {
+        FileStream::streamRange($stream, $start, $end, function (string $chunk) use (&$out): void {
             $out .= $chunk;
         });
 
@@ -512,7 +512,7 @@ final class LegacyFileSystemTest extends IdnoTestCase
         fwrite($stream, $data);
         rewind($stream);
         $out = '';
-        $this->assertSame(strlen($data), View::streamAll($stream, function (string $chunk) use (&$out): void {
+        $this->assertSame(strlen($data), FileStream::streamAll($stream, function (string $chunk) use (&$out): void {
             $out .= $chunk;
         }));
         $this->assertSame($data, $out);
@@ -523,7 +523,7 @@ final class LegacyFileSystemTest extends IdnoTestCase
         try {
             $stalled = fopen('idnostall://x', 'rb');
             $started = microtime(true);
-            $this->assertSame(0, View::streamAll($stalled, function (string $chunk): void {
+            $this->assertSame(0, FileStream::streamAll($stalled, function (string $chunk): void {
                 $this->fail('nothing was read');
             }));
             $this->assertLessThan(5.0, microtime(true) - $started);
@@ -539,7 +539,7 @@ final class LegacyFileSystemTest extends IdnoTestCase
         $stream = fopen('php://temp', 'w+b');
         fwrite($stream, '0123456789');
         rewind($stream);
-        View::seekTo($stream, 4);
+        FileStream::seekTo($stream, 4);
 
         $started = microtime(true);
         $this->assertSame('456789', $this->streamed($stream, 4, 2000));

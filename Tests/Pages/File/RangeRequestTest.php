@@ -4,7 +4,6 @@ namespace Tests\Pages\File {
 
     use Idno\Core\Idno;
     use Idno\Core\Webservice;
-    use Idno\Pages\File\View;
 
     /**
      * Requests for part of a stored file (the Range header, RFC 9110 section 14), which is how
@@ -131,36 +130,6 @@ namespace Tests\Pages\File {
         /**
          * @dataProvider satisfiableRanges
          */
-        public function testParseRange($range, $first, $last)
-        {
-            $this->assertSame([$first, $last], View::parseRange($range, self::SIZE));
-        }
-
-        /**
-         * @dataProvider ignoredRanges
-         */
-        public function testParseRangeIgnoresWhatIsNotOneRangeOfBytes($range)
-        {
-            $this->assertNull(View::parseRange($range, self::SIZE));
-        }
-
-        /**
-         * @dataProvider unsatisfiableRanges
-         */
-        public function testParseRangeRefusesWhatCannotBeSatisfied($range)
-        {
-            $this->assertFalse(View::parseRange($range, self::SIZE));
-        }
-
-        public function testParseRangeOfEmptyFile()
-        {
-            $this->assertFalse(View::parseRange('bytes=0-', 0));
-            $this->assertFalse(View::parseRange('bytes=-10', 0));
-        }
-
-        /**
-         * @dataProvider satisfiableRanges
-         */
         public function testRangeIsServed($range, $first, $last)
         {
             $result = $this->request($range);
@@ -195,6 +164,7 @@ namespace Tests\Pages\File {
 
             $this->assertEquals(416, $result['response'], "A request for $range can't be satisfied.");
             $this->assertSame(['bytes */' . self::SIZE], $this->headerValues($result, 'Content-Range'), 'The answer should say how large the file is.');
+            $this->assertSame(['0'], $this->headerValues($result, 'Content-Length'), 'The answer has no body: its length is not the length of the file.');
             $this->assertSame('', (string) $result['content'], 'No part of the file should be sent.');
         }
 

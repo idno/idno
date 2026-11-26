@@ -62,6 +62,24 @@ final class PageRouteConventionTest extends TestCase
         $this->assertSame(['no_lead', 'no_slash', 'bad_requirement', 'bad_default', 'missing_method', 'undeclared_method', 'free_but_utf8', 'free_dot'], array_keys($named), implode("\n", $found));
     }
 
+    public function testTheFileRoutesExemptionIsNarrow(): void
+    {
+        $build = static function (string $path, array $requirements, array $defaults, array $methods = ['GET', 'HEAD', 'OPTIONS'], string $name = 'idno_file'): RouteCollection {
+            $routes = new RouteCollection();
+            $routes->add($name, new Route($path, ['_controller' => RoutesConventionController::class . '::page'] + $defaults, $requirements, ['utf8' => false], '', [], $methods));
+
+            return $routes;
+        };
+        $requirements = ['lead' => '/?', 'id' => '[A-Za-z0-9\-]+', 'rest' => '(?:/.*)?'];
+        $defaults = ['lead' => '', 'rest' => ''];
+
+        $this->assertSame([], PageRouteConvention::violations($build('/{lead}file/{id}{rest}', $requirements, $defaults)), 'a name after the id, any path, a trailing slash');
+        $this->assertNotSame([], PageRouteConvention::violations($build('/{lead}file/{id}{rest}', ['rest' => '(?:/[^/]*)?'] + $requirements, $defaults)), 'the rest takes any path');
+        $this->assertNotSame([], PageRouteConvention::violations($build('/{lead}file/{id}{rest}', ['rest' => '(?:/.*)?', 'lead' => '.*'] + $requirements, $defaults)), 'lead requirement');
+        $this->assertNotSame([], PageRouteConvention::violations($build('/{lead}file/{id}{rest}{slash}', $requirements + ['slash' => '/?'], $defaults + ['slash' => ''])), 'no {slash}');
+        $this->assertNotSame([], PageRouteConvention::violations($build('/{lead}file/{id}{rest}', $requirements, $defaults, name: 'another_route')), 'another route is not exempt');
+    }
+
     public function testTheTagRoutesExemptionIsNarrowAndItStillFailsOnEverythingElse(): void
     {
         $build = static function (string $path, array $requirements, array $defaults, array $methods = ['GET', 'HEAD', 'OPTIONS'], array $options = ['utf8' => false]): RouteCollection {

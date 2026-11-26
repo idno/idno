@@ -300,7 +300,7 @@ abstract class PageShell extends Page
         if ($sent) {
             // sent as it is made (a file is never held in memory), and never for a HEAD, whose answer has no body: a stream's callback does work
             if ($context->request()->getRealMethod() !== 'HEAD') {
-                \Idno\Pages\File\View::endOutputBuffers();
+                \Idno\Http\Controller\File\FileStream::endOutputBuffers();
                 $response->sendContent();
             }
 

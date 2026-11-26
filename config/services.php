@@ -44,7 +44,7 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         'Config' => ['BootConfig.php'],
         // FrontController: static methods only, used by index.php before the container exists. Client/: the
         // HTTP client factory and the bounded body reader, static helpers (the clients are wired below).
-        'Http' => ['Client', 'FrontController.php', 'Page/AddedHeaders.php', 'Page/ConditionalRequest.php', 'Page/DrawnPage.php', 'Page/HttpDate.php', 'Page/SitePage.php', 'Page/PageContext.php', 'Page/PageError.php', 'Page/PageNotModified.php', 'Page/PageRedirect.php', 'Page/RoutedByLegacyTable.php', 'Webmention/ReceivedWebmention.php', 'Webmention/TargetHosts.php', 'Webmention/WebmentionTarget.php'],
+        'Http' => ['Client', 'FrontController.php', 'Page/AddedHeaders.php', 'Page/ConditionalRequest.php', 'Page/DrawnPage.php', 'Page/HttpDate.php', 'Page/SitePage.php', 'Page/PageContext.php', 'Page/PageError.php', 'Page/PageNotModified.php', 'Page/PageRedirect.php', 'Page/RoutedByLegacyTable.php', 'Controller/File/ByteRange.php', 'Controller/File/FileCaching.php', 'Controller/File/FileLookup.php', 'Controller/File/FileStream.php', 'Controller/File/ServedFile.php', 'Webmention/ReceivedWebmention.php', 'Webmention/TargetHosts.php', 'Webmention/WebmentionTarget.php'],
         // Takes the kernel (so cannot be a container service); functions.php is not a class.
         'Console' => ['Application.php', 'functions.php'],
         // Value and helper classes (a query tree and its nodes, an entity query, the record index
@@ -405,6 +405,9 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
     $services->set(\Idno\Legacy\LegacyProfiles::class);
     $services->alias(\Idno\Http\Controller\Profile\Profiles::class, \Idno\Legacy\LegacyProfiles::class)->public();
     $services->set(\Idno\Http\Controller\Profile\ProfilePages::class)->public();
+    // The stored files, over the legacy file store and session: the file page's service takes the interface
+    $services->set(\Idno\Legacy\LegacyStoredFiles::class);
+    $services->alias(\Idno\Http\Controller\File\StoredFiles::class, \Idno\Legacy\LegacyStoredFiles::class);
     // The annotation pages and the shortlink, over the same finders; the controllers take the services
     $services->set(\Idno\Legacy\LegacyAnnotations::class);
     $services->alias(\Idno\Http\Controller\Permalink\Annotations::class, \Idno\Legacy\LegacyAnnotations::class);

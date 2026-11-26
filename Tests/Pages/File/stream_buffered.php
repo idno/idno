@@ -22,10 +22,10 @@ ob_start();
 echo 'BEFORE';
 $stream = fopen($file, 'rb');
 if ($mode === 'all') {
-    \Idno\Pages\File\View::streamAll($stream);
+    \Idno\Http\Controller\File\FileStream::streamAll($stream);
 } else {
-    \Idno\Pages\File\View::seekTo($stream, 0);
-    \Idno\Pages\File\View::streamRange($stream, 0, $size - 1);
+    \Idno\Http\Controller\File\FileStream::seekTo($stream, 0);
+    \Idno\Http\Controller\File\FileStream::streamRange($stream, 0, $size - 1);
 }
 fclose($stream);
 

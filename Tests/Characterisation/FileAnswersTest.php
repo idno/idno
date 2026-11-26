@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Characterisation;
 
+use Idno\Http\Page\HttpDate;
 use Tests\Support\RecordedAnswers;
 
 /**
@@ -22,6 +23,121 @@ final class FileAnswersTest extends FileSiteCase
     protected const SHARED_SITE = true;
 
     protected const GROUP = 'files';
+
+    /**
+     * The cases the page that replaced the legacy one answers differently ON PURPOSE, with why: the recordings are the legacy page's and are kept as
+     * they were, and each case is held to the recording but for what changed (`KINDS`).
+     */
+    private const CHANGED = [
+        'html-visitor' => self::WHY_DOWNLOAD,
+        'html-admin' => self::WHY_DOWNLOAD,
+        'restricted-admin' => self::WHY_DOWNLOAD,
+        'site-export-admin' => self::WHY_DOWNLOAD,
+        'recorded-admin' => self::WHY_DOWNLOAD,
+        'range-html' => self::WHY_DOWNLOAD,
+        'range-restricted-admin' => self::WHY_DOWNLOAD,
+        'range-recorded-admin' => self::WHY_DOWNLOAD,
+        'range-site-export-admin' => self::WHY_DOWNLOAD,
+        'head-html' => self::WHY_DOWNLOAD,
+        'head-restricted-admin' => self::WHY_DOWNLOAD,
+        'head-restricted-admin-range' => self::WHY_DOWNLOAD,
+        'head-recorded-admin' => self::WHY_DOWNLOAD,
+        'html-no-name' => self::WHY_DOWNLOAD,
+        'html-name' => self::WHY_DOWNLOAD,
+        'html-name-with-a-space' => self::WHY_DOWNLOAD,
+        'html-upper-case-id' => self::WHY_DOWNLOAD,
+        'zip-no-name' => self::WHY_DOWNLOAD,
+        'ims-restricted-before-admin' => self::WHY_DOWNLOAD,
+        'ims-restricted-after-admin' => self::WHY_DOWNLOAD,
+        'ims-recorded-after-admin' => self::WHY_DOWNLOAD,
+        'range-unsatisfiable' => self::WHY_REFUSED,
+        'range-starts-at-the-size' => self::WHY_REFUSED,
+        'range-inverted' => self::WHY_REFUSED,
+        'range-empty-suffix' => self::WHY_REFUSED,
+        'head-image-unsatisfiable' => self::WHY_REFUSED,
+        'range-html-unsatisfiable' => self::WHY_DOWNLOAD . '; ' . self::WHY_REFUSED,
+        'range-restricted-admin-unsatisfiable' => self::WHY_DOWNLOAD . '; ' . self::WHY_REFUSED,
+        'malformed-host' => self::WHY_NOT_SERVED,
+        'malformed-host-head' => self::WHY_NOT_SERVED,
+        'put-visitor' => self::WHY_NOT_SERVED,
+        'post-visitor' => self::WHY_NOT_SERVED,
+        'delete-visitor' => self::WHY_NOT_SERVED,
+        'image-doubled-slash-after-file' => self::WHY_NOT_SERVED,
+        'html-name-dots' => 'an encoded slash in a name is a slash to the route (the legacy router, given the path with its dot segments resolved by the rig\'s server, answered the 404 page): the download is named after the last segment',
+        'html-name-hostile' => 'the route takes any character in a name, a line break too, which the legacy pattern did not match (the 404 page): the download\'s name replaces every character that is not a letter, a digit or one of ._-',
+        'xhr-restricted-visitor' => self::WHY_XHR,
+        'xhr-restricted-admin' => self::WHY_XHR,
+        'xhr-missing' => self::WHY_XHR,
+        'ims-image-before' => self::WHY_CONDITIONAL,
+        'ims-image-after' => self::WHY_CONDITIONAL,
+        'ims-image-before-head' => self::WHY_CONDITIONAL,
+        'ims-image-after-head' => self::WHY_CONDITIONAL,
+        'ims-image-before-range' => self::WHY_CONDITIONAL,
+        'ims-image-after-range' => self::WHY_CONDITIONAL,
+        'ims-image-garbage' => self::WHY_CONDITIONAL . '; a date that is not an HTTP date is ignored',
+        'ims-html-before' => self::WHY_CONDITIONAL,
+        'ims-html-after' => self::WHY_CONDITIONAL,
+        'ims-attached-owner-before-owner' => self::WHY_CONDITIONAL,
+        'ims-attached-owner-after-owner' => self::WHY_CONDITIONAL,
+    ];
+
+    /**
+     * What changed in each of them (see `assertTheAnswerThatChanged()`).
+     *
+     * @var array<string, array<string, mixed>>
+     */
+    private const KINDS = [
+        'html-visitor' => ['name' => 'html.bin'],
+        'html-admin' => ['name' => 'html.bin'],
+        'restricted-admin' => ['name' => 'restricted.bin'],
+        'site-export-admin' => ['name' => 'site-export.bin'],
+        'recorded-admin' => ['name' => 'recorded.bin'],
+        'range-html' => ['name' => 'x.bin'],
+        'range-restricted-admin' => ['name' => 'x.bin'],
+        'range-recorded-admin' => ['name' => 'x.bin'],
+        'range-site-export-admin' => ['name' => 'x.bin'],
+        'head-html' => ['name' => 'x.bin'],
+        'head-restricted-admin' => ['name' => 'x.bin'],
+        'head-restricted-admin-range' => ['name' => 'x.bin'],
+        'head-recorded-admin' => ['name' => 'x.bin'],
+        'html-no-name' => ['name' => 'download'],
+        'html-name' => ['name' => 'page.html'],
+        'html-name-with-a-space' => ['name' => 'some_name.html'],
+        'html-upper-case-id' => ['name' => 'download'],
+        'zip-no-name' => ['name' => 'download'],
+        'ims-restricted-before-admin' => ['name' => 'download'],
+        'ims-restricted-after-admin' => ['name' => 'download'],
+        'ims-recorded-after-admin' => ['name' => 'download'],
+        'range-unsatisfiable' => ['refused' => true],
+        'range-starts-at-the-size' => ['refused' => true],
+        'range-inverted' => ['refused' => true],
+        'range-empty-suffix' => ['refused' => true],
+        'head-image-unsatisfiable' => ['refused' => true],
+        'range-html-unsatisfiable' => ['name' => 'x.bin', 'refused' => true],
+        'range-restricted-admin-unsatisfiable' => ['name' => 'x.bin', 'refused' => true],
+        'malformed-host' => ['page' => 404],
+        'malformed-host-head' => ['page' => 404, 'head' => true],
+        'put-visitor' => ['page' => 404],
+        'post-visitor' => ['page' => 404],
+        'delete-visitor' => ['page' => 404],
+        'image-doubled-slash-after-file' => ['page' => 404],
+        'html-name-dots' => ['status' => 200, 'bytes' => true, 'download' => 'x.html'],
+        'html-name-hostile' => ['status' => 200, 'bytes' => true, 'download' => '__x______X-A_b.html'],
+        'xhr-restricted-visitor' => ['xhr' => true],
+        'xhr-restricted-admin' => ['xhr' => true],
+        'xhr-missing' => ['xhr' => true],
+        'ims-image-before' => ['status' => 200, 'bytes' => true],
+        'ims-image-after' => ['status' => 304],
+        'ims-image-before-head' => ['status' => 200],
+        'ims-image-after-head' => ['status' => 304],
+        'ims-image-before-range' => ['status' => 206, 'bytes' => 'ABCDEFGHIJ'],
+        'ims-image-after-range' => ['status' => 304],
+        'ims-image-garbage' => ['status' => 200, 'bytes' => true],
+        'ims-html-before' => ['status' => 200, 'bytes' => true, 'download' => 'download'],
+        'ims-html-after' => ['status' => 304],
+        'ims-attached-owner-before-owner' => ['status' => 200, 'bytes' => true],
+        'ims-attached-owner-after-owner' => ['status' => 304],
+    ];
 
     /**
      * Each seeded file for each viewer: case => [the file, the viewer].
@@ -130,17 +246,6 @@ final class FileAnswersTest extends FileSiteCase
     protected function seedSharedSite(): void
     {
         $this->seedFiles();
-    }
-
-    /**
-     * One recorded request for a file, the time of the request marked in place of `Last-Modified`.
-     *
-     * @param array<string, string>     $headers
-     * @param string|array<string>|null $body
-     */
-    private function recordFile(string $case, string $method, string $path, array $headers = [], string $viewer = 'visitor'): SiteResponse
-    {
-        return $this->record($case, $method, $path, $headers, $viewer, null, self::withTheRequestTimeMarked(...));
     }
 
     public function testEachFileForEachViewer(): void
@@ -270,5 +375,102 @@ final class FileAnswersTest extends FileSiteCase
         $this->recordFile('ims-recorded-after-admin', 'GET', $this->fileAddress('recorded'), $after, 'admin');
         $this->recordFile('ims-missing', 'GET', '/file/' . str_repeat('0', 32), $after);
         $this->addToAssertionCount(1);
+    }
+
+    public function testEveryCaseThatDiffersOnPurposeIsARecordedCaseAndHasItsAssertion(): void
+    {
+        $this->assertSame(array_keys(self::CHANGED), array_keys(self::KINDS));
+        foreach (self::CHANGED as $case => $why) {
+            $this->assertNotSame('', $why, $case);
+            $this->assertFileExists(self::recordedAnswersDirectory() . '/' . self::GROUP . '/' . $case . '.txt', $case);
+        }
+    }
+
+    /** A download is called after the last segment of the address it is asked for at, whatever the file's id. */
+    public function testADownloadIsNamedAfterItsAddress(): void
+    {
+        $id = $this->seedFiles()['html'];
+        $names = ['/page.html' => 'page.html', '' => 'download', '/' => 'download', '/a/b/c.zip' => 'c.zip', '/some%20name.html' => 'some_name.html', '/..%2f..%2fx.html' => 'x.html'];
+        foreach ($names as $rest => $name) {
+            $answer = $this->site()->request('GET', '/file/' . $id . $rest);
+            $this->assertSame(200, $answer->status, $rest);
+            $this->assertSame('attachment; filename="' . $name . '"', $answer->header('Content-Disposition'), $rest);
+            $this->assertStringNotContainsString($id, (string) $answer->header('Content-Disposition'), 'it is no longer the file\'s id');
+        }
+        $this->assertNull($this->site()->request('GET', $this->fileAddress('image', '/photo.png'))->header('Content-Disposition'), 'an image is shown, not downloaded');
+    }
+
+    /** What a public file's `Expires` is: an HTTP date in GMT, thirty days after the request (it was the server\'s time zone with a numeric offset). */
+    public function testAPublicFilesExpiresIsAnHttpDate(): void
+    {
+        $answer = $this->site()->request('GET', $this->fileAddress('image'));
+
+        $expires = (string) $answer->header('Expires');
+        $this->assertMatchesRegularExpression('/^[A-Z][a-z]{2}, \d{2} [A-Z][a-z]{2} \d{4} \d{2}:\d{2}:\d{2} GMT$/', $expires);
+        $this->assertNotNull(HttpDate::parse($expires), 'a recipient reads it');
+        $date = HttpDate::parse((string) $answer->header('Date'));
+        $this->assertNotNull($date);
+        $this->assertEqualsWithDelta($date + 30 * 86400, HttpDate::parse($expires), 5);
+        $this->assertSame('public', $answer->header('Cache-Control'));
+        $this->assertSame('public', $answer->header('Pragma'));
+    }
+
+    /** A range nothing of the file satisfies has no body: the answer says so, whatever the length of the file. */
+    public function testARefusedRangeHasNoBody(): void
+    {
+        $answer = $this->site()->request('GET', $this->fileAddress('image'), ['Range' => 'bytes=999999-']);
+
+        $this->assertSame(416, $answer->status);
+        $this->assertSame('bytes */300', $answer->header('Content-Range'));
+        $this->assertSame('0', $answer->header('Content-Length'));
+        $this->assertSame('', $answer->body);
+    }
+
+    /** A request for part of a file whose copy the client has is answered "not modified" (as a request for all of it is), never with the part. */
+    public function testARangeWithASatisfiedConditionIsNotModified(): void
+    {
+        $future = HttpDate::format(time() + 86400);
+        foreach ([[], ['Range' => 'bytes=0-9']] as $range) {
+            $answer = $this->site()->request('GET', $this->fileAddress('image'), ['If-Modified-Since' => $future] + $range);
+            $this->assertSame(304, $answer->status, json_encode($range));
+            $this->assertSame('', $answer->body);
+            $this->assertNull($answer->header('Content-Range'));
+        }
+        // beside an If-None-Match the date is ignored
+        $this->assertSame(200, $this->site()->request('GET', $this->fileAddress('image'), ['If-Modified-Since' => $future, 'If-None-Match' => '"x"'])->status);
+        // an archive of the site is always sent
+        $this->assertSame(200, $this->site()->request('GET', $this->fileAddress('restricted'), $this->asViewer('admin', ['If-Modified-Since' => $future]))->status);
+    }
+
+    /**
+     * A HEAD answers with the headers and reads nothing of the file: the stored bytes are made unreadable, the file is still found (it is a stat), and
+     * a GET (which must read them) says in the site's log that it could not, where a HEAD says nothing.
+     */
+    public function testAHeadReadsNothing(): void
+    {
+        if (function_exists('posix_geteuid') && posix_geteuid() === 0) {
+            $this->markTestSkipped('A file cannot be made unreadable to root.');
+        }
+        $id = $this->seedFiles()['pdf'];
+        $stored = glob($this->uploadDirectory() . '/*/0/0/0/0/' . $id . '.file');
+        $this->assertCount(1, $stored ?: [], 'the file is in the upload directory');
+        $before = $this->logOffset();
+        chmod($stored[0], 0000);
+        try {
+            $head = $this->site()->request('HEAD', $this->fileAddress('pdf'));
+            $this->assertSame(200, $head->status);
+            $this->assertSame('300', $head->header('Content-Length'));
+            $this->assertSame('', $head->body);
+            $this->assertStringNotContainsString('Could not read a file', $this->logSince($before), 'a HEAD read nothing');
+
+            try {
+                $this->site()->request('GET', $this->fileAddress('pdf'));
+            } catch (\RuntimeException) {
+                // (the answer announces 300 bytes and holds none: the client says so)
+            }
+            $this->assertStringContainsString('Could not read a file', $this->logSince($before), 'a GET reads the file');
+        } finally {
+            chmod($stored[0], 0644);
+        }
     }
 }
