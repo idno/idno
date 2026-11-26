@@ -1,0 +1,28 @@
+status 403
+cache-control: no-store, no-cache, must-revalidate
+content-length: <the length of the body>
+content-type: application/rss+xml
+expires: <past>
+link: <{site}/indieauth/auth>; rel="authorization_endpoint"
+link: <{site}/indieauth/token>; rel="token_endpoint"
+link: <{site}/micropub/endpoint>; rel="micropub"
+pragma: no-cache
+x-clacks-overhead: GNU Terry Pratchett
+x-powered-by: https://idno.co
+
+<?xml version="1.0"?>
+<rss version="2.0" xmlns:g="http://base.google.com/ns/1.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:geo="http://www.w3.org/2003/01/geo/wgs84_pos#" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" xmlns:wp="http://wordpress.org/export/1.2/" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>Idno site</title>
+    <itunes:author>Idno site</itunes:author>
+    <description><![CDATA[A social website powered by Idno]]></description>
+    <itunes:summary><![CDATA[A social website powered by Idno]]></itunes:summary>
+    <link>{site}/profile/ada</link>
+    <language>en</language>
+    <itunes:explicit>No</itunes:explicit>
+    <atom:link href="https://hub.example/" rel="hub"/>
+    <atom:link href="{site}/profile/ada?_t=rss" rel="self" type="application/rss+xml"/>
+    <generator>Idno https://idno.co</generator>
+    <!--##KNOWNFEEDITEMS##-->
+  </channel>
+</rss>

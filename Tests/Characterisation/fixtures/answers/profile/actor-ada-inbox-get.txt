@@ -1,0 +1,23 @@
+status 200
+cache-control: no-store, no-cache, must-revalidate
+content-type: application/activity+json
+expires: <past>
+link: <{site}/indieauth/auth>; rel="authorization_endpoint"
+link: <{site}/indieauth/token>; rel="token_endpoint"
+link: <{site}/micropub/endpoint>; rel="micropub"
+link: <{site}/webmention/>; rel="http://webmention.org/"
+link: <{site}/webmention/>; rel="webmention"
+link: <https://hub.example/>; rel="hub"
+link: <{site}/actor/ada/inbox>; rel="self"
+pragma: no-cache
+vary: Accept
+x-clacks-overhead: GNU Terry Pratchett
+x-powered-by: https://idno.co
+
+{
+    "@context": "https://www.w3.org/ns/activitystreams",
+    "id": "{site}/actor/ada/inbox",
+    "type": "OrderedCollection",
+    "totalItems": 0,
+    "orderedItems": []
+}

@@ -1,0 +1,84 @@
+status 200
+access-control-allow-origin: *
+cache-control: no-store, no-cache, must-revalidate
+content-length: <the length of the body>
+content-type: text/markdown; charset=utf-8
+expires: <past>
+last-modified: Fri, 20 Mar 2026 12:00:00 GMT
+link: <{site}/indieauth/auth>; rel="authorization_endpoint"
+link: <{site}/indieauth/token>; rel="token_endpoint"
+link: <{site}/micropub/endpoint>; rel="micropub"
+link: <{site}/webmention/>; rel="http://webmention.org/"
+link: <{site}/webmention/>; rel="webmention"
+link: <https://hub.example/>; rel="hub"
+link: <{site}/profile/ada?_t=markdown>; rel="self"
+link: <{site}/profile/ada>; rel="canonical"
+pragma: no-cache
+vary: Accept
+x-clacks-overhead: GNU Terry Pratchett
+x-content-type-options: nosniff
+x-powered-by: https://idno.co
+
+---
+title: "Ada Admin"
+description: "The Fixture Site profile for Ada Admin"
+link: "{site}/profile/ada"
+---
+
+# Ada Admin
+
+## [A note to open by its id ...]({site}/2026/a-note-to-open-by-its-id-in-a-view)
+
+*Ada Admin, Sun, 15 Mar 2026 13:00:00 +0000*
+
+A note to open by its id in a view address.
+
+## [Café notes]({site}/2026/caf%C3%A9-notes)
+
+*Ada Admin, Sun, 15 Mar 2026 12:00:00 +0000*
+
+Notes from a café, with an accent in the title.
+
+## [A longer article about templates]({site}/2026/a-longer-article-about-templates)
+
+*Ada Admin, Mon, 02 Mar 2026 12:00:00 +0000*
+
+Templates draw pages. **Hello** again.
+
+A second paragraph.
+
+## [Hello world: a note about gardens, with ...]({site}/2026/hello-world-a-note-about-gardens-with-a-link-to)
+
+*Ada Admin, Sun, 01 Mar 2026 12:00:00 +0000*
+
+Hello world: a note about gardens, with a link to <https://example.org/garden> in it.
+
+## [An older note, number 4, for the ...]({site}/2026/an-older-note-number-4-for-the-second-page)
+
+*Ada Admin, Wed, 04 Feb 2026 12:00:00 +0000*
+
+An older note, number 4, for the second page.
+
+## [An older note, number 3, for the ...]({site}/2026/an-older-note-number-3-for-the-second-page)
+
+*Ada Admin, Tue, 03 Feb 2026 12:00:00 +0000*
+
+An older note, number 3, for the second page.
+
+## [An older note, number 2, for the ...]({site}/2026/an-older-note-number-2-for-the-second-page)
+
+*Ada Admin, Mon, 02 Feb 2026 12:00:00 +0000*
+
+An older note, number 2, for the second page.
+
+## [An older note, number 1, for the ...]({site}/2026/an-older-note-number-1-for-the-second-page)
+
+*Ada Admin, Sun, 01 Feb 2026 12:00:00 +0000*
+
+An older note, number 1, for the second page.
+
+## [Gardening]({site}/2025/gardening)
+
+*Ada Admin, Fri, 12 Dec 2025 12:00:00 +0000*
+
+Gardening

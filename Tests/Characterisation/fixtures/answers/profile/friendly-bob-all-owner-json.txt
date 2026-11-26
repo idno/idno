@@ -1,0 +1,365 @@
+status 200
+access-control-allow-credentials: true
+access-control-allow-headers: Authorization, Content-Type
+access-control-allow-origin: *
+cache-control: no-store, no-cache, must-revalidate
+content-length: <the length of the body>
+content-type: application/json
+expires: <past>
+last-modified: Fri, 20 Mar 2026 12:00:00 GMT
+link: <{site}/indieauth/auth>; rel="authorization_endpoint"
+link: <{site}/indieauth/token>; rel="token_endpoint"
+link: <{site}/micropub/endpoint>; rel="micropub"
+link: <{site}/webmention/>; rel="http://webmention.org/"
+link: <{site}/webmention/>; rel="webmention"
+link: <https://hub.example/>; rel="hub"
+link: <{site}/profile/bob/all?_t=json>; rel="self"
+pragma: no-cache
+vary: Accept
+x-clacks-overhead: GNU Terry Pratchett
+x-powered-by: https://idno.co
+
+{
+    "user": {
+        "id": "00000000-0000-4000-8000-000000000002",
+        "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000002",
+        "content": "",
+        "formattedContent": "",
+        "displayName": "Bob Member",
+        "objectType": "person",
+        "url": "{site}\/profile\/bob",
+        "image": {
+            "url": "{site}\/gfx\/users\/default-01.png"
+        }
+    },
+    "items": [
+        {
+            "id": "00000000000040008000000000000043",
+            "uuid": "{site}\/view\/00000000000040008000000000000043",
+            "content": "Bob keeps a note to himself.",
+            "formattedContent": "\n<p>Bob keeps a note to himself.<\/p>\n",
+            "displayName": "Bob keeps a note to himself.",
+            "objectType": "note",
+            "published": "2026-03-14T14:00:00+00:00",
+            "updated": "2026-03-20T12:00:00+00:00",
+            "url": "{site}\/2026\/bob-keeps-a-note-to-himself",
+            "actor": {
+                "id": "00000000-0000-4000-8000-000000000002",
+                "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000002",
+                "content": "",
+                "formattedContent": "",
+                "displayName": "Bob Member",
+                "objectType": "person",
+                "url": "{site}\/profile\/bob",
+                "image": {
+                    "url": "{site}\/gfx\/users\/default-01.png"
+                }
+            }
+        },
+        {
+            "id": "00000000000040008000000000000042",
+            "uuid": "{site}\/view\/00000000000040008000000000000042",
+            "content": "Bob writes a note for the members of the site.",
+            "formattedContent": "\n<p>Bob writes a note for the members of the site.<\/p>\n",
+            "displayName": "Bob writes a note for the members ...",
+            "objectType": "note",
+            "published": "2026-03-14T13:00:00+00:00",
+            "updated": "2026-03-20T12:00:00+00:00",
+            "url": "{site}\/2026\/bob-writes-a-note-for-the-members-of-the-site",
+            "actor": {
+                "id": "00000000-0000-4000-8000-000000000002",
+                "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000002",
+                "content": "",
+                "formattedContent": "",
+                "displayName": "Bob Member",
+                "objectType": "person",
+                "url": "{site}\/profile\/bob",
+                "image": {
+                    "url": "{site}\/gfx\/users\/default-01.png"
+                }
+            }
+        },
+        {
+            "id": "00000000000040008000000000000041",
+            "uuid": "{site}\/view\/00000000000040008000000000000041",
+            "content": "Bob publishes a note anyone can read.",
+            "formattedContent": "\n<p>Bob publishes a note anyone can read.<\/p>\n",
+            "displayName": "Bob publishes a note anyone can read.",
+            "objectType": "note",
+            "published": "2026-03-14T12:00:00+00:00",
+            "updated": "2026-03-20T12:00:00+00:00",
+            "url": "{site}\/2026\/bob-publishes-a-note-anyone-can-read",
+            "actor": {
+                "id": "00000000-0000-4000-8000-000000000002",
+                "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000002",
+                "content": "",
+                "formattedContent": "",
+                "displayName": "Bob Member",
+                "objectType": "person",
+                "url": "{site}\/profile\/bob",
+                "image": {
+                    "url": "{site}\/gfx\/users\/default-01.png"
+                }
+            }
+        },
+        {
+            "id": "00000000-0000-4000-8000-000000000018",
+            "uuid": "{site}\/view\/00000000-0000-4000-8000-000000000018",
+            "content": "Bob says hello from the other account.",
+            "formattedContent": "\n<p>Bob says hello from the other account.<\/p>\n",
+            "displayName": "Bob says hello from the other account.",
+            "objectType": "note",
+            "published": "2026-03-08T12:00:00+00:00",
+            "updated": "2026-03-20T12:00:00+00:00",
+            "url": "{site}\/2026\/bob-says-hello-from-the-other-account",
+            "actor": {
+                "id": "00000000-0000-4000-8000-000000000002",
+                "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000002",
+                "content": "",
+                "formattedContent": "",
+                "displayName": "Bob Member",
+                "objectType": "person",
+                "url": "{site}\/profile\/bob",
+                "image": {
+                    "url": "{site}\/gfx\/users\/default-01.png"
+                }
+            }
+        },
+        {
+            "id": "0000000000004000800000000000006b",
+            "uuid": "{site}\/view\/0000000000004000800000000000006b",
+            "content": "Bob's note that people reacted to.",
+            "formattedContent": "\n<p>Bob's note that people reacted to.<\/p>\n",
+            "displayName": "Bob's note that people reacted to.",
+            "objectType": "note",
+            "published": "2025-12-11T12:00:00+00:00",
+            "updated": "2026-03-20T12:00:00+00:00",
+            "url": "{site}\/2025\/bobs-note-that-people-reacted-to",
+            "actor": {
+                "id": "00000000-0000-4000-8000-000000000002",
+                "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000002",
+                "content": "",
+                "formattedContent": "",
+                "displayName": "Bob Member",
+                "objectType": "person",
+                "url": "{site}\/profile\/bob",
+                "image": {
+                    "url": "{site}\/gfx\/users\/default-01.png"
+                }
+            },
+            "annotations": {
+                "reply": {
+                    "{site}\/2025\/bobs-note-that-people-reacted-to\/annotations\/e84afaab83ecb301b3d97ce4174d2773": {
+                        "permalink": "https:\/\/example.org\/carol\/reply",
+                        "owner_name": "Carol",
+                        "owner_url": "https:\/\/example.org\/carol",
+                        "owner_image": "https:\/\/example.org\/carol.png",
+                        "content": "Carol replies to Bob.",
+                        "time": 1765458000,
+                        "title": ""
+                    }
+                },
+                "like": {
+                    "{site}\/2025\/bobs-note-that-people-reacted-to\/annotations\/be1ab1632e4285edc3733b142935c60b": {
+                        "permalink": "https:\/\/example.org\/dave\/like",
+                        "owner_name": "Dave",
+                        "owner_url": "https:\/\/example.org\/dave",
+                        "owner_image": "https:\/\/example.org\/dave.png",
+                        "content": "",
+                        "time": 1765461600,
+                        "title": ""
+                    }
+                },
+                "mention": {
+                    "{site}\/2025\/bobs-note-that-people-reacted-to\/annotations\/1993ee5cbe82b07a09d8b7320a2ab0b6": {
+                        "permalink": "https:\/\/example.org\/erin\/mention",
+                        "owner_name": "Erin",
+                        "owner_url": "https:\/\/example.org\/erin",
+                        "owner_image": "https:\/\/example.org\/erin.png",
+                        "content": "Erin mentions Bob's note.",
+                        "time": 1765465200,
+                        "title": ""
+                    }
+                },
+                "share": {
+                    "{site}\/2025\/bobs-note-that-people-reacted-to\/annotations\/85e47ac07ac9d6416168a97e33fa969a": {
+                        "permalink": "https:\/\/example.org\/frank\/share",
+                        "owner_name": "Frank",
+                        "owner_url": "https:\/\/example.org\/frank",
+                        "owner_image": "https:\/\/example.org\/frank.png",
+                        "content": "",
+                        "time": 1765468800,
+                        "title": ""
+                    }
+                }
+            }
+        },
+        {
+            "id": "0000000000004000800000000000006a",
+            "uuid": "{site}\/view\/0000000000004000800000000000006a",
+            "content": "For the members only.",
+            "formattedContent": "\n<p>For the members only.<\/p>\n",
+            "displayName": "Bob's photo for members",
+            "objectType": "image",
+            "published": "2025-12-10T12:00:00+00:00",
+            "updated": "2026-03-20T12:00:00+00:00",
+            "url": "{site}\/2025\/bobs-photo-for-members",
+            "actor": {
+                "id": "00000000-0000-4000-8000-000000000002",
+                "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000002",
+                "content": "",
+                "formattedContent": "",
+                "displayName": "Bob Member",
+                "objectType": "person",
+                "url": "{site}\/profile\/bob",
+                "image": {
+                    "url": "{site}\/gfx\/users\/default-01.png"
+                }
+            },
+            "attachments": [
+                {
+                    "filename": "photo.png",
+                    "url": "{site}\/file\/00000000000040008000000000000013\/photo.png",
+                    "mime-type": "image\/png",
+                    "length": 1234
+                }
+            ],
+            "thumbnails": []
+        },
+        {
+            "id": "00000000000040008000000000000068",
+            "uuid": "{site}\/view\/00000000000040008000000000000068",
+            "content": "Bob will be there.",
+            "formattedContent": "\n<p><data class=\"p-rsvp\" value=\"yes\"><a href=\"https:\/\/example.org\/event\/2\" class=\"u-in-reply-to\"><\/a>Bob will be there.<\/data><\/p>\n",
+            "displayName": "Yes: Bob will be there.",
+            "objectType": "rsvp",
+            "published": "2025-12-08T12:00:00+00:00",
+            "updated": "2026-03-20T12:00:00+00:00",
+            "url": "{site}\/2025\/bob-will-be-there",
+            "actor": {
+                "id": "00000000-0000-4000-8000-000000000002",
+                "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000002",
+                "content": "",
+                "formattedContent": "",
+                "displayName": "Bob Member",
+                "objectType": "person",
+                "url": "{site}\/profile\/bob",
+                "image": {
+                    "url": "{site}\/gfx\/users\/default-01.png"
+                }
+            }
+        },
+        {
+            "id": "00000000000040008000000000000067",
+            "uuid": "{site}\/view\/00000000000040008000000000000067",
+            "content": "Bob has a party.",
+            "formattedContent": "\n<p>Bob has a party.<\/p>\n",
+            "displayName": "Bob's party",
+            "objectType": "event",
+            "published": "2025-12-07T12:00:00+00:00",
+            "updated": "2026-03-20T12:00:00+00:00",
+            "url": "{site}\/2025\/bobs-party",
+            "actor": {
+                "id": "00000000-0000-4000-8000-000000000002",
+                "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000002",
+                "content": "",
+                "formattedContent": "",
+                "displayName": "Bob Member",
+                "objectType": "person",
+                "url": "{site}\/profile\/bob",
+                "image": {
+                    "url": "{site}\/gfx\/users\/default-01.png"
+                }
+            }
+        },
+        {
+            "id": "00000000000040008000000000000066",
+            "uuid": "{site}\/view\/00000000000040008000000000000066",
+            "content": "Coffee with Bob.",
+            "formattedContent": "\n<p>Coffee with Bob.<\/p>\n",
+            "displayName": "Checked into The Cafe",
+            "objectType": "place",
+            "published": "2025-12-06T12:00:00+00:00",
+            "updated": "2026-03-20T12:00:00+00:00",
+            "url": "{site}\/2025\/bob-checked-into-the-cafe",
+            "latitude": "51.5033",
+            "longitude": "-0.1195",
+            "placeName": "The Cafe",
+            "address": "2 Cafe Road, Springfield",
+            "tags": "#coffee",
+            "actor": {
+                "id": "00000000-0000-4000-8000-000000000002",
+                "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000002",
+                "content": "",
+                "formattedContent": "",
+                "displayName": "Bob Member",
+                "objectType": "person",
+                "url": "{site}\/profile\/bob",
+                "image": {
+                    "url": "{site}\/gfx\/users\/default-01.png"
+                }
+            }
+        },
+        {
+            "id": "00000000000040008000000000000065",
+            "uuid": "{site}\/view\/00000000000040008000000000000065",
+            "content": "https:\/\/example.org\/bobs-find Bob found this.",
+            "formattedContent": "\n<p>https:\/\/example.org\/bobs-find Bob found this.<\/p>\n",
+            "displayName": "Bob's find",
+            "objectType": "bookmark",
+            "published": "2025-12-05T12:00:00+00:00",
+            "updated": "2026-03-20T12:00:00+00:00",
+            "url": "{site}\/2025\/bobs-find",
+            "actor": {
+                "id": "00000000-0000-4000-8000-000000000002",
+                "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000002",
+                "content": "",
+                "formattedContent": "",
+                "displayName": "Bob Member",
+                "objectType": "person",
+                "url": "{site}\/profile\/bob",
+                "image": {
+                    "url": "{site}\/gfx\/users\/default-01.png"
+                }
+            }
+        }
+    ],
+    "count": 14,
+    "offset": 0,
+    "object": {
+        "id": "00000000000040008000000000000065",
+        "uuid": "{site}\/view\/00000000000040008000000000000065",
+        "content": "https:\/\/example.org\/bobs-find Bob found this.",
+        "formattedContent": "\n<p>https:\/\/example.org\/bobs-find Bob found this.<\/p>\n",
+        "displayName": "Bob's find",
+        "objectType": "bookmark",
+        "published": "2025-12-05T12:00:00+00:00",
+        "updated": "2026-03-20T12:00:00+00:00",
+        "url": "{site}\/2025\/bobs-find",
+        "actor": {
+            "id": "00000000-0000-4000-8000-000000000002",
+            "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000002",
+            "content": "",
+            "formattedContent": "",
+            "displayName": "Bob Member",
+            "objectType": "person",
+            "url": "{site}\/profile\/bob",
+            "image": {
+                "url": "{site}\/gfx\/users\/default-01.png"
+            }
+        }
+    },
+    "annotation": {
+        "permalink": "https:\/\/example.org\/erin\/mention",
+        "owner_name": "Erin",
+        "owner_url": "https:\/\/example.org\/erin",
+        "owner_image": "https:\/\/example.org\/erin.png",
+        "content": "Erin mentions Bob's note.",
+        "time": 1765465200,
+        "title": ""
+    },
+    "items_per_page": 10,
+    "title": "Bob Member",
+    "description": "The Fixture Site profile for Bob Member",
+    "messages": []
+}

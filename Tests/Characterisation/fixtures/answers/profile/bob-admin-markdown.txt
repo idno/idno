@@ -1,0 +1,64 @@
+status 200
+access-control-allow-origin: *
+cache-control: no-store, no-cache, must-revalidate
+content-length: <the length of the body>
+content-type: text/markdown; charset=utf-8
+expires: <past>
+last-modified: Fri, 20 Mar 2026 12:00:00 GMT
+link: <{site}/indieauth/auth>; rel="authorization_endpoint"
+link: <{site}/indieauth/token>; rel="token_endpoint"
+link: <{site}/micropub/endpoint>; rel="micropub"
+link: <{site}/webmention/>; rel="http://webmention.org/"
+link: <{site}/webmention/>; rel="webmention"
+link: <https://hub.example/>; rel="hub"
+link: <{site}/profile/bob?_t=markdown>; rel="self"
+link: <{site}/profile/bob>; rel="canonical"
+pragma: no-cache
+vary: Accept
+x-clacks-overhead: GNU Terry Pratchett
+x-content-type-options: nosniff
+x-powered-by: https://idno.co
+
+---
+title: "Bob Member"
+description: "The Fixture Site profile for Bob Member"
+link: "{site}/profile/bob"
+---
+
+# Bob Member
+
+## [Bob keeps a note to himself.]({site}/2026/bob-keeps-a-note-to-himself)
+
+*Bob Member, Sat, 14 Mar 2026 14:00:00 +0000*
+
+Bob keeps a note to himself.
+
+## [Bob writes a note for the members ...]({site}/2026/bob-writes-a-note-for-the-members-of-the-site)
+
+*Bob Member, Sat, 14 Mar 2026 13:00:00 +0000*
+
+Bob writes a note for the members of the site.
+
+## [Bob publishes a note anyone can read.]({site}/2026/bob-publishes-a-note-anyone-can-read)
+
+*Bob Member, Sat, 14 Mar 2026 12:00:00 +0000*
+
+Bob publishes a note anyone can read.
+
+## [Bob says hello from the other account.]({site}/2026/bob-says-hello-from-the-other-account)
+
+*Bob Member, Sun, 08 Mar 2026 12:00:00 +0000*
+
+Bob says hello from the other account.
+
+## [Bob's note that people reacted to.]({site}/2025/bobs-note-that-people-reacted-to)
+
+*Bob Member, Thu, 11 Dec 2025 12:00:00 +0000*
+
+Bob's note that people reacted to.
+
+## [Bob on writing at length]({site}/2025/bob-on-writing-at-length)
+
+*Bob Member, Tue, 02 Dec 2025 12:00:00 +0000*
+
+Bob writes at length, and **says** so.

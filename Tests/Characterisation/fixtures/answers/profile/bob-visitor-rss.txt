@@ -1,0 +1,83 @@
+status 200
+cache-control: no-store, no-cache, must-revalidate
+content-length: <the length of the body>
+content-type: application/rss+xml
+expires: <past>
+last-modified: Fri, 20 Mar 2026 12:00:00 GMT
+link: <{site}/indieauth/auth>; rel="authorization_endpoint"
+link: <{site}/indieauth/token>; rel="token_endpoint"
+link: <{site}/micropub/endpoint>; rel="micropub"
+link: <{site}/webmention/>; rel="http://webmention.org/"
+link: <{site}/webmention/>; rel="webmention"
+link: <https://hub.example/>; rel="hub"
+link: <{site}/profile/bob?_t=rss>; rel="self"
+pragma: no-cache
+vary: Accept
+x-clacks-overhead: GNU Terry Pratchett
+x-powered-by: https://idno.co
+
+<?xml version="1.0"?>
+<rss version="2.0" xmlns:g="http://base.google.com/ns/1.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:geo="http://www.w3.org/2003/01/geo/wgs84_pos#" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" xmlns:wp="http://wordpress.org/export/1.2/" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>Bob Member</title>
+    <itunes:author>Bob Member</itunes:author>
+    <description><![CDATA[A social website powered by Idno]]></description>
+    <itunes:summary><![CDATA[A social website powered by Idno]]></itunes:summary>
+    <link>{site}/profile/bob</link>
+    <language>en</language>
+    <itunes:explicit>No</itunes:explicit>
+    <atom:link href="https://hub.example/" rel="hub"/>
+    <atom:link href="{site}/profile/bob?_t=rss" rel="self" type="application/rss+xml"/>
+    <generator>Idno https://idno.co</generator>
+    <!--##KNOWNFEEDITEMS##-->
+    <item>
+      <title>Bob publishes a note anyone can read.</title>
+      <link>{site}/2026/bob-publishes-a-note-anyone-can-read</link>
+      <guid>{site}/view/00000000000040008000000000000041</guid>
+      <pubDate>Sat, 14 Mar 2026 12:00:00 +0000</pubDate>
+      <wp:post_type>post</wp:post_type>
+      <wp:status>publish</wp:status>
+      <dc:creator>Bob Member</dc:creator>
+      <description><![CDATA[<p class="p-name e-content entry-content">Bob publishes a note anyone can read.</p>
+]]></description>
+    </item>
+    <item>
+      <title>Bob says hello from the other account.</title>
+      <link>{site}/2026/bob-says-hello-from-the-other-account</link>
+      <guid>{site}/view/00000000-0000-4000-8000-000000000018</guid>
+      <pubDate>Sun, 08 Mar 2026 12:00:00 +0000</pubDate>
+      <wp:post_type>post</wp:post_type>
+      <wp:status>publish</wp:status>
+      <dc:creator>Bob Member</dc:creator>
+      <description><![CDATA[<p class="p-name e-content entry-content">Bob says hello from the other account.</p>
+]]></description>
+    </item>
+    <item>
+      <title>Bob's note that people reacted to.</title>
+      <link>{site}/2025/bobs-note-that-people-reacted-to</link>
+      <guid>{site}/view/0000000000004000800000000000006b</guid>
+      <pubDate>Thu, 11 Dec 2025 12:00:00 +0000</pubDate>
+      <wp:post_type>post</wp:post_type>
+      <wp:status>publish</wp:status>
+      <dc:creator>Bob Member</dc:creator>
+      <description><![CDATA[<p class="p-name e-content entry-content">Bob&#039;s note that people reacted to.</p>
+]]></description>
+    </item>
+    <item>
+      <title>Bob on writing at length</title>
+      <link>{site}/2025/bob-on-writing-at-length</link>
+      <guid>{site}/view/00000000000040008000000000000062</guid>
+      <pubDate>Tue, 02 Dec 2025 12:00:00 +0000</pubDate>
+      <wp:post_type>post</wp:post_type>
+      <wp:status>publish</wp:status>
+      <dc:creator>Bob Member</dc:creator>
+      <description><![CDATA[
+<div class="e-content entry-content">
+<p>Bob writes at length, and <strong>says</strong> so.</p>        <i class="fa fa-tag"></i><a href="{site}/tag/%23bob+%23length" class="p-category" rel="tag">#bob #length</a>
+        </div>
+]]></description>
+      <category>#bob</category>
+      <category>#length</category>
+    </item>
+  </channel>
+</rss>
