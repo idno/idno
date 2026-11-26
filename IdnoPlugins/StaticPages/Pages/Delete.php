@@ -17,6 +17,12 @@ namespace IdnoPlugins\StaticPages\Pages {
                 // TODO 404
                 $this->forward();
             }
+            if (empty($object)) {
+                // a post that is not there (or that the member may not read) is no page to delete: it was a fatal error, drawing the title of nothing
+                $this->forward();
+
+                return;
+            }
 
             $t    = \Idno\Core\Idno::site()->template();
             $body = $t->__(array(

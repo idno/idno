@@ -138,4 +138,23 @@ final class PostDeletePagesAccessTest extends PermalinkSiteCase
         }
         $this->assertSame([], RecordingMailTransport::drain(), 'no failure was mailed to the administrators');
     }
+
+    /**
+     * The page that asks "delete this?" is opened with a GET: for a post that is not there it is no page, whatever the request (it was a server error, and a
+     * mail to the administrators, for the content types that draw the post's title).
+     */
+    public function testTheDeletePageOfAPostThatIsNotThereIsNotAServerError(): void
+    {
+        $this->seedPermalinkContent();
+        $missing = '00000000000040008000000000000999';
+        RecordingMailTransport::drain();
+        foreach ($this->pages() as $what => [$route]) {
+            foreach ([false, true] as $script) {
+                $answer = $this->site()->request('GET', $route . $missing, $this->asViewer('member', ($script ? self::XHR : []) + ['Referer' => $this->baseUrl()]));
+                // (a page with no GET handler, the check-in's, answers 501 as every page does)
+                $this->assertContains($answer->status, [200, 301, 302, 303, 307, 403, 404, 410, 501], $what . ($script ? ', a script\'s request' : '') . ' ' . substr($answer->body, 0, 200));
+            }
+        }
+        $this->assertSame([], RecordingMailTransport::drain(), 'no failure was mailed to the administrators');
+    }
 }
