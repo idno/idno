@@ -44,7 +44,7 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         'Config' => ['BootConfig.php'],
         // FrontController: static methods only, used by index.php before the container exists. Client/: the
         // HTTP client factory and the bounded body reader, static helpers (the clients are wired below).
-        'Http' => ['Client', 'FrontController.php', 'Page/AddedHeaders.php', 'Page/ConditionalRequest.php', 'Page/DrawnPage.php', 'Page/HttpDate.php', 'Page/SitePage.php', 'Page/PageContext.php', 'Page/PageError.php', 'Page/PageNotModified.php', 'Page/PageRedirect.php'],
+        'Http' => ['Client', 'FrontController.php', 'Page/AddedHeaders.php', 'Page/ConditionalRequest.php', 'Page/DrawnPage.php', 'Page/HttpDate.php', 'Page/SitePage.php', 'Page/PageContext.php', 'Page/PageError.php', 'Page/PageNotModified.php', 'Page/PageRedirect.php', 'Page/RoutedByLegacyTable.php'],
         // Takes the kernel (so cannot be a container service); functions.php is not a class.
         'Console' => ['Application.php', 'functions.php'],
         // Value and helper classes (a query tree and its nodes, an entity query, the record index
@@ -89,7 +89,7 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         // The installer's value objects, static helpers and the classes it builds with new; the paths, the web
         // installer, the setup token and the two listeners are services (the paths are wired below).
         'Install' => ['AdministratorDetails.php', 'CheckResult.php', 'ConfigFile.php', 'DatabaseChoice.php', 'DatabaseConnectionFailed.php', 'DatabaseFinding.php', 'EarlierSite.php', 'FirstAdministrator.php', 'InstallCode.php', 'InstallForm.php', 'InstallPage.php', 'ServerChecks.php', 'SiteAddress.php', 'UploadFolder.php'],
-        'Legacy' => ['BarePage.php', 'ControllerRoute.php', 'ControllerPage.php', 'FatalErrorPage.php', 'FlysystemFile.php', 'FlysystemFileSystem.php', 'LateLogger.php', 'LegacyBootstrap.php', 'LegacyCurrentUserSource.php', 'LegacyForbiddenPage.php', 'LegacyResponse.php', 'LegacyServiceFactory.php', 'LegacySiteSettings.php', 'LegacySqlMaintenance.php', 'LegacyTemplateHelpers.php', 'LegacyTemplateTranslation.php', 'MessengerEventQueue.php', 'NotInstalledException.php', 'PageShell.php', 'RepositoryDataConcierge.php'],
+        'Legacy' => ['BarePage.php', 'ControllerRoute.php', 'ControllerPage.php', 'FatalErrorPage.php', 'FlysystemFile.php', 'FlysystemFileSystem.php', 'LateLogger.php', 'LegacyBootstrap.php', 'LegacyCurrentUserSource.php', 'LegacyForbiddenPage.php', 'LegacyResponse.php', 'LegacyServiceFactory.php', 'LegacySiteSettings.php', 'LegacySqlMaintenance.php', 'LegacyTemplateHelpers.php', 'LegacyTemplateTranslation.php', 'MessengerEventQueue.php', 'NotInstalledException.php', 'PageShell.php', 'Placeholder', 'RepositoryDataConcierge.php'],
     ];
     foreach (CodeFingerprint::SERVICE_DIRECTORIES as $dir) {
         $path = $projectDir . '/Idno/' . $dir;

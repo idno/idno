@@ -36,11 +36,21 @@ final class RemoteFetchCallSitesTest extends IdnoTestCase
         $this->previousErrorLog = (string) ini_set('error_log', $this->errorLog);
         $this->siteSeen = [];
         $this->remoteSeen = [];
+        $this->forgetMentionClient();
+    }
+
+    /**
+     * The webmention client a test left behind (`Webmention::$mentionClient` is static) is not the next test's.
+     */
+    private function forgetMentionClient(): void
+    {
+        (new \ReflectionProperty(\Idno\Core\Webmention::class, 'mentionClient'))->setValue(null, false);
     }
 
     protected function tearDown(): void
     {
         Webservice::useClient(null);
+        $this->forgetMentionClient();
         ini_set('error_log', $this->previousErrorLog);
         @unlink($this->errorLog);
         parent::tearDown();

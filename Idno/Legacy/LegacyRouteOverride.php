@@ -10,6 +10,7 @@ use Idno\Kernel;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\DependencyInjection\Attribute\AutowireServiceClosure;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Event\RequestEvent;
 use Symfony\Component\HttpKernel\KernelEvents;
 
@@ -71,18 +72,7 @@ final class LegacyRouteOverride
             return;
         }
 
-        // The legacy router's choice, for each spelling of the path: core's place held (a placeholder, or the shell this controller replaces) is the
-        // controller's; any other page is a plugin's, and so is one that serves the request as a permalink's Markdown form where the controller is no
-        // Markdown permalink itself
-        $replaced = array_map(static fn (string $class): string => strtolower(ltrim($class, '\\')), [ControllerRoute::class, ...($page->shell ? [$page->name] : [])]);
-        $kept = false;
-        foreach (PageHandler::claimsOf(($this->dispatcher)()->routes(), $request) as $claim) {
-            if (!in_array(strtolower($claim['class']), $replaced, true) || ($claim['markdown'] && !$page->markdownPermalink)) {
-                $kept = true;
-                break;
-            }
-        }
-        if (!$kept) {
+        if (!self::handsBack($page, ($this->dispatcher)()->routes(), $request)) {
             return;
         }
 
@@ -93,5 +83,24 @@ final class LegacyRouteOverride
         }
         $path = substr($request->getPathInfo(), 1);
         $request->attributes->add(['_controller' => LegacyController::class, '_route' => 'idno_legacy', '_route_params' => ['path' => $path], 'path' => $path]);
+    }
+
+    /**
+     * Whether the request goes to the legacy router and not to the controller whose `#[SitePage]` this is: the router's choice, for each spelling of the
+     * path, is a page that is neither a placeholder nor the shell this controller replaces (a plugin took the path), or serves the request as a permalink's
+     * Markdown form where the controller is no Markdown permalink itself.
+     *
+     * @param iterable $routes pattern => handler, the legacy route table
+     */
+    public static function handsBack(SitePage $page, iterable $routes, Request $request): bool
+    {
+        $replaced = array_map(static fn (string $class): string => strtolower(ltrim($class, '\\')), [ControllerRoute::class, ...($page->shell ? [$page->name] : [])]);
+        foreach (PageHandler::claimsOf($routes, $request) as $claim) {
+            if (!in_array(strtolower($claim['class']), $replaced, true) || ($claim['markdown'] && !$page->markdownPermalink)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

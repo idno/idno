@@ -110,6 +110,27 @@ final class PageListenersWithoutLegacyTest extends TestCase
         $kernel->shutdown();
     }
 
+    public function testTheRoutedPagesListenerBuildsNothingWithoutTheLegacyApplication(): void
+    {
+        $kernel = $this->kernel();
+        $handler = self::errorHandler();
+
+        // a request the catch-all serves (the address of a routed page: no controller has a route for it) and one a controller's route serves
+        $routed = Request::create('/_test/routed/word/abc');
+        $unknown = $kernel->handle($routed);
+        $ping = $kernel->handle(Request::create('/_test/ping'));
+
+        $this->assertFalse($kernel->legacyBooted());
+        $this->assertSame(200, $ping->getStatusCode());
+        $this->assertInstanceOf(\Idno\Legacy\LegacyResponse::class, $unknown, 'the catch-all\'s response: there is no legacy router to give it to a controller');
+        $this->assertSame('idno_legacy', $routed->attributes->get('_route'));
+        $this->assertFalse($routed->attributes->has('_idno_legacy_routed'));
+        $this->assertFalse($routed->attributes->has('_idno_legacy_choice'), 'the router\'s table was not asked');
+        $this->assertFalse($kernel->getContainer()->initialized(\Tests\Fixtures\RoutedFixtureController::class), 'and no routed action was built');
+        $this->assertSame($handler, self::errorHandler());
+        $kernel->shutdown();
+    }
+
     public function testTheUpgradeStepIsUntouched(): void
     {
         $kernel = $this->kernel();

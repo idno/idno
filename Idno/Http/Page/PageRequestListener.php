@@ -73,7 +73,10 @@ final class PageRequestListener
             throw new MethodNotAllowedHttpException($page->allowedMethods());
         }
         $lifecycle = ($this->lifecycle)();
-        $markdown = $page->markdownPermalink && in_array($request->getMethod(), ['GET', 'HEAD'], true) && self::takeOffMarkdownSuffix($request);
+        // (a request routed by the legacy table carries the `.md` rule's answer: its parameters are Toro's, with the suffix already off)
+        $markdown = $request->attributes->get('_idno_legacy_routed') === true
+            ? $request->attributes->get('_idno_markdown_suffix') === true
+            : $page->markdownPermalink && in_array($request->getMethod(), ['GET', 'HEAD'], true) && self::takeOffMarkdownSuffix($request);
         $context = new PageContext($request, $page);
         $context->attachTo($request);
         $context->setMarkdownSuffix($markdown);

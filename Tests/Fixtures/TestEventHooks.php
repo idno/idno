@@ -50,6 +50,15 @@ final class TestEventHooks
                 Idno::site()->routes()->addRoute('/_test/fixture-shell-public/?', FixturePublicShell::class);
             });
         }
+        // With IDNO_TEST_ROUTED=1 the pages routed by the legacy table (RoutedFixtureController): a placeholder at an address that holds a stored setting (the
+        // permalink structure is one), and a shell, registered as core registers what it keeps
+        if (getenv('IDNO_TEST_ROUTED') === '1') {
+            $dispatcher->addListener('plugins/loaded', static function (): void {
+                $word = Idno::site()->config()->test_routed_word;
+                Idno::site()->routes()->addRoute('/_test/routed/' . (is_string($word) && $word !== '' ? $word : 'word') . '/:id/?', RoutedPlaceholder::class);
+                Idno::site()->routes()->addRoute('/_test/routed-shell/:id/.*', RoutedFixtureShell::class);
+            });
+        }
         // With IDNO_TEST_CLAIM_ROUTES the pages of the routing tests (RouteOverrideTest), registered on `plugins/loaded`, the first event the boot
         // fires after every plugin's registerPages() (a plugin registers its pages when it is built), as a plugin's page is:
         //   replaced  the shell ReplacedPage on the path a controller serves, which the controller shadows
@@ -69,6 +78,7 @@ final class TestEventHooks
         //   moved-*   a plugin's registrations for a path that moved to a controller, EARLY (`/feed.xml`, registered before the WebFinger component's) and,
         //             in Tests\Fixtures\LateRoutes, LATE (`/.well-known/webfinger`, registered after every core component's): identical addRoute(),
         //             hijackRoute(), an exact unescaped key, a broad pattern, a hijack made before core's later registration, a hijack of the root
+        //   routed-hijack  a plugin's hijackRoute() of the pattern of the page routed by the legacy table (for ClaimingPage) and of its shell's (for a subclass of it)
         //   hijackbroad    a plugin's hijackRoute() of a pattern that matches the feed paths and others, a different pattern from core's
         $claim = getenv('IDNO_TEST_CLAIM_ROUTES');
         if (is_string($claim) && $claim !== '') {
@@ -98,6 +108,7 @@ final class TestEventHooks
                     'coreidentical' => array_map(static fn (string $pattern) => $routes->addRoute($pattern, ClaimingPage::class), $coreHome),
                     'feedhijack' => $routes->hijackRoute('/feed\.xml', ClaimingPage::class),
                     'hijackbroad' => $routes->hijackRoute('/(?:feed|search)(.*)', ClaimingPage::class),
+                    'routed-hijack' => [$routes->hijackRoute('/_test/routed/word/:id/?', ClaimingPage::class), $routes->hijackRoute('/_test/routed-shell/:id/.*', \Tests\Fixtures\SubclassedRoutedShell::class)],
                     'feeds' => array_map(static fn (string $pattern) => $routes->addRoute($pattern, ClaimingPage::class), ['/feed\.xml', '/search/?', '/tag/([^\s]+)\/?']),
                     default => null,
                 };

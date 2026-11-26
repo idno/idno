@@ -301,23 +301,57 @@ namespace Idno\Core {
          */
         public static function claimsOf($routes, \Symfony\Component\HttpFoundation\Request $request): array
         {
-            $reads = in_array(strtoupper((string) $request->server->get('REQUEST_METHOD', $request->getMethod())), ['GET', 'HEAD'], true);
+            $method = strtoupper((string) $request->server->get('REQUEST_METHOD', $request->getMethod()));
+            $toro = static::toroPath($request);
             $claims = [];
             foreach (static::spellingsOf($request) as $path) {
-                $stripped = $reads ? \Idno\Markdown\MarkdownRequest::pathWithoutSuffix($path) : null;
-                $class = static::chosenFor($routes, $path);
-                if ($class !== null) {
-                    $markdown = $stripped !== null && is_a($class, \Idno\Common\MarkdownPermalink::class, true);
-                    $claims[$class . '|' . (int) $markdown] = ['class' => $class, 'markdown' => $markdown];
-                } elseif ($stripped !== null) {
-                    $class = static::chosenFor($routes, $stripped);
-                    if ($class !== null && is_a($class, \Idno\Common\MarkdownPermalink::class, true)) {
-                        $claims[$class . '|1'] = ['class' => $class, 'markdown' => true];
-                    }
+                // (the path the router itself is given is the one its choice is recorded for: asked once for the request, whoever asks first)
+                $routed = $path === $toro && $method === $request->getRealMethod()
+                    ? static::choiceFor($routes, $request)
+                    : static::routedFor($routes, $method, $path);
+                if ($routed !== null && $routed !== []) {
+                    $claims[$routed['class'] . '|' . (int) $routed['markdown']] = ['class' => $routed['class'], 'markdown' => $routed['markdown']];
                 }
             }
 
             return array_values($claims);
+        }
+
+        /**
+         * What the legacy router will do with the request being served (`routedFor()` for the path it is given, `toroPath()`, and the real method), asked of the
+         * table ONCE for the request: the answer is kept on the request (`_idno_legacy_choice`, with what it was asked in `_idno_legacy_subject`), so the
+         * listeners that need it and the dispatcher that serves a legacy page share one lookup. Kept only for a table that is an object (the site's); `[]`
+         * when the router has no page for it.
+         *
+         * @param  iterable $routes pattern => handler, also readable as an array
+         * @return array{}|array{class: string, pattern: string|int, arguments: list<string>, markdown: bool, path: string}
+         */
+        public static function choiceFor($routes, \Symfony\Component\HttpFoundation\Request $request): array
+        {
+            $subject = [is_object($routes) ? spl_object_id($routes) : null, $request->getRealMethod(), static::toroPath($request)];
+            if ($subject[0] !== null && $request->attributes->get('_idno_legacy_subject') === $subject) {
+                return (array) $request->attributes->get('_idno_legacy_choice');
+            }
+            $choice = static::routedFor($routes, $subject[1], $subject[2]) ?? [];
+            if ($subject[0] !== null) {
+                $request->attributes->set('_idno_legacy_subject', $subject);
+                $request->attributes->set('_idno_legacy_choice', $choice);
+            }
+
+            return $choice;
+        }
+
+        /**
+         * The choice `choiceFor()` recorded on the request for this table, when it is still the router's for the request's method and path; null when none was
+         * recorded (the router is then asked as it always was).
+         *
+         * @return array{}|array{class: string, pattern: string|int, arguments: list<string>, markdown: bool, path: string}|null
+         */
+        public static function recordedChoice($routes, \Symfony\Component\HttpFoundation\Request $request): ?array
+        {
+            $subject = [is_object($routes) ? spl_object_id($routes) : null, $request->getRealMethod(), static::toroPath($request)];
+
+            return $subject[0] !== null && $request->attributes->get('_idno_legacy_subject') === $subject ? (array) $request->attributes->get('_idno_legacy_choice') : null;
         }
 
         /**

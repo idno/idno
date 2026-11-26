@@ -38,6 +38,9 @@ final class LegacyController
     {
         $dispatcher = $this->dispatcher;
 
-        return new LegacyResponse(static fn () => $dispatcher->dispatch(), $this->requests, $request);
+        // The router's choice for the request, when a listener asked it already: Toro is given that entry alone
+        $choice = $request !== null ? $dispatcher->recordedChoice($request) : null;
+
+        return new LegacyResponse(static fn () => $dispatcher->dispatch($choice), $this->requests, $request);
     }
 }

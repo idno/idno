@@ -15,6 +15,7 @@ use Symfony\Component\Routing\RouteCollection;
 use Tests\Fixtures\ClaimingPage;
 use Tests\Fixtures\ReplacedPage;
 use Tests\Fixtures\SitePageFixtureController;
+use Tests\Support\RoutedActions;
 
 /** A controller whose shell is a Markdown permalink and that does not say it is one (not routed: the convention's check is proven on it) */
 #[SitePage(name: ReplacedPage::class, shell: true)]
@@ -247,6 +248,106 @@ final class SitePageClaimsTest extends TestCase
     private static function smallSnapshot(): array
     {
         return ['/early/?', '/feed\.xml', self::MARKER, '/late/?'];
+    }
+
+    /**
+     * The keys (as the snapshot writes them, `{permalink}` for the permalink route) each placeholder of a page routed by the legacy table stands in for: the keys
+     * of the class it replaces at the snapshot's commit.
+     *
+     * @var array<class-string, list<string>>
+     */
+    private const PLACEHOLDER_KEYS = [
+        \Idno\Legacy\Placeholder\AnnotationView::class => ['/view/([A-Za-z0-9\\-]+)/annotations/([A-Za-z0-9\\-]+)?', '{permalink}/annotations/([A-Za-z0-9\\-]+)?'],
+        \Idno\Legacy\Placeholder\AnnotationDelete::class => ['{permalink}/annotations/([A-Za-z0-9\\-]+)/delete/?', '{permalink}/annotation/delete/?'],
+    ];
+
+    /**
+     * What is wrong with the registrations of the classes that name a routed action: a key that holds one is a key of the snapshot (the permalink route
+     * written out), and a placeholder holds every key of the class it replaces.
+     *
+     * @param list<class-string>                 $namers          the classes that name a routed action
+     * @param list<string>                       $snapshotKeys    the snapshot's keys as the table keys them (`{permalink}` replaced)
+     * @param array<class-string, list<string>>  $placeholderKeys the keys each placeholder replaces, as the table keys them
+     *
+     * @return list<string>
+     */
+    public static function routedViolations(PageHandler $table, array $namers, array $snapshotKeys, array $placeholderKeys): array
+    {
+        $found = [];
+        $held = [];
+        foreach ($table as $key => $handler) {
+            $class = ltrim((string) $handler, '\\');
+            if (in_array($class, $namers, true)) {
+                $held[$class][] = (string) $key;
+                if (!in_array((string) $key, $snapshotKeys, true)) {
+                    $found[] = $class . ' is registered under ' . $key . ', which core did not register before any page moved';
+                }
+            }
+        }
+        foreach ($placeholderKeys as $class => $keys) {
+            if (!isset($held[$class])) {
+                continue;
+            }
+            foreach ($keys as $key) {
+                if (!in_array($key, $held[$class], true)) {
+                    $found[] = $class . ' does not hold ' . $key . ', which the class it replaces held';
+                }
+            }
+        }
+
+        return $found;
+    }
+
+    public function testEveryRoutedHandlerIsRegisteredUnderTheSnapshotsKeys(): void
+    {
+        $permalink = \Idno\Common\Entity::getPermalinkRoute();
+        $placeholders = array_map(static fn (array $keys): array => array_map(static fn (string $key): string => self::keyOf(str_replace('{permalink}', $permalink, $key)), $keys), self::PLACEHOLDER_KEYS);
+        $namers = [];
+        foreach (RoutedActions::namers() as $class => [$controller, $method]) {
+            foreach (RoutedActions::actions() as $action) {
+                if ($action['action'] === $controller . '::' . $method) {
+                    $namers[] = $class;
+                }
+            }
+        }
+        $keys = array_values(array_filter(self::expectedKeys(), static fn (string $key): bool => $key !== self::MARKER));
+
+        $this->assertSame([], self::routedViolations(Idno::site()->routes(), $namers, $keys, $placeholders));
+        // each way it can fail
+        $table = new PageHandler();
+        $table->addRoute('/a-key-core-never-had/?', \Idno\Legacy\Placeholder\AnnotationView::class);
+        $table->addRoute($permalink . '/annotations/:id?', \Idno\Legacy\Placeholder\AnnotationView::class);
+        $found = implode("\n", self::routedViolations($table, [\Idno\Legacy\Placeholder\AnnotationView::class], $keys, $placeholders));
+        $this->assertStringContainsString('is registered under /a-key-core-never-had/?', $found);
+        $this->assertStringContainsString('does not hold ' . $placeholders[\Idno\Legacy\Placeholder\AnnotationView::class][0], $found, 'the key of the class it replaces that is gone');
+    }
+
+    public function testAPlaceholderOfItsOwnHoldsCoresPlace(): void
+    {
+        // a table as core's, with the two placeholders where the classes they replace were registered
+        $permalink = \Idno\Common\Entity::getPermalinkRoute();
+        $expected = self::expectedKeys();
+        $table = new PageHandler();
+        foreach ($expected as $key) {
+            if ($key === self::MARKER) {
+                $table->addRoute(self::PLUGIN_TIME, ControllerRoute::class);
+                continue;
+            }
+            $handler = ControllerRoute::class;
+            foreach (self::PLACEHOLDER_KEYS as $class => $keys) {
+                if (in_array(self::keyOf(str_replace('{permalink}', $permalink, $key)), array_map(static fn (string $k): string => self::keyOf(str_replace('{permalink}', $permalink, $k)), $keys), true)) {
+                    $handler = $class;
+                }
+            }
+            $table->addRoute($key, $handler);
+        }
+
+        $this->assertSame([], self::snapshotViolations(self::keysOf($table), $expected, self::keyOf(self::PLUGIN_TIME)), 'the placeholders hold the places and the order of the keys');
+        $this->assertSame(\Idno\Legacy\Placeholder\AnnotationView::class, PageHandler::chosenFor($table, '/view/abc/annotations/def'));
+        $this->assertSame(\Idno\Legacy\Placeholder\AnnotationDelete::class, PageHandler::chosenFor($table, '/2026/hello/annotation/delete'));
+        // and a plugin's hijack of a placeholder's pattern is chosen in front of it, which the router's own lookup decides
+        $table->hijackRoute('/view/:id/annotations/:id?', ClaimingPage::class);
+        $this->assertSame(ClaimingPage::class, PageHandler::chosenFor($table, '/view/abc/annotations/def'));
     }
 
     public function testAKeptShellAndAPlaceholderHoldCoresPlace(): void

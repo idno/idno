@@ -98,6 +98,16 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
             ->set(\Tests\Fixtures\FixtureShellController::class)
             ->autowire()
             ->autoconfigure();
+        // The pages routed by the legacy route table (RoutedFixtureController: no #[Route]), one implementation for the controller and its shell
+        $container->services()
+            ->set(\Tests\Fixtures\RoutedFixturePages::class)
+            ->autowire()
+            ->autoconfigure()
+            ->public();
+        $container->services()
+            ->set(\Tests\Fixtures\RoutedFixtureController::class)
+            ->autowire()
+            ->autoconfigure();
     }
 
     // The upgrade step's time budget, shortened by IDNO_TEST_UPGRADE_STEP_SECONDS (unset: the

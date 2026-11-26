@@ -381,7 +381,7 @@ Idno/
   Legacy/                      Shims between the kernel and the legacy application (see below), among them
                                MessengerEventQueue (the site's queue), LegacyEventTrigger / LegacyUserContext and
                                the shims of the site pages controllers serve: ControllerPage (the current page of such a request),
-                               BarePage, ControllerRoute (the placeholder in the legacy route table), LegacyRouteOverride,
+                               BarePage, ControllerRoute (the placeholder in the legacy route table), LegacyRouteOverride, LegacyRoutedPages (and Placeholder/, the placeholders of pages routed by the legacy table),
                                LegacyPageLifecycle, LegacyPageDrawer, LegacyHeaderReconciler (with HeaderQueue and PhpHeaders:
                                the headers of a site page), the adapters of what the controllers' services ask the site
                                (LegacyHomeStream, LegacySiteIcons, LegacyWebfingerDirectory, LegacyMentionCandidates) and
@@ -797,7 +797,7 @@ environment only, `config/services_test.php` builds `BootConfig` and `InstallPat
    work is registered, so `php -S` and mod_php, which only flush, let the client go as the legacy path did; under FPM `Response::send()`
    calls `fastcgi_finish_request()`, which does it whatever the headers. A response that streams (a `StreamedResponse`, a file) carries no length.
 
-Three kinds of request therefore take three paths through the kernel:
+Four kinds of request therefore take four paths through the kernel:
 
 - A LEGACY PAGE (`Idno\Common\Page`, a plugin's, or a core page that is still a legacy class): router, the catch-all, `LegacyController`, a `LegacyResponse`; the page runs while the response is sent, writes
   with `header()`/`echo`/`exit`, and its exceptions are the legacy handler's (`Page::exception()`, the 500 page).
@@ -811,6 +811,11 @@ Three kinds of request therefore take three paths through the kernel:
   pages; 8. `Kernel::terminate()` runs `PageRequestListener::onTerminate()`: the work the page asked to be done after the response (`AfterResponse::run()`). Nothing in it `exit`s.
 - A SHELL (a deprecated class under `Idno\Pages\` that extends `PageShell`, reached through the catch-all when the controller's route does not take the request, or a plugin's subclass of it): the legacy path
   with its handlers delegating to the same page service, then writing the response as a legacy page does, `exit`ing after every one.
+- A ROUTED PAGE (a controller action marked `#[RoutedByLegacyTable]`, with a `#[SitePage]` and no `#[Route]`: for an address the site decides at run time, such as a permalink's pattern, which is a stored setting that plugins add
+  their own to): Symfony's router matches only the catch-all (`idno_legacy`); `LegacyRoutedPages` (`kernel.request`, priority 30, after `LegacyRouteOverride` at 31) asks the legacy router once what it will do with the request
+  (`PageHandler::choiceFor()`: the page class, the captured arguments, the `.md` rule), and when that page is one that NAMES an action (a placeholder of its own, or a kept shell and never a subclass of one) whose
+  `#[SitePage]` takes the method, sets `_controller`, `_route`, `argument0`... and `_idno_markdown_suffix` on the request: from there it is a site page (the lifecycle, the renderer and the response rules above). Any
+  other request stays the legacy router's, and the one entry it chose is all the dispatcher gives Toro.
 
 Because legacy pages run while the response is sent (after `Kernel::handle()` has
 returned), an exception thrown by a legacy page is handled by the legacy exception
@@ -871,6 +876,11 @@ and `Tests/Upgrade/UpgradeEndToEndTest`. Do not add another.
   imported with a `FileExistenceResource`, skipped while it does not exist; `Idno/Http` is in
   `CodeFingerprint::SERVICE_DIRECTORIES`; a directory outside them is added to `config/routes.php` AND to
   `CodeFingerprint::SERVICE_DIRECTORIES` so the container and route cache are rebuilt when it changes).
+- A page whose address the site decides at RUN TIME (a permalink's pattern is a stored setting, and plugins register their own patterns for the same page at boot) cannot be a `#[Route]`, which is compiled: its action
+  carries `#[Idno\Http\Page\RoutedByLegacyTable(route: 'idno_<name>')]` and its `#[SitePage]`, and the legacy class that served it names the action in a public constant `ACTION = [Controller::class, 'method']`
+  (its kept shell, or a placeholder of its own under `Idno\Legacy\Placeholder\` where the class was deleted); see "Legacy pages and routes". A NEW page, whose address the site does not decide at run time,
+  is a `#[Route]` as above and does not use this. `debug:router` does not list a routed action: `Tests/Kernel/fixtures/routed-pages.php` does (route name => the action and the class that names it), and
+  `Tests/Kernel/RoutedPagesListTest` fails for an action that is not listed there.
 - It always wins over the legacy catch-all, whatever the path: that route has priority
   `-1000`. So a new route also shadows any legacy page at the same path, but only for
   the HTTP methods it accepts: a request with another method still reaches the legacy
@@ -1148,6 +1158,27 @@ state-changing browser request): the admin page `/admin/legacytables` is one, fo
 `/admin/welcome/` (`Idno\Pages\Admin\Welcome`, registered in `Idno\Core\Admin::registerPages()`): the page a new administrator lands on
 after the installation, a GET that needs `adminGatekeeper()`. It is a legacy page, like every admin page: the admin pages are legacy pages,
 and this one is drawn in their shell and menu with their gatekeeper.
+
+**Pages routed by the legacy table.** `Idno\Http\Page\RoutedByLegacyTable` (`#[\Attribute(TARGET_METHOD)]`, `route`: a name matching `idno_[a-z0-9_]+`, refused otherwise) marks a controller action that has no `#[Route]` and is served for the
+addresses the legacy route table holds for a page class that names it. The class names the action with the public constant `ACTION` (`[Controller::class, 'method']`; `null` where there is none): a kept shell (`PageShell::ACTION`, which
+also gives it the action's `#[SitePage]`) or, for a page whose class was deleted, a placeholder of its own under `Idno\Legacy\Placeholder\` (`AnnotationView`, `AnnotationDelete`: not `ControllerRoute`, which names no action, so a
+placeholder says which action serves it; `$excludes['Legacy']` lists `Placeholder`). Each routed action is named by exactly one class (`LegacyRoutedPagesTest`). The table is still exactly what it was: a placeholder is registered
+under the keys of the class it replaces (`SitePageClaimsTest::testEveryRoutedHandlerIsRegisteredUnderTheSnapshotsKeys`).
+`Idno\Legacy\LegacyRoutedPages` (`kernel.request`, priority 30; it takes the kernel and the dispatcher as a service closure and acts only when the legacy application booted, for a main request whose `_route` is `idno_legacy`) asks
+`PageHandler::choiceFor($table, $request)` (`routedFor()` for `toroPath()` and the REAL method, kept on the request as `_idno_legacy_choice`, with what it was asked in `_idno_legacy_subject`; `claimsOf()` reads the same answer for the path
+the router is given, so `LegacyRouteOverride` and this listener share the one lookup of a handed-back request). It routes the request only when the class chosen declares `ACTION` ITSELF (a subclass of a shell inherits the constant and is a plugin's
+page, served through the shell), is no deprecated shell but with its own class as `SHELL`, names an action marked `#[RoutedByLegacyTable]` whose `#[SitePage]` allows both the real method and the method an override header names;
+then it sets `_controller` (`Class::method`), `_route` (the attribute's), `_route_params` and attributes `argument0`, `argument1`... (Toro's captured groups, in order: `PageContext::arguments()` reads them, so the action receives what the
+legacy page received in `$this->arguments`), `_idno_legacy_routed` and `_idno_markdown_suffix` (the `.md` rule's answer, which `PageRequestListener::onController()` uses instead of taking the suffix off a parameter), and removes
+the catch-all's `path`. Everything else is the router's, unchanged: a plugin's `addRoute()` of the identical pattern, `hijackRoute()` or an exact key (the router's choice decides), a method the action does not take (the router's 404 for a
+placeholder, the shell's handler for a shell), a subclass of the shell, a malformed `Host`, any spelling the router itself does not resolve to the page.
+`LegacyDispatcher::dispatch(?array $choice = null)` gives Toro the ONE entry the choice names (`[pattern => handler]`; no entry for `[]`, the router's 404), read from the request by `recordedChoice()` (valid only for the table, method and path it
+was recorded for): a legacy request pays one lookup of the table, where it paid two (Toro's own and `beginStatelessRequestIfTheShellTakesNoFormToken()`'s). `LegacyRouteOverride::handsBack($page, $routes, $request)` is that listener's decision as a
+public function. Measured in process on the real table of the rig's site (154 patterns, the test environment with debug on; the smallest of 7 rounds of 5,000 requests): a legacy page whose pattern is an exact key (`/session/login`) 0.2 us
+before and 1.7 us after (the listener's own work), a path that matches late (WebFinger) or nothing 52 us before (two lookups) and 29 us after (one lookup and the listener). Over HTTP (a server of the test, debug off, opcache on; median
+of 200 requests, the smallest of 5 blocks) `/session/login` took 5.2 ms and a path no route matches 5.0 ms before, and 5.2 ms and 5.8 ms after: the difference of tens of microseconds is below what a request's timing resolves.
+Tests: `Tests/Kernel/LegacyRoutedPagesTest`, `RoutedPagesListTest`, `PageListenersWithoutLegacyTest`, `SitePageClaimsTest`, and over HTTP `Tests/Characterisation/RoutedPagesTest` and `RoutedPagesSettingTest` (the fixtures:
+`Tests\Fixtures\RoutedFixtureController`, `RoutedPlaceholder`, `RoutedFixtureShell`, `SubclassedRoutedShell`, switched by `IDNO_TEST_ROUTED=1` and the `routed-hijack` mode of `IDNO_TEST_CLAIM_ROUTES`).
 
 **Shells.** A page whose logic moved to a service that a controller calls is kept for one major version as a deprecated SHELL: a class under `Idno\Pages\`
 that extends `Idno\Legacy\PageShell`, is marked `@deprecated`, and has no logic of its own. Each ported page has ONE implementation, in the service the controller

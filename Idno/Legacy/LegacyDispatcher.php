@@ -55,10 +55,26 @@ final class LegacyDispatcher
     }
 
     /**
+     * The choice recorded on the request for this router's table (`PageHandler::choiceFor()`), when it is still the router's for the request's method and
+     * path; null when none was recorded.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function recordedChoice(\Symfony\Component\HttpFoundation\Request $request): ?array
+    {
+        return PageHandler::recordedChoice($this->routes, $request);
+    }
+
+    /**
      * Registers the Toro 404 hook and serves the request. May not return: legacy pages
      * call exit.
+     *
+     * `$choice` is what the router already decided for this request (`PageHandler::recordedChoice()`): Toro is given the one entry it chose, or no entry for a
+     * request it has no page for (`[]`), so the table is looked up once for the request. Without one it is given the whole table, as it always was.
+     *
+     * @param array<string, mixed>|null $choice
      */
-    public function dispatch(): void
+    public function dispatch(?array $choice = null): void
     {
         // Only the first kernel booted in a process has legacy services wired to
         // Idno::site() (see LegacyBootstrap::boot()). A dispatcher from any other kernel
@@ -73,6 +89,9 @@ final class LegacyDispatcher
         }
 
         $routes = $this->routes();
+        if ($choice !== null) {
+            $routes = $choice === [] ? [] : [$choice['pattern'] => $this->routes[$choice['pattern']]];
+        }
 
         // Manage routing
 

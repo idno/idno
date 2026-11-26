@@ -59,6 +59,21 @@ final class PageRoutesTest extends TestCase
         $this->assertSame([], PageRouteConvention::violations($routes));
     }
 
+    public function testNoRouteServesAnActionRoutedByTheLegacyTable(): void
+    {
+        // an action routed by the legacy table is reached through the table, never through the router's collection (the convention is for routes)
+        foreach ($this->router()->getRouteCollection() as $name => $route) {
+            $controller = $route->getDefault('_controller');
+            if (!is_string($controller) || !str_contains($controller, '::')) {
+                continue;
+            }
+            [$class, $method] = explode('::', $controller, 2);
+            if (class_exists($class) && method_exists($class, $method)) {
+                $this->assertSame([], (new \ReflectionMethod($class, $method))->getAttributes(\Idno\Http\Page\RoutedByLegacyTable::class), $name . ' is a route and is routed by the legacy table');
+            }
+        }
+    }
+
     public function testAllFourSpellingsMatchWithoutRedirect(): void
     {
         $router = $this->router();
