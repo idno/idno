@@ -16,7 +16,7 @@ use Symfony\Component\Routing\Attribute\Route;
  * that `UrlValidator::isSafeUrl()` accepts without a lookup, which `LocalOnlyHttpClient` answers from this route when the site's environment names it in
  * IDNO_TEST_REMOTE_STAND_IN. `GET /_test/remote/{name}` serves the document (404 when there is none); every fetch is recorded, and
  * `GET /_test/remote-fetched` lists the names fetched since it was last asked, oldest first, and forgets them. The files are in a directory of the
- * system temporary directory that is named after this checkout's real path, written under an exclusive lock (the web server has several workers).
+ * system temporary directory that is named after this checkout's real path (a file name starts with the port of the site that answers, so two sites share nothing), written under an exclusive lock (the web server has several workers).
  */
 final class RemoteDocumentController
 {
@@ -25,7 +25,7 @@ final class RemoteDocumentController
     #[Route('/_test/remote/{name}', name: 'idno_test_remote_document', requirements: ['name' => self::NAME], methods: ['GET', 'HEAD', 'PUT'])]
     public function document(Request $request, string $name): Response
     {
-        $file = self::directory() . '/' . $name . '.document';
+        $file = self::directory() . '/' . $request->getPort() . '-' . $name . '.document';
         if ($request->isMethod('PUT')) {
             $query = $request->query->all();
             $status = is_string($query['status'] ?? null) ? max(100, min(599, (int) $query['status'])) : 200;
@@ -34,7 +34,7 @@ final class RemoteDocumentController
 
             return new Response('', 204, ['Cache-Control' => 'no-store']);
         }
-        file_put_contents(self::directory() . '/fetched.log', $name . "\n", FILE_APPEND | LOCK_EX);
+        file_put_contents(self::directory() . '/' . $request->getPort() . '-fetched.log', $name . "\n", FILE_APPEND | LOCK_EX);
         $stored = is_file($file) ? json_decode((string) file_get_contents($file), true) : null;
         if (!is_array($stored)) {
             return new Response('No such document.', 404, ['Content-Type' => 'text/plain', 'Cache-Control' => 'no-store']);
@@ -44,10 +44,10 @@ final class RemoteDocumentController
     }
 
     #[Route('/_test/remote-fetched', name: 'idno_test_remote_fetched', methods: ['GET'])]
-    public function fetched(): JsonResponse
+    public function fetched(Request $request): JsonResponse
     {
         $names = [];
-        $handle = fopen(self::directory() . '/fetched.log', 'c+');
+        $handle = fopen(self::directory() . '/' . $request->getPort() . '-fetched.log', 'c+');
         if ($handle !== false) {
             if (flock($handle, LOCK_EX)) {
                 $names = array_values(array_filter(explode("\n", (string) stream_get_contents($handle)), static fn (string $line): bool => $line !== ''));

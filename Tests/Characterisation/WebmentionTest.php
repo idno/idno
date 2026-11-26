@@ -5,7 +5,8 @@ namespace Tests\Characterisation {
     /**
      * The Webmention endpoint as a remote sender sees it. Remote hosts are
      * .invalid so nothing leaves the machine; every case here is refused before
-     * any source is fetched.
+     * any source is fetched (`WebmentionAnswersTest` and `WebmentionAnnotationKeysTest`
+     * send mentions whose sources are fetched).
      */
     class WebmentionTest extends CharacterisationTestCase
     {
@@ -51,6 +52,18 @@ namespace Tests\Characterisation {
             );
         }
 
+        /**
+         * A field that is not text (`source[]=a`) is a request that is missing something, not a server error (the legacy endpoint answered it with the 500 page).
+         */
+        public function testFieldsThatAreNotTextAreAnUnknownError(): void
+        {
+            $r = $this->site()->request('POST', 'webmention/', ['Content-Type' => 'application/x-www-form-urlencoded'], 'source[]=a&target[]=b');
+
+            $this->assertSame(400, $r->status);
+            $this->assertStringContainsString('application/json', (string) $r->header('Content-Type'));
+            $this->assertSame('unknown_error', json_decode($r->body, true)['error']);
+        }
+
         public function testTargetOnAnotherSiteRejectedWithTargetNotFound(): void
         {
             $r = $this->site()->request('POST', 'webmention/', [], [
@@ -66,10 +79,10 @@ namespace Tests\Characterisation {
         }
 
         /**
-         * The unreachable source fails the SSRF check, but the response reports
-         * it as "target_not_supported" with a self-mention message.
+         * The target is a page of the site and the source is one the site may not fetch: the refusal says so (the legacy endpoint answered it with the
+         * self-mention error).
          */
-        public function testUnknownLocalTargetRejectedWithMisleadingSelfMentionError(): void
+        public function testASourceTheSiteMayNotFetchIsSourceNotAllowed(): void
         {
             $base = $this->site()->baseUrl();
             $r    = $this->site()->request('POST', 'webmention/', [], [
@@ -78,8 +91,9 @@ namespace Tests\Characterisation {
             ]);
 
             $this->assertSame(400, $r->status);
+            $this->assertStringContainsString('application/json', (string) $r->header('Content-Type'));
             $this->assertSame(
-                '{"error":"target_not_supported","error_text":"A page can\'t webmention itself."}',
+                '{"error":"source_not_allowed","error_text":"The source URL is not allowed."}',
                 $r->body
             );
         }

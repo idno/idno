@@ -90,7 +90,7 @@ final class RemoteFetchCallSitesTest extends IdnoTestCase
     {
         $this->useClients(fn() => new MockResponse('<a href="https://example.test/t">t</a>', ['http_code' => 200]));
 
-        $result = \Idno\Pages\Webmentions\Endpoint::fetchSource('https://source.example/post');
+        $result = \Idno\Core\Idno::container()->get(\Idno\Legacy\LegacyWebmentionSources::class)->fetch('https://source.example/post');
 
         $this->assertSame(200, $result['response']);
         $this->assertSame('<a href="https://example.test/t">t</a>', $result['content']);

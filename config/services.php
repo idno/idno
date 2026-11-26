@@ -411,6 +411,9 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
     // The annotation pages and the shortlink, over the same finders; the controllers take the services
     $services->set(\Idno\Legacy\LegacyAnnotations::class);
     $services->alias(\Idno\Http\Controller\Permalink\Annotations::class, \Idno\Legacy\LegacyAnnotations::class);
+    // What the webmention endpoint asks about a mention's source, over the legacy application; public: a test calls its fetch on mock clients
+    $services->set(\Idno\Legacy\LegacyWebmentionSources::class)->public();
+    $services->alias(\Idno\Http\Webmention\WebmentionSources::class, \Idno\Legacy\LegacyWebmentionSources::class)->public();
     // The page of this site an address is, for a webmention aimed at it (found as a GET of it is routed); public: the endpoint asks for it with Idno::container()->get()
     $services->set(\Idno\Legacy\LegacyWebmentionTargets::class)->public();
     $services->alias(\Idno\Http\Webmention\WebmentionTargets::class, \Idno\Legacy\LegacyWebmentionTargets::class)->public();

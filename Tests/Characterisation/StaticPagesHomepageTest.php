@@ -100,14 +100,14 @@ final class StaticPagesHomepageTest extends PrivateSiteTestCase
         $this->assertSame(['Idno\Pages\Homepage', 'Idno\Pages\Homepage'], $result);
     }
 
-    public function testARootWebmentionWithASourceThatIsNotPublicIsRefusedWithTheSelfMentionMessage(): void
+    public function testARootWebmentionWithASourceTheSiteMayNotFetchIsSourceNotAllowed(): void
     {
         $this->setAsHomepage();
 
         $response = $this->site()->request('POST', '/webmention/', [], ['source' => $this->baseUrl() . '_test/page/mention', 'target' => $this->baseUrl()]);
 
         $this->assertSame(400, $response->status);
-        $this->assertSame('{"error":"target_not_supported","error_text":"A page can\'t webmention itself."}', $response->body);
+        $this->assertSame('{"error":"source_not_allowed","error_text":"The source URL is not allowed."}', $response->body);
     }
 
     public function testASiteWithAStaticHomePageLogsNoDeprecation(): void

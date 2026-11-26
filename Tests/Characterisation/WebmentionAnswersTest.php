@@ -21,8 +21,63 @@ final class WebmentionAnswersTest extends PermalinkSiteCase
 
     protected const GROUP = 'webmention';
 
+    /** The cases the endpoint that replaced the legacy one answers differently on purpose, each with why (`EXPECTED` holds what it answers). */
+    private const METHOD_WHY = 'a method the endpoint does not take is the legacy router\'s 404 page, as for every page that moved to a controller (the legacy page answered the invalid-token 403 page)';
+
+    private const SOURCE_WHY = 'a source the site may not fetch is source_not_allowed (the legacy endpoint answered it with the self-mention error)';
+
+    private const HOST_WHY = 'a target is the site\'s only on the site\'s own host and port (the legacy endpoint matched the path alone)';
+
+    private const NO_MENTIONS_WHY = 'a page that takes no mention is no target: the answer is target_not_found, before the source is fetched (the legacy endpoint fetched it and answered source_not_supported)';
+
+    private const NOBODY_WHY = 'a mention is received as nobody, whoever sent it: a post only some members may read takes none (the legacy endpoint received it as the sender\'s session)';
+
+    private const CHANGED = [
+        'source-loopback' => self::SOURCE_WHY,
+        'source-ftp' => self::SOURCE_WHY,
+        'mention-post-markdown-address' => 'the Markdown form of a post is the post: its address resolves to the permalink (the legacy page answered target_not_found for it after the permalink moved)',
+        'mention-post-other-host-name' => self::HOST_WHY,
+        'mention-post-other-port' => self::HOST_WHY,
+        'mention-post-no-host' => 'a target with no host is no address of the site: the target must be an absolute address (the legacy endpoint matched the path alone)',
+        'mention-shortlink' => 'a shortlink takes a mention as the post it names does (the legacy endpoint answered target_not_found for it after the page moved)',
+        'mention-shortlink-unknown' => 'a shortlink no post has is a target that does not take the mention: the source is fetched and the answer is source_not_supported, as for any address of a page that exists and takes none',
+        'mention-actor-address' => self::NO_MENTIONS_WHY,
+        'mention-webmention-endpoint-address' => self::NO_MENTIONS_WHY,
+        'mention-home-index-php' => 'the front controller\'s own address is the home page (the legacy router had no page for it)',
+        'private-post-owner-cookie' => self::NOBODY_WHY,
+        'private-post-admin-cookie' => self::NOBODY_WHY,
+        'members-only-post-member-cookie' => self::NOBODY_WHY,
+        'put-visitor' => self::METHOD_WHY,
+        'delete-visitor' => self::METHOD_WHY,
+        'stored-bob-public' => 'the mentions the endpoint takes are the ones it resolves to the post: see the cases that differ',
+        'stored-private-post' => 'a mention is received as nobody: a post only its owner may read takes none, whoever sends it',
+        'target-not-a-url' => 'an address with a space or a control character in it is refused before anything is looked up (unknown_error): the target is the sender\'s',
+    ];
+
+    /** What the changed cases answer: status and, for a refusal, its error. @var array<string, array{int, string|null}> */
+    private const EXPECTED = [
+        'source-loopback' => [400, 'source_not_allowed'],
+        'source-ftp' => [400, 'source_not_allowed'],
+        'mention-post-markdown-address' => [202, null],
+        'mention-post-other-host-name' => [400, 'target_not_found'],
+        'mention-post-other-port' => [400, 'target_not_found'],
+        'mention-post-no-host' => [400, 'target_not_found'],
+        'mention-shortlink' => [202, null],
+        'mention-shortlink-unknown' => [400, 'source_not_supported'],
+        'mention-actor-address' => [400, 'target_not_found'],
+        'mention-webmention-endpoint-address' => [400, 'target_not_found'],
+        'mention-home-index-php' => [202, null],
+        'private-post-owner-cookie' => [400, 'source_not_supported'],
+        'private-post-admin-cookie' => [400, 'source_not_supported'],
+        'members-only-post-member-cookie' => [400, 'source_not_supported'],
+        'target-not-a-url' => [400, 'unknown_error'],
+    ];
+
     /** The address the sources are fetched from. */
     private const SOURCES = 'http://93.184.216.34/';
+
+    /** @var list<string> the cases whose answer is not the recording's, in this run */
+    private array $differences = [];
 
     private const KINDS = ['reply' => 'u-in-reply-to', 'like' => 'u-like-of', 'share' => 'u-repost-of', 'mention' => ''];
 
@@ -70,17 +125,85 @@ final class WebmentionAnswersTest extends PermalinkSiteCase
     }
 
     /**
-     * @param array<string, string> $headers
+     * A POST to the endpoint, recorded. The page the endpoint is now has its own lifecycle, which the legacy endpoint (it took the request in its own `post()`)
+     * had none of: the `Link` headers that the pages of the site carry (the webmention endpoint, the hub, `self`) and `Vary: Accept` are added to every answer,
+     * and a refusal is `application/json` (the legacy endpoint sent its JSON as `text/html`). The answer is compared with the recording with those left
+     * out, and they are asserted to be there. A case in `CHANGED` is held to what `EXPECTED` says of it.
+     *
      * @param array<string, string>|string|null $form
+     * @param array<string, string> $headers
      */
     private function post(string $case, array|string|null $form, string $viewer = 'visitor', array $headers = []): SiteResponse
     {
-        return $this->record($case, 'POST', 'webmention/', $headers, $viewer, $form);
+        if (static::captureMode() !== 'compare') {
+            return $this->record($case, 'POST', 'webmention/', $headers, $viewer, $form);
+        }
+        $response = $this->site()->request('POST', 'webmention/', $this->asViewer($viewer, $headers), $form);
+        if (isset(self::CHANGED[$case])) {
+            $this->assertRecordedAnswer(self::GROUP, $case, $response);
+            $this->assertChanged($case, $response);
+
+            return $response;
+        }
+        $file = self::recordedAnswersDirectory() . '/' . self::GROUP . '/' . $case . '.txt';
+        $this->assertFileExists($file, $case);
+        $recorded = (string) file_get_contents($file);
+        $actual = self::withoutThePagesHeaders(self::normalise($response, $this->baseUrl()), $case);
+        if (str_starts_with($recorded, 'status 400')) {
+            $expected = str_replace("content-type: text/html; charset=UTF-8\n", "content-type: application/json\n", $recorded);
+            $this->assertNotSame($recorded, $expected, $case . ': the recording holds the legacy type');
+            $recorded = $expected;
+        }
+        if ($recorded !== $actual) {
+            $this->differences[] = $case . ': ' . $response->status . ' ' . (json_decode($response->body, true)['error'] ?? '') . ' (recorded ' . strtok($recorded, "\n") . ' ' . (preg_match('/"error":"([a-z_]+)"/', $recorded, $m) === 1 ? $m[1] : '') . ')';
+        }
+
+        return $response;
+    }
+
+    /** The answer without the headers every page of the site has, which each of them must hold (once). */
+    private static function withoutThePagesHeaders(string $answer, string $case): string
+    {
+        [$head, $body] = explode("\n\n", $answer, 2) + [1 => ''];
+        $lines = explode("\n", $head);
+        foreach (['link: <{site}/webmention/>; rel="http://webmention.org/"', 'link: <{site}/webmention/>; rel="webmention"', 'link: <https://hub.example/>; rel="hub"', 'link: <{site}/webmention/>; rel="self"', 'vary: Accept'] as $line) {
+            self::assertSame(1, count(array_keys($lines, $line, true)), $case . ': ' . $line);
+            $lines = array_values(array_diff($lines, [$line]));
+        }
+
+        return implode("\n", $lines) . "\n\n" . $body;
+    }
+
+    /** A case whose answer is not the legacy endpoint's, on purpose: its status and, for a refusal, its error, with the reason in `CHANGED`. */
+    private function assertChanged(string $case, SiteResponse $response): void
+    {
+        [$status, $error] = self::EXPECTED[$case] ?? throw new \LogicException('No expectation for ' . $case);
+        $this->assertSame($status, $response->status, $case);
+        if ($error !== null) {
+            $this->assertSame($error, json_decode($response->body, true)['error'] ?? null, $case);
+            $this->assertStringContainsString('application/json', (string) $response->header('Content-Type'), $case);
+        } else {
+            $this->assertSame('', $response->body, $case);
+        }
+    }
+
+    /** @return array<string, array<string, array<string, mixed>>> the post's annotations as the record holds them */
+    private function stored(string $id): array
+    {
+        $stored = $this->runInSite('return \\Idno\\Core\\Idno::container()->get(\\Idno\\Storage\\RecordStore::class)->findById(\'entities\', ' . $this->literal($id) . ')[\'annotations\'] ?? [];');
+        $this->assertIsArray($stored);
+
+        return $stored;
     }
 
     /** The post's annotations as the record holds them, with the times left out (an annotation's address ends in a random id). */
     private function recordStored(string $case, string $id): void
     {
+        if (isset(self::CHANGED[$case])) {
+            $this->assertRecordedAnswer(self::GROUP, $case, new SiteResponse(200, [], ''));
+
+            return;
+        }
         $code = <<<'PHP'
         $record = \Idno\Core\Idno::container()->get(\Idno\Storage\RecordStore::class)->findById('entities', %ID%);
         $stored = $record['annotations'] ?? null;
@@ -164,8 +287,8 @@ final class WebmentionAnswersTest extends PermalinkSiteCase
         $this->record('get-admin', 'GET', 'webmention/', [], 'admin');
         $this->record('head-visitor', 'HEAD', 'webmention/');
         $this->record('options-visitor', 'OPTIONS', 'webmention/');
-        $this->record('put-visitor', 'PUT', 'webmention/', [], 'visitor', 'source=a&target=b');
-        $this->record('delete-visitor', 'DELETE', 'webmention/');
+        $this->assertSame(404, $this->record('put-visitor', 'PUT', 'webmention/', [], 'visitor', 'source=a&target=b')->status);
+        $this->assertSame(404, $this->record('delete-visitor', 'DELETE', 'webmention/')->status);
 
         // A request that is missing something
         $this->post('no-fields', []);
@@ -217,6 +340,14 @@ final class WebmentionAnswersTest extends PermalinkSiteCase
 
         $this->recordStored('stored-bob-public', $postId);
         $this->recordStored('stored-private-post', '00000000000040008000000000000043');
+        // (the post's own annotations: the mention of the address that is the post's, spelled other ways, and each kind; none for a source that has gone, and none
+        // for a mention of a post, a profile or a shortlink that the site refused)
+        $this->assertSame(
+            ['reply' => ['mention-post-markdown-address', 'mention-post-fragment', 'mention-post-trailing-slash', 'mention-post-other-scheme', 'mention-view-address', 'mention-shortlink', 'admin-cookie'], 'mention' => ['mention-post-query', 'kind-mention'], 'like' => ['kind-like'], 'share' => ['kind-share']],
+            array_map(fn (array $list): array => array_map(static fn (array $annotation): string => substr((string) $annotation['permalink'], strlen(self::SOURCES)), array_values($list)), $this->stored($postId)),
+            'what the public post holds'
+        );
+        $this->assertSame([], $this->stored('00000000000040008000000000000043'), 'a post only its owner may read holds no mention, whoever sent it');
 
         // The home page of a multi-user site has no page of its own to take a mention, and on a single-user site (the default) the root is its owner's profile
         $root = $base;
@@ -233,6 +364,7 @@ final class WebmentionAnswersTest extends PermalinkSiteCase
         $this->post('post-public-private-site', ['source' => $this->source('walled-post', $target), 'target' => $target]);
         $this->post('missing-fields-private-site', []);
         $this->runInSite('$config = \Idno\Core\Idno::site()->config(); $config->walled_garden = false; $config->save(); return true;');
+        $this->assertSame([], $this->differences, 'the answers that are not the recordings');
     }
 
     /** The scenario on a site of its own. */

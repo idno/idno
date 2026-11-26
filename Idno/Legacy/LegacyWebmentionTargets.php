@@ -12,6 +12,7 @@ use Idno\Http\Webmention\ReceivesWebmentions;
 use Idno\Http\Webmention\TargetHosts;
 use Idno\Http\Webmention\WebmentionTarget;
 use Idno\Http\Webmention\WebmentionTargets;
+use Idno\Core\Idno;
 use Idno\Core\PageHandler;
 use Idno\Kernel;
 use Idno\Portability\SiteFacts;
@@ -132,11 +133,30 @@ final class LegacyWebmentionTargets implements WebmentionTargets
         $arguments = $routed['arguments'];
 
         return new WebmentionTarget($class, '', $arguments, static function (ReceivedWebmention $mention) use ($class, $arguments): bool {
-            $page = new $class();
-            $page->arguments = $arguments;
-            $page->setPermalink();
+            // Building the page is what the legacy router did, and its constructor makes the page the site's current page, installs its exception handler and
+            // queues the headers every legacy page sends: what the request being served had made of them is put back, whatever the page does
+            $site = Idno::site();
+            $current = $site->currentPage();
+            $built = false;
+            try {
+                $page = new $class();
+                $built = true;
+                $page->arguments = $arguments;
+                $page->setPermalink();
 
-            return (bool) $page->webmentionContent($mention->source, $mention->target, $mention->sourceResponse, $mention->sourceMf2);
+                return (bool) $page->webmentionContent($mention->source, $mention->target, $mention->sourceResponse, $mention->sourceMf2);
+            } finally {
+                if ($built) {
+                    restore_exception_handler();
+                    $headers = new PhpHeaders();
+                    foreach (['X-Powered-By', 'X-Clacks-Overhead', 'X-Idno-Build-Fingerprint'] as $name) {
+                        $headers->remove($name);
+                    }
+                }
+                if ($current instanceof Page) {
+                    $site->setCurrentPage($current);
+                }
+            }
         });
     }
 

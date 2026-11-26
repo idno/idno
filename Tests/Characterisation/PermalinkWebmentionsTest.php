@@ -9,10 +9,10 @@ use Tests\Support\RecordedAnswers;
 /**
  * What the post permalink does with a webmention, recorded from the legacy page, on a site of the test's own (a webmention writes an annotation).
  *
- * The endpoint (`/webmention/`) fetches the source with the client that refuses private networks, and the rig's own address is one, so no webmention
- * gets past the endpoint over HTTP: the endpoint's answer for each target is recorded over HTTP (`*-http`), and what the page does once the endpoint has
- * fetched a source that links to its target is recorded by handing the page the mention in the site, as the endpoint does: the permalink's page with the
- * last segment of the target as its argument (the router's choice), `setPermalink()`, `webmentionContent()` (`result`: what it returned, and `stored`: the annotations the post holds afterwards, with the time left out).
+ * What the page does once the endpoint has fetched a source that links to its target is recorded by handing the page the mention in the site, as the endpoint
+ * does: the permalink's page with the last segment of the target as its argument (the router's choice), `setPermalink()`, `webmentionContent()` (`result`:
+ * what it returned, and `stored`: the annotations the post holds afterwards, with the time left out). What the endpoint answers to a mention of each kind of
+ * target, from a source it really fetches, is `WebmentionAnswersTest`'s.
  * The answers are `Tests/Characterisation/fixtures/answers/permalink-webmentions/`.
  */
 final class PermalinkWebmentionsTest extends PermalinkSiteCase
@@ -106,24 +106,5 @@ final class PermalinkWebmentionsTest extends PermalinkSiteCase
         $this->recordMention('missing-post', $this->mention('2026/no-such-slug-here', 'reply', null));
         $this->recordMention('deleted-post', $this->mention($paths['deleted'], 'reply', null));
         $this->recordMention('view-address', $this->mention('view/' . $ids['view-note'], 'reply', $ids['view-note']));
-    }
-
-    /** What the endpoint answers to a mention of each kind of target, from a source it cannot fetch. */
-    public function testWhatTheEndpointAnswersForEachKindOfTarget(): void
-    {
-        $paths = $this->seedPermalinkContent();
-        $source = 'https://remote.invalid/reply';
-        $cases = [
-            'public-post-http' => $paths['bob-public'],
-            'private-post-http' => $paths['bob-owner'],
-            'draft-post-http' => $paths['bob-draft'],
-            'missing-post-http' => '2026/no-such-slug-here',
-            'deleted-post-http' => $paths['deleted'],
-            'view-address-http' => 'view/' . $paths['ids']['view-note'],
-            'markdown-address-http' => $paths['bob-public'] . '.md',
-        ];
-        foreach ($cases as $case => $target) {
-            $this->record($case, 'POST', 'webmention/', [], 'visitor', ['source' => $source, 'target' => $this->baseUrl() . $target]);
-        }
     }
 }

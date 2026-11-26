@@ -428,7 +428,8 @@ namespace Idno\Core {
 
         function registerPages()
         {
-            \Idno\Core\Idno::site()->routes()->addRoute('/webmention/?', '\Idno\Pages\Webmentions\Endpoint', true);
+            // The endpoint is served by a controller (Idno\Http\Controller\WebmentionController); the placeholder keeps its place in the route table
+            \Idno\Core\Idno::site()->routes()->addRoute('/webmention/?', \Idno\Legacy\ControllerRoute::class, true);
         }
 
         function registerEventHooks()

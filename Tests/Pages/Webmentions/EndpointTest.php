@@ -86,8 +86,42 @@ EOD;
     }
 
     /**
-     * Test that the self-webmention path check correctly detects
-     * a page trying to webmention itself.
+     * The endpoint as the site builds it, with the real resolver and the real check of what is this site's own address: a receiver is never reached by
+     * these cases (a self-mention is refused before the source is looked at).
+     */
+    private function endpoint(): \Idno\Http\Webmention\WebmentionEndpoint
+    {
+        $translation = new class implements \Idno\Templating\TemplateTranslation {
+            public function translate(string $text, array $subs = []): string
+            {
+                return $text;
+            }
+        };
+
+        return new \Idno\Http\Webmention\WebmentionEndpoint(
+            Idno::container()->get(\Idno\Http\Webmention\WebmentionTargets::class),
+            Idno::container()->get(\Idno\Http\Webmention\WebmentionSources::class),
+            new \Symfony\Component\DependencyInjection\ServiceLocator([]),
+            Idno::container()->get(\Idno\Http\Page\PageRenderer::class),
+            $translation
+        );
+    }
+
+    /**
+     * What the endpoint answers to a mention: the status and the error it names.
+     *
+     * @return array{int, string}
+     */
+    private function answerTo(string $source, string $target): array
+    {
+        $request = \Symfony\Component\HttpFoundation\Request::create('/webmention/', 'POST', [], [], [], ['CONTENT_TYPE' => 'application/x-www-form-urlencoded'], http_build_query(['source' => $source, 'target' => $target]));
+        $response = $this->endpoint()->receive(new \Idno\Http\Page\PageContext($request, new \Idno\Http\Page\SitePage('Idno\Pages\Webmentions\Endpoint', methods: ['GET', 'POST'], formTokenReplacedBy: 'a test')));
+
+        return [$response->getStatusCode(), (string) (json_decode((string) $response->getContent(), true)['error'] ?? '')];
+    }
+
+    /**
+     * Test that a page of this site cannot mention itself: the source is the target's own address, spelled with a trailing slash.
      */
     function testSelfWebmentionDetected()
     {
@@ -99,48 +133,29 @@ EOD;
         $this->toDelete[] = $entity;
         $url = $entity->getURL();
 
-        $source_path = parse_url($url, PHP_URL_PATH);
-        $target_path = parse_url($url, PHP_URL_PATH);
-
-        $this->assertTrue(
-            $source_path && $target_path && rtrim($source_path, '/') === rtrim($target_path, '/'),
-            'A post URL compared to itself should be detected as a self-webmention.'
-        );
+        $this->assertSame([400, 'target_not_supported'], $this->answerTo($url . '/', $url));
     }
 
     /**
-     * Test that the self-webmention check handles trailing slashes.
+     * Test that the self-webmention check handles trailing slashes, in either direction.
      */
     function testSelfWebmentionTrailingSlash()
     {
-        $url_no_slash = 'http://example.com/2024/my-post';
-        $url_with_slash = 'http://example.com/2024/my-post/';
+        $base = Idno::site()->config()->getURL();
 
-        $source_path = parse_url($url_no_slash, PHP_URL_PATH);
-        $target_path = parse_url($url_with_slash, PHP_URL_PATH);
-
-        $this->assertTrue(
-            $source_path && $target_path && rtrim($source_path, '/') === rtrim($target_path, '/'),
-            'Self-webmention check should match URLs regardless of trailing slash.'
-        );
+        $this->assertSame([400, 'target_not_supported'], $this->answerTo($base . '2024/my-post', $base . '2024/my-post/'));
+        $this->assertSame([400, 'target_not_supported'], $this->answerTo($base . '2024/my-post/', $base . '2024/my-post'));
     }
 
     /**
-     * Test that different same-site posts are not falsely flagged
-     * as self-webmentions.
+     * Test that different same-site posts are not falsely flagged as self-webmentions: the answer is the next check's (this site's own address is
+     * one the site will not fetch from), never the self-mention's.
      */
     function testDifferentPostsPassSelfCheck()
     {
-        $source = Idno::site()->config()->getURL() . '2024/reply-post';
-        $target = Idno::site()->config()->getURL() . '2024/original-post';
+        $base = Idno::site()->config()->getURL();
 
-        $source_path = parse_url($source, PHP_URL_PATH);
-        $target_path = parse_url($target, PHP_URL_PATH);
-
-        $this->assertFalse(
-            rtrim($source_path, '/') === rtrim($target_path, '/'),
-            'Different posts should not be detected as self-webmentions.'
-        );
+        $this->assertSame([400, 'source_not_allowed'], $this->answerTo($base . '2024/reply-post', $base . '2024/original-post'));
     }
 
     /**
