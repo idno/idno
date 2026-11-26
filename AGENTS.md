@@ -1179,6 +1179,13 @@ draft or published. On for new sites (`Config`); not federated; not a content ty
   of a page unless the template type is exactly `json`. `Idno\Pages\Session\Login` gives a
   signed-in API client its API key that way (`api-token`, JSON over HTTPS only).
   `Tests/Pages/Session/LoginApiKeyTest.php` checks this.
+- The account email is private: `$user->email` is the address the site writes to and a password
+  reset goes to, and it is never part of anything drawn for somebody else, in any template type
+  (`User::jsonLDSerialise()`, which is printed in the head of a profile and of a post for every
+  visitor, and `User::jsonSerialize()` leave it out); a contact address a member wants to show is
+  one of the links of their profile (`profile['url']`, a `mailto:` entry). Only the member's own
+  settings page and administrators' pages print it. `Tests/Pages/User/AccountEmailPrivacyTest.php`
+  checks this over HTTP.
 - `FILTER_VALIDATE_URL` does not check the scheme: it accepts `javascript://...`. A plugin
   that stores an address a member typed (the Like plugin's bookmark, for example) keeps it
   only when `UrlValidator::httpUrl()` accepts it. `Tests/Core/MemberContentOutputTest.php`

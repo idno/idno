@@ -1262,6 +1262,8 @@ namespace Idno\Entities {
             unset($data['updated']);
             unset($data['published']);
             unset($data['banned'], $data['ban_reason'], $data['banned_by'], $data['ban_hides_profile']);
+            // The account email is private: it is never part of what is drawn for anybody
+            unset($data['email']);
 
             $data['image'] = array('url' => $this->getIcon());
             if (!empty($this->profile['url'])) {
@@ -1271,12 +1273,18 @@ namespace Idno\Entities {
             return $data;
         }
 
+        /**
+         * The member as a schema.org Person, which is printed in the head of their profile and
+         * of their posts for every visitor. The account email is private and is never part of
+         * it (nor of jsonSerialize()): an address the member wants to show is one of the links
+         * of their profile, which are in sameAs.
+         */
         public function jsonLDSerialise(array $params = array())
         {
             $json = [
                 '@context' => 'http://schema.org',
                 '@type' => 'Person',
-                'email' => $this->email,
+                'name' => $this->getName(),
                 'image' => $this->getIcon(),
                 'url' => $this->getURL(),
             ];
