@@ -104,7 +104,7 @@ namespace IdnoPlugins\StaticPages\Pages {
             if ($object->saveDataFromInput()) {
                 $this->forward($object->getURL());
             }
-            $this->forward($_SERVER['HTTP_REFERER']);
+            $this->forward(\Idno\Pages\Session\Login::sanitizeRedirectUrl($_SERVER['HTTP_REFERER'] ?? ''));
         }
 
         // Handle DELETE requests to the entity

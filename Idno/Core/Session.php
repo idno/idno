@@ -709,7 +709,9 @@ namespace Idno\Core {
             if (!$this->apiRequest || !$this->sessionStartedHere || session_status() !== PHP_SESSION_ACTIVE) {
                 return;
             }
-            $_SESSION = [];
+            // what this request has said so far (the warning about a connection in the clear) is drawn with it: the messages stay in memory
+            $messages = $_SESSION['messages'] ?? [];
+            $_SESSION = $messages === [] ? [] : ['messages' => $messages];
             @session_destroy();
             $this->removeSessionCookie();
         }

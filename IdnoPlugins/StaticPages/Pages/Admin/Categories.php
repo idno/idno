@@ -9,11 +9,13 @@ namespace IdnoPlugins\StaticPages\Pages\Admin {
 
         function getContent()
         {
+            $this->adminGatekeeper();
             $this->forward(\Idno\Core\Idno::site()->config()->getURL() . 'admin/staticpages/');
         }
 
         function postContent()
         {
+            $this->adminGatekeeper();
 
             $categories = $this->getInput('categories');
             if ($staticpages = \Idno\Core\Idno::site()->plugins()->get('StaticPages')) {

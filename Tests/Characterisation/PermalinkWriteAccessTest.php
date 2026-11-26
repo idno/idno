@@ -171,4 +171,37 @@ final class PermalinkWriteAccessTest extends PermalinkSiteCase
         $this->assertSame($before, $this->filesStored(), 'no file was stored');
         $this->assertSame([], $this->sinkRequests($sink), 'nothing was fetched');
     }
+
+    public function testARedirectAfterAWriteOrADeleteStaysOnTheSite(): void
+    {
+        $paths = $this->seedPermalinkContent();
+        $ids = $paths['ids'];
+        $evil = 'https://evil.example/landing';
+        $same = fn (SiteResponse $answer): bool => str_starts_with($answer->lines('location')[0] ?? '', $this->baseUrl());
+        // the edit form's `forward-to` field
+        $answer = $this->site()->request('POST', '/status/edit/' . $ids['status'], $this->asViewer('admin'), ['__bTk' => $this->tokenOf('admin'), 'body' => 'Edited', 'forward-to' => $evil]);
+        $this->assertSame(302, $answer->status);
+        $this->assertTrue($same($answer), 'forward-to: ' . ($answer->lines('location')[0] ?? ''));
+        // the `Referer` of a delete
+        foreach (['/delete/' . $ids['status'], '/photo/delete/' . $ids['photo']] as $path) {
+            $answer = $this->site()->request('POST', $path, $this->asViewer('admin', ['Referer' => $evil]), ['__bTk' => $this->tokenOf('admin')]);
+            $this->assertSame(302, $answer->status, $path);
+            $this->assertTrue($same($answer), $path . ': ' . ($answer->lines('location')[0] ?? ''));
+        }
+    }
+
+    public function testTheStaticPagesCategoryPagesAreForAnAdministrator(): void
+    {
+        $this->seedPermalinkContent();
+        foreach (['add' => ['category' => 'Mine'], 'edit' => ['category' => 'Mine', 'new_category' => 'Yours'], 'delete' => ['category' => 'Mine'], 'categories' => ['categories' => "A\nB"]] as $page => $fields) {
+            foreach ($this->nonOwners() as $kind => $who) {
+                $token = $who['token'];
+                unset($who['token']);
+                $answer = $this->site()->request('POST', '/admin/staticpages/' . $page . '/', $who, $fields + ['__bTk' => $token]);
+                $this->assertSame(403, $answer->status, "$kind $page");
+            }
+            $answer = $this->site()->request('POST', '/admin/staticpages/' . $page . '/', $this->asViewer('admin'), $fields + ['__bTk' => $this->tokenOf('admin')]);
+            $this->assertSame(302, $answer->status, "an administrator $page");
+        }
+    }
 }

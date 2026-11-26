@@ -148,7 +148,7 @@ namespace Idno\Pages\Account {
                 $this->forward();
             } else {
                 \Idno\Core\Idno::site()->session()->addMessageAtStart(\Idno\Core\Idno::site()->language()->_("We couldn't register you."));
-                $this->forward($_SERVER['HTTP_REFERER']);
+                $this->forward(\Idno\Pages\Session\Login::sanitizeRedirectUrl($_SERVER['HTTP_REFERER'] ?? ''));
             }
 
         }

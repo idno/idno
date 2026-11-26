@@ -71,7 +71,7 @@ namespace IdnoPlugins\Text\Pages {
                     \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->_('Your draft has been saved.'));
                     $this->forward(\Idno\Core\Idno::site()->config()->getDisplayURL() . 'drafts/');
                 } else {
-                    $forward = $this->getInput('forward-to', $object->getDisplayURL());
+                    $forward = \Idno\Pages\Session\Login::sanitizeRedirectUrl($this->getInput('forward-to', $object->getDisplayURL()));
                     $this->forward($forward);
                 }
             }

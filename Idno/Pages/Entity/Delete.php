@@ -56,7 +56,7 @@ namespace Idno\Pages\Entity {
             if ($object->delete()) {
                 \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->esc_('%s was deleted.', [$object->getTitle()]));
             }
-            $this->forward($_SERVER['HTTP_REFERER']);
+            $this->forward(\Idno\Pages\Session\Login::sanitizeRedirectUrl($_SERVER['HTTP_REFERER'] ?? ''));
         }
 
     }

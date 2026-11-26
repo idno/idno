@@ -481,6 +481,21 @@ final class ControllerPage extends Page
         $this->unavailable(__FUNCTION__);
     }
 
+    public function editRequestedEntity($object)
+    {
+        $this->unavailable(__FUNCTION__);
+    }
+
+    public function editGatekeeper($object)
+    {
+        $this->unavailable(__FUNCTION__);
+    }
+
+    public function deleteRequestedEntity($object)
+    {
+        $this->unavailable(__FUNCTION__);
+    }
+
     private function unavailable(string $method): never
     {
         throw new \LogicException('Page::' . $method . '() is not available on a page a controller serves: the controller answers, from the request.');

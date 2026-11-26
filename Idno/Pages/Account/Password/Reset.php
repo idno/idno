@@ -72,7 +72,7 @@ namespace Idno\Pages\Account\Password {
                 $this->forward(\Idno\Core\Idno::site()->config()->getURL() . 'account/password');
             } else {
                 \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->_('Sorry, your passwords either don\'t match, or are too weak'));
-                $this->forward($_SERVER['HTTP_REFERER']);
+                $this->forward(\Idno\Pages\Session\Login::sanitizeRedirectUrl($_SERVER['HTTP_REFERER'] ?? ''));
             }
 
         }

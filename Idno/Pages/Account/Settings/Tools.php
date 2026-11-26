@@ -44,7 +44,7 @@ namespace Idno\Pages\Account\Settings {
                 }
             }
 
-            $this->forward($_SERVER['HTTP_REFERER']);
+            $this->forward(\Idno\Pages\Session\Login::sanitizeRedirectUrl($_SERVER['HTTP_REFERER'] ?? ''));
         }
 
     }
