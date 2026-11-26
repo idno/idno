@@ -107,7 +107,7 @@ if ($title === '') {
 }
 $description = $oneLine($vars['description'] ?? '');
 $link = \Idno\Core\UrlValidator::httpUrl($this->markdownPageAddress());
-if (\Idno\Core\PageHandler::markdownSuffixRequested()) {
+if ($site->currentPage()->markdownSuffixRequested()) {
     // (a permalink that could not be shown, asked for as `<permalink>.md`)
     $link = (string) preg_replace('/\.md$/', '', $link, 1);
 }

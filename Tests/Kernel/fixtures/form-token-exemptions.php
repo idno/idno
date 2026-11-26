@@ -11,5 +11,6 @@ declare(strict_types=1);
  * @return array<string, string> `Class::method` => the sentence
  */
 return [
+    'Tests\Fixtures\FixtureShellController::receive' => 'a test of a shell whose page takes no form token',
     'Tests\Fixtures\SitePageFixtureController::tokenless' => 'a test of the exemption',
 ];

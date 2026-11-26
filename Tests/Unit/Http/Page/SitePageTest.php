@@ -142,4 +142,23 @@ final class SitePageTest extends TestCase
         $this->assertFalse($exempt->changesStateWithoutFormToken('DELETE'), 'a method the page does not declare is refused, not exempted');
         $this->assertFalse((new SitePage('X', methods: ['GET', 'POST']))->changesStateWithoutFormToken('POST'), 'a page with no exemption needs the token');
     }
+
+    public function testACopyWithAnotherNameIsTheSameInEveryOtherArgument(): void
+    {
+        $page = new SitePage('Original', shell: true, publicOnPrivateSite: true, defaultType: 'rss', methods: ['GET', 'POST'], markdownPermalink: true, formTokenReplacedBy: 'why');
+
+        $copy = $page->withName('Subclass');
+
+        $this->assertNotSame($page, $copy);
+        $this->assertSame('Subclass', $copy->name);
+        $this->assertSame('Original', $page->name, 'the original is unchanged');
+        foreach ((new \ReflectionClass(SitePage::class))->getProperties() as $property) {
+            if ($property->getName() !== 'name') {
+                $this->assertSame($property->getValue($page), $property->getValue($copy), $property->getName() . ' is carried over');
+            }
+        }
+        $account = (new SitePage('A', accountPage: true, settingsPage: true))->withName('B');
+        $this->assertTrue($account->accountPage);
+        $this->assertTrue($account->settingsPage);
+    }
 }

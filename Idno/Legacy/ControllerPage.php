@@ -361,6 +361,11 @@ final class ControllerPage extends Page
         }
     }
 
+    public function markdownSuffixRequested()
+    {
+        return $this->context->markdownSuffixRequested();
+    }
+
     public function wantsMarkdown()
     {
         return MarkdownRequest::wanted(

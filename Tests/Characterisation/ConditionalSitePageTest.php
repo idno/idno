@@ -144,7 +144,9 @@ final class ConditionalSitePageTest extends PrivateSiteTestCase
         $path = '/_test/fixture-shell/?case=conditional';
 
         $current = $this->answer($path, self::LAST_CHANGE + 86400);
-        $this->assertSame(self::comparable(self::recorded('legacy-304')), self::comparable(self::normalise($current, $this->baseUrl())));
+        // (the recording is of a page that is no permalink: the shell's page is one, and says it varies by `Accept` as its controller does)
+        $this->assertStringContainsString('Accept', (string) $current->header('Vary'));
+        $this->assertSame(self::comparable(self::recorded('legacy-304')), self::comparable(self::normalise($current, $this->baseUrl()), ['vary']));
         $this->assertSame('', $current->body);
 
         $older = $this->answer($path, self::LAST_CHANGE - 86400);
@@ -156,18 +158,17 @@ final class ConditionalSitePageTest extends PrivateSiteTestCase
     public function testTheControllerAndTheShellOfOnePageAnswerAlike(): void
     {
         $shell = $this->answer('/_test/fixture-shell/?case=conditional', self::LAST_CHANGE + 86400);
-        $controller = $this->answer('/_test/fixture-shell-controller?case=conditional', self::LAST_CHANGE + 86400);
+        $controller = $this->answer('/_test/fixture-shell/controller?case=conditional', self::LAST_CHANGE + 86400);
 
         $this->assertSame(304, $shell->status);
-        // (the controller's attribute says `markdownPermalink` and the shell's page is built without the attribute's flags, so only the controller varies by `Accept`)
         $this->assertSame(
-            self::comparable(self::normalise($shell, $this->baseUrl()), ['vary']),
-            self::comparable(self::normalise($controller, $this->baseUrl()), ['vary'])
+            self::comparable(self::normalise($shell, $this->baseUrl())),
+            self::comparable(self::normalise($controller, $this->baseUrl()))
         );
 
         // and both send the page to a copy from before the change (the bodies name their own addresses)
         $shell = $this->answer('/_test/fixture-shell/?case=conditional', self::LAST_CHANGE - 86400);
-        $controller = $this->answer('/_test/fixture-shell-controller?case=conditional', self::LAST_CHANGE - 86400);
+        $controller = $this->answer('/_test/fixture-shell/controller?case=conditional', self::LAST_CHANGE - 86400);
         $this->assertSame(200, $shell->status);
         $this->assertSame(200, $controller->status);
         $this->assertSame($shell->header('Last-Modified'), $controller->header('Last-Modified'));

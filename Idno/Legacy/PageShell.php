@@ -6,14 +6,18 @@ namespace Idno\Legacy;
 
 use Idno\Common\Page;
 use Idno\Core\Idno;
+use Idno\Core\PageHandler;
 use Idno\Http\Page\PageContext;
 use Idno\Http\Page\PageNotModified;
 use Idno\Http\Page\PageRedirect;
 use Idno\Http\Page\SitePage;
 use Idno\Templating\ShellHeaders;
+use Idno\Templating\TypeChain;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\GoneHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -30,7 +34,10 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
  * the context. The `Response` the service returns is written as a legacy page writes one: the status with `http_response_code()` and each
  * header with `header()`, with the rule that keeps the session's caching lines (`LegacyHeaderReconciler`), and the body is echoed, after which the request ends, as the legacy
  * page ended it where it drew (`exit`): nothing a subclass does after `parent::getContent()`, no router hook after the handler and no
- * `kernel.terminate` runs for a page served through a shell, as none did for the page it replaced. What the
+ * `kernel.terminate` runs for a page served through a shell, as none did for the page it replaced. The page is the one its controller
+ * serves: the shell names the controller action that serves it (`ACTION`) and takes that action's `#[SitePage]` (its flags, under the name of the
+ * shell or its subclass), its Markdown form (the `.md` of an address a `MarkdownPermalink` shell is routed for) and the `Vary` of a permalink,
+ * and a streamed or file response is sent as the controller's is. What the
  * service throws is what a legacy page did: a refusal, a missing page, a gone page and a forward are the page's own `deniedContent()`,
  * `noContent()`, `goneContent()` and `forward()`, and a current copy (`PageNotModified`) is the 304 that ended the request.
  */
@@ -39,11 +46,21 @@ abstract class PageShell extends Page
     /** The class of the shell itself, which each shell declares: a class that is not it is a subclass */
     protected const SHELL = '';
 
+    /**
+     * The controller action that serves the page, as `[class, method]`: the shell takes its `#[SitePage]` (null: a page with only a name, and no flags).
+     * The action says `shell: true` and names the shell's class.
+     *
+     * @var array{0: class-string, 1: string}|null
+     */
+    public const ACTION = null;
+
     /** @var array<string, true> the shells whose deprecation has been logged in this process */
     private static array $deprecationLogged = [];
 
     public function __construct()
     {
+        // (before the page is begun: `page/ready` must never see the session's user on a request the page authenticates itself)
+        $this->beginTokenlessRequest();
         parent::__construct();
         $this->noteSubclass();
     }
@@ -59,6 +76,7 @@ abstract class PageShell extends Page
         $site = Idno::site();
         $context = $this->contextFor($this->currentRequest());
         $page = new ControllerPage($context, $this->xhr());
+        $this->selectTypes($context, $page);
 
         $thrown = null;
         $response = null;
@@ -147,9 +165,54 @@ abstract class PageShell extends Page
         return ($stack instanceof RequestStack ? $stack->getCurrentRequest() : null) ?? Request::createFromGlobals();
     }
 
+    /**
+     * What `LegacyPageLifecycle::begin()` does for a controller's page before it is served: the type the action names when the request names none, and
+     * the Markdown form a permalink's `.md` asked for.
+     */
+    private function selectTypes(PageContext $context, ControllerPage $page): void
+    {
+        $site = Idno::site();
+        $defaultType = $context->page()->defaultType;
+        if ($defaultType !== null && empty($context->input('_t'))) {
+            $context->setInput('_t', $defaultType);
+            $template = $page->getInput('_t');
+            if (is_string($template)) {
+                $template = TypeChain::requested($template);
+            }
+            if (is_string($template) && TypeChain::requestable($template) && $site->template()->templateTypeExists($template)) {
+                $site->template()->setTemplateType($template);
+            }
+        }
+        if ($context->markdownSuffixRequested()) {
+            $page->selectMarkdownIfWanted();
+        }
+    }
+
+    /**
+     * A page whose action takes state-changing requests without the form token (`formTokenReplacedBy`) serves them as nobody, as the controller's does:
+     * the request is made stateless before the page is built, so the router's check of the token is not asked and the session's user is never the page's.
+     */
+    private function beginTokenlessRequest(): void
+    {
+        $page = static::ACTION === null ? null : SitePage::of(static::ACTION);
+        if ($page === null || $page->formTokenReplacedBy === null) {
+            return;
+        }
+        $request = $this->currentRequest();
+        foreach ([$request->getRealMethod(), $request->getMethod()] as $method) {
+            if ($page->changesStateWithoutFormToken($method)) {
+                Idno::site()->session()->beginStatelessRequest();
+
+                return;
+            }
+        }
+    }
+
     private function contextFor(Request $request): PageContext
     {
-        $context = new PageContext($request, new SitePage(name: static::class));
+        $page = static::ACTION === null ? null : SitePage::of(static::ACTION);
+        $context = new PageContext($request, $page?->withName(static::class) ?? new SitePage(name: static::class));
+        $context->setMarkdownSuffix(PageHandler::markdownSuffixRequested());
         $context->setArguments(array_map('strval', array_values($this->arguments)));
         foreach ($this->data() as $name => $value) {
             $context->setInput((string) $name, $value);
@@ -169,6 +232,10 @@ abstract class PageShell extends Page
      */
     private function write(Response $response, PageContext $context): void
     {
+        // a permalink's answer depends on the Accept header (the HTML or the Markdown form): every answer of it says so, as the controller's listener adds
+        if ($context->page()->markdownPermalink) {
+            $response->setVary('Accept', false);
+        }
         // the headers the page asked for, as the controller's listener puts them on its response
         $context->applyTo($response);
 
@@ -185,6 +252,15 @@ abstract class PageShell extends Page
             foreach (array_values($values) as $position => $value) {
                 $php->send($name . ': ' . $value, $position === 0 && $replace);
             }
+        }
+        if ($response instanceof StreamedResponse || $response instanceof BinaryFileResponse) {
+            // sent as it is made (a file is never held in memory), and never for a HEAD, whose answer has no body: a stream's callback does work
+            if ($context->request()->getMethod() !== 'HEAD') {
+                \Idno\Pages\File\View::endOutputBuffers();
+                $response->sendContent();
+            }
+
+            return;
         }
         echo $response->getContent();
     }

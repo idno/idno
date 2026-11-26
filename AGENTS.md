@@ -1150,8 +1150,9 @@ serve the page, through the same service, and nothing has to be kept in sync. Th
 for classes that extend `PageShell`, and holds each to the rule); it is `Idno\Pages\Homepage`. Shells are removed in 3.0.
 - `PageShell::delegate(\Closure $serve)` runs `$serve(PageContext): Response` on the request being served as a controller would. The context is built from the
   request on Symfony's `RequestStack` (which `LegacyResponse` pushes while legacy code runs; the process's request where there is none) and from what the shell
-  holds: its `arguments`, the inputs it was given with `setInput()`, its owner, entity, permalink flag and status, and `SitePage(name: static::class)` (so the body class
-  and the page the events name are the subclass's). A `ControllerPage` over the context is the current page while `$serve` runs, and the shell again after (what
+  holds: its `arguments`, the inputs it was given with `setInput()`, its owner, entity, permalink flag and status, and the `#[SitePage]` of the action the shell names (below)
+  under `static::class` (`SitePage::withName()`: a copy with every other argument the same), so the body class and the page the events name are the subclass's
+  and the flags are the action's. A `ControllerPage` over the context is the current page while `$serve` runs, and the shell again after (what
   the page learned, its owner and status, is copied back). The `Response` is written as a legacy page writes one: the headers the page asked for are put on it, the
   header rule (`LegacyHeaderReconciler::reconcile()`) keeps the session's caching lines, `http_response_code()`, each header with `header()` (through `PhpHeaders`),
   and the body is echoed; the headers the page asked for are put on the response by `PageContext::applyTo()`, the one rule the controller's response listener
@@ -1161,12 +1162,26 @@ for classes that extend `PageShell`, and holds each to the rule); it is `Idno\Pa
   that draws after the parent; `PageShellTest::testEveryResponseTheShellWritesEndsThePage`). What `$serve` throws is the legacy
   exit: a `PageRedirect` is `$this->forward()`, `AccessDeniedHttpException` `deniedContent()`, `NotFoundHttpException` `noContent()` and `GoneHttpException`
   `goneContent()`, run with the shell as the current page, and a `PageNotModified` is the legacy 304 (written as any response is, then `exit`).
+- A shell names the controller action that serves its page: `public const ACTION = [<controller class>, '<method>'];` (`PageShell::ACTION` is null: a shell with no action is a page with a name and no
+  flags). `PageShell::contextFor()` takes `SitePage::of(static::ACTION)?->withName(static::class)`, so a request served through the shell (or a subclass of it) carries the action's flags: `accountPage`
+  and `settingsPage` (a settings page's Markdown form is a title and one line), `publicOnPrivateSite`, `defaultType` (the request's `_t` is set, and the type selected, as `LegacyPageLifecycle::begin()` does, when the
+  request names none), `markdownPermalink` and `formTokenReplacedBy`. A `MarkdownPermalink` shell (the router routes `<path>.md` to it: `PageHandler::markdownSuffixRequested()`) is served as the
+  Markdown form: the context's suffix flag is set from it and the `markdown` type selected, and `Vary: Accept` is added (not replacing) to every response of a `markdownPermalink` page, a 304
+  included. The `markdown` shell reads the suffix from the current page (`Page::markdownSuffixRequested()`, which a `ControllerPage` answers from its context), so the front matter's `link` of
+  a page that is not a post leaves the `.md` off whoever serves it. A shell whose action is exempt from the form token is made stateless in its constructor, before `page/ready` (a POST, PUT, PATCH or DELETE
+  the action declares: `Session::beginStatelessRequest()`), so `Page::post()` asks for no token and the request is nobody's, as the controller's is. `write()` sends a `StreamedResponse` or a
+  `BinaryFileResponse` with `sendContent()` after ending the output buffers, and sends nothing of it for a HEAD; any other response's content is echoed. `Idno\Pages\Homepage::ACTION` is `HomepageController::home`
+  (`content()` has the same flags, and the feeds, the search and the tags are not shells), so a feed's `defaultType` never reaches the home page. `Tests/Kernel/ShellActionsTest` holds every shell of
+  `Idno/Pages/` and `Tests/Fixtures/` to an action that exists, carries `shell: true` and names the shell, and every `shell: true` action to a shell that names it (or an action of the same flags
+  but for `methods`); `Tests/Kernel/SitePageRoutesTest::testNoSitePageCarriesIsCsrfTokenValid` forbids `#[IsCsrfTokenValid]` on a site page.
 - Constructing or serving a SUBCLASS of a shell (not the shell itself) logs one line for each shell in a process (the flag is keyed by the shell, so a subclass of one shell does not hide a subclass of another), through the site's logger at warning level: `Deprecated: <class>
   extends <shell>, which is a deprecated shell ...`, naming `docs/developers/plugins/upgrading.md`. No bundled plugin extends a shell: the StaticPages plugin's static home page is the `homepage/replace` event's
   (below), so a site with one logs nothing (`StaticPagesHomepageTest::testASiteWithAStaticHomePageLogsNoDeprecation`).
 - Tests: `Tests/Kernel/PageShellTest` (in subprocesses on a private site: what the shell hands the service and what it writes, the four exits, the deprecation
   line once a process), `Tests/Characterisation/HomepageShellTest` (a hijacked subclass and one on its own route over HTTP, the headers, a malformed Host, the
-  shell's page byte for byte the controller's), `Tests\Fixtures\ThirdPartyHomepage` (`IDNO_TEST_CLAIM_ROUTES=homepage-hijack|homepage-route`).
+  shell's page byte for byte the controller's), `Tests\Fixtures\ThirdPartyHomepage` (`IDNO_TEST_CLAIM_ROUTES=homepage-hijack|homepage-route`),
+  `Tests/Characterisation/ShellFlagsTest` (`IDNO_TEST_FIXTURE_SHELL=1`: `FixtureShell`, its subclass `SubclassedFixtureShell` (`/_test/fixture-shell-sub/`), `FixtureAccountShell` and `FixtureTokenlessShell` against the
+  actions of `FixtureShellController` that serve the same pages: the Markdown form and `Vary`, the account and settings flags, a streamed response, a HEAD, the home page not being the feed, and a POST with no form token served as nobody).
 
 **Feeds, search and tags.** The home page's stream under other addresses is `HomepageController` too, with no class of its own to keep: the three page classes that served the feeds, the search and the tags
 are deleted (not shells: nothing ever extended them; `docs/developers/plugins/upgrading.md` has the table of every deleted class), and the legacy route table keeps a placeholder at each one's place. Each action is one call of

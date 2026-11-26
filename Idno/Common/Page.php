@@ -936,6 +936,16 @@ namespace Idno\Common {
         }
 
         /**
+         * Whether the address of this request ended in the `.md` of a permalink's Markdown form, which the router took off.
+         *
+         * @return bool
+         */
+        function markdownSuffixRequested()
+        {
+            return \Idno\Core\PageHandler::markdownSuffixRequested();
+        }
+
+        /**
          * Whether this request asks for the Markdown form of a post's permalink: the suffix `.md` on the permalink,
          * `?format=markdown`, `?_t=markdown` (or `md`), or an Accept header whose first choice is `text/markdown`
          * (\Idno\Markdown\MarkdownRequest). `?_t=markdown` asks any page for Markdown (Page::init() selects the type); the

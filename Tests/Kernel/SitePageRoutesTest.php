@@ -9,6 +9,7 @@ use Idno\Kernel;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Routing\Route;
 use Symfony\Component\Routing\RouteCollection;
+use Symfony\Component\Security\Http\Attribute\IsCsrfTokenValid;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 #[SitePage('Fixture\RoutesAccount', accountPage: true)]
@@ -40,6 +41,19 @@ final class SitePageRoutesExemptController
 {
     #[IsGranted('ROLE_USER')]
     public function guarded(): void
+    {
+    }
+
+    public function open(): void
+    {
+    }
+}
+
+#[SitePage('Fixture\RoutesToken')]
+final class SitePageRoutesTokenController
+{
+    #[IsCsrfTokenValid('idno', tokenKey: '__bTk')]
+    public function checked(): void
     {
     }
 
@@ -185,6 +199,64 @@ final class SitePageRoutesTest extends TestCase
 
             $this->assertGreaterThan(0, $exempt, 'the scan saw an exempt page (the fixture\'s)');
             $this->assertSame([], self::exemptWithIsGranted($routes));
+        } finally {
+            $kernel->shutdown();
+        }
+    }
+
+    /**
+     * @return list<string> the routes of a site page whose controller carries #[IsCsrfTokenValid]: a site page has the session's form token checked by its lifecycle
+     */
+    private static function withIsCsrfTokenValid(RouteCollection $routes): array
+    {
+        $found = [];
+        foreach ($routes as $name => $route) {
+            $controller = $route->getDefault('_controller');
+            if ((!is_string($controller) && !is_array($controller)) || SitePage::of($controller) === null) {
+                continue;
+            }
+            [$class, $method] = is_array($controller) ? [is_object($controller[0]) ? $controller[0]::class : $controller[0], $controller[1]] : (str_contains($controller, '::') ? explode('::', $controller, 2) : [$controller, '__invoke']);
+            $reflection = new \ReflectionClass($class);
+            $attributes = $reflection->getAttributes(IsCsrfTokenValid::class);
+            if ($reflection->hasMethod($method)) {
+                $attributes = [...$attributes, ...$reflection->getMethod($method)->getAttributes(IsCsrfTokenValid::class)];
+            }
+            if ($attributes !== []) {
+                $found[] = $name . ' (' . $class . '::' . $method . '): a site page has its form token checked by its lifecycle, so #[IsCsrfTokenValid] would ask twice';
+            }
+        }
+
+        return $found;
+    }
+
+    public function testAnActionWithIsCsrfTokenValidIsFound(): void
+    {
+        $routes = new RouteCollection();
+        $routes->add('checked', new Route('/x', ['_controller' => SitePageRoutesTokenController::class . '::checked']));
+        $routes->add('open', new Route('/y', ['_controller' => SitePageRoutesTokenController::class . '::open']));
+
+        $found = self::withIsCsrfTokenValid($routes);
+
+        $this->assertCount(1, $found, implode("\n", $found));
+        $this->assertStringStartsWith('checked ', $found[0]);
+    }
+
+    public function testNoSitePageCarriesIsCsrfTokenValid(): void
+    {
+        $kernel = new Kernel('test', true, bootLegacy: false);
+        $kernel->boot();
+        try {
+            $routes = $kernel->getContainer()->get('router')->getRouteCollection();
+            $sitePages = 0;
+            foreach ($routes as $route) {
+                $controller = $route->getDefault('_controller');
+                if ((is_string($controller) || is_array($controller)) && SitePage::of($controller) !== null) {
+                    $sitePages++;
+                }
+            }
+
+            $this->assertGreaterThan(0, $sitePages, 'the scan saw the routes of site pages');
+            $this->assertSame([], self::withIsCsrfTokenValid($routes));
         } finally {
             $kernel->shutdown();
         }

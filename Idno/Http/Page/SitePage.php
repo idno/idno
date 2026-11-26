@@ -58,6 +58,25 @@ final class SitePage
         }
     }
 
+    /**
+     * A copy that names another page class and is the same in every other argument: what a shell serves under its own name (or a subclass's) with the
+     * flags of the action that serves it.
+     */
+    public function withName(string $name): self
+    {
+        return new self(
+            name: $name,
+            shell: $this->shell,
+            publicOnPrivateSite: $this->publicOnPrivateSite,
+            accountPage: $this->accountPage,
+            settingsPage: $this->settingsPage,
+            defaultType: $this->defaultType,
+            methods: $this->methods,
+            markdownPermalink: $this->markdownPermalink,
+            formTokenReplacedBy: $this->formTokenReplacedBy,
+        );
+    }
+
     /** The methods that change state: the form token is asked for them. */
     private const STATE_CHANGING = ['POST', 'PUT', 'PATCH', 'DELETE'];
 

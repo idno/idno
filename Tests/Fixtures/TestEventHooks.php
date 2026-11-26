@@ -43,6 +43,9 @@ final class TestEventHooks
         if (getenv('IDNO_TEST_FIXTURE_SHELL') === '1') {
             $dispatcher->addListener('plugins/loaded', static function (): void {
                 Idno::site()->routes()->addRoute('/_test/fixture-shell/?', FixtureShell::class);
+                Idno::site()->routes()->addRoute('/_test/fixture-shell-sub/?', SubclassedFixtureShell::class);
+                Idno::site()->routes()->addRoute('/_test/fixture-shell-tokenless/?', FixtureTokenlessShell::class);
+                Idno::site()->routes()->addRoute('/account/_test-fixture-shell/?', FixtureAccountShell::class);
             });
         }
         // With IDNO_TEST_CLAIM_ROUTES the pages of the routing tests (RouteOverrideTest), registered on `plugins/loaded`, the first event the boot

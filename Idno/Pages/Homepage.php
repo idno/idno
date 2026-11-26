@@ -24,6 +24,8 @@ namespace Idno\Pages {
     {
         protected const SHELL = self::class;
 
+        public const ACTION = [\Idno\Http\Controller\HomepageController::class, 'home'];
+
         // Handle GET requests to the homepage
 
         function getContent()

@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Tests\Fixtures;
 
+use Idno\Core\Idno;
 use Idno\Http\Page\PageContext;
 use Idno\Http\Page\PageRenderer;
+use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -49,5 +51,16 @@ final class FixtureShellPages
             'description' => 'A page drawn for a test.',
             'body' => '<p>permalink=' . ($page->isPermalink() ? 'yes' : 'no') . ' status=' . $page->status() . '</p>',
         ]);
+    }
+
+    /**
+     * The page that takes a request with no form token: who the legacy session says made it.
+     */
+    public function receive(PageContext $page): Response
+    {
+        $session = Idno::site()->session();
+        $uuid = $session->currentUserUUID();
+
+        return new JsonResponse(['user' => $uuid === false ? null : $uuid, 'api' => $session->isAPIRequest(), 'method' => $page->request()->getMethod()]);
     }
 }

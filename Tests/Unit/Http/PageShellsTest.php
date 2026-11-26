@@ -65,6 +65,18 @@ final class PageShellsTest extends TestCase
     /**
      * @dataProvider shells
      */
+    public function testAShellMayDeclareTheActionThatServesItsPage(string $class): void
+    {
+        $constant = (new \ReflectionClass($class))->getReflectionConstant('ACTION');
+
+        $this->assertNotFalse($constant, 'the base declares ACTION');
+        $action = $constant->getValue();
+        $this->assertTrue($action === null || (is_array($action) && count($action) === 2 && is_string($action[0]) && is_string($action[1])), 'ACTION is null or [class, method]');
+    }
+
+    /**
+     * @dataProvider shells
+     */
     public function testAShellDeclaresOnlyHandlers(string $class): void
     {
         $reflection = new \ReflectionClass($class);
