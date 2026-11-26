@@ -65,10 +65,10 @@ if (!empty(\Idno\Core\Idno::site()->config()->itunes_explicit)) {
 }
 
 if (!empty(\Idno\Core\Idno::site()->config()->hub)) {
-    $pubsub = $page->createElement('atom:link');
-    $pubsub->setAttribute('href', \Idno\Core\Idno::site()->config()->hub);
-    $pubsub->setAttribute('rel', 'hub');
-    $channel->appendChild($pubsub);
+    $hub = $page->createElement('atom:link');
+    $hub->setAttribute('href', \Idno\Core\Idno::site()->config()->hub);
+    $hub->setAttribute('rel', 'hub');
+    $channel->appendChild($hub);
 }
     $self = $page->createElement('atom:link');
     $self->setAttribute('href', $this->getCurrentURL());

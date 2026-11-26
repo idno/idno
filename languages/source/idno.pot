@@ -1372,11 +1372,11 @@ msgstr ""
 
 #: ./templates/classic/admin/home.tpl.php:196
 #: ./templates/default/admin/home.html.twig:89
-msgid "PubSubHubbub hub"
+msgid "WebSub hub"
 msgstr ""
 
 #: ./templates/classic/admin/home.tpl.php:199
-msgid "PubSubHubbub hub address"
+msgid "WebSub hub address"
 msgstr ""
 
 #: ./templates/classic/admin/home.tpl.php:203
@@ -1384,7 +1384,7 @@ msgid "You can probably leave this as is."
 msgstr ""
 
 #: ./templates/classic/admin/home.tpl.php:204
-msgid "Learn more about PuSH"
+msgid "Learn more about WebSub"
 msgstr ""
 
 #: ./templates/classic/admin/home.tpl.php:214

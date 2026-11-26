@@ -11,7 +11,7 @@ The site has two clients. They are the same client with the same settings, excep
 connect to a private network.
 
 * **The site client** (`idno.http_client`) is for URLs the site itself chose: the site's own URLs, a fixed API of a
-  service (the plugin's own, say), and URLs the site's **admin** configured (the PuSH hub, a webhook, an API endpoint).
+  service (the plugin's own, say), and URLs the site's **admin** configured (the WebSub hub, a webhook, an API endpoint).
 * **The remote client** (`idno.http_client.remote`) is for every other URL. That means a URL a remote party supplied (a
   webmention's source, an ActivityPub actor or inbox, a hub or feed that a followed site advertises), a URL taken from a
   document a remote server returned (an authorization server's endpoints, a DID document's service endpoint), and a URL a

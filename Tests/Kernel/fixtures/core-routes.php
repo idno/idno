@@ -6,7 +6,7 @@ declare(strict_types=1);
  * The legacy route table's core registrations as they were at commit 69af0d425, before any page moved to a controller: every key that core and the
  * components it builds registered, in the order the table held them, with the marker `@plugins` at the point where the plugins' routes are registered
  * (the plugins are built at the end of `Idno::registerPages()`: the keys after the marker are those of the components `LegacyBootstrap::boot()` builds
- * after `Idno`: Account, Admin, Webfinger, Webmention, PubSubHubbub). Keys are as the table holds them (the tokens replaced), the four of the permalink
+ * after `Idno`: Account, Admin, Webfinger, Webmention, WebSub). Keys are as the table holds them (the tokens replaced), the four of the permalink
  * route written `{permalink}`.
  *
  * Generated from that commit's code, not by hand: check the commit out, install its `vendor/`, configure a site with every plugin in `antiplugins`

@@ -936,7 +936,7 @@ final class ImportTest extends PortabilityTestCase
     {
         $events = [];
         $armed = true;
-        foreach (['pubsubhubbub/ping', 'standardsitesync/sync'] as $name) {
+        foreach (['websub/ping', 'standardsitesync/sync'] as $name) {
             // There is no way to remove a listener: these record only while the test runs.
             Idno::site()->events()->addListener($name, static function () use (&$events, &$armed, $name): void {
                 if ($armed) {
@@ -979,7 +979,7 @@ final class ImportTest extends PortabilityTestCase
             $note->body = 'Written normally';
             $this->store($note, $this->admin());
             $note->publish();
-            $this->assertContains('pubsubhubbub/ping', $events, 'a post published normally pings the hub (the queue here is the synchronous one)');
+            $this->assertContains('websub/ping', $events, 'a post published normally pings the hub (the queue here is the synchronous one)');
             \Idno\Core\Webmention::pingMentions(Idno::site()->config()->getURL() . 'x', '<a href="http://target.example/post">a link</a>');
             $this->assertNotSame([], [...$siteRequests, ...$remoteRequests], 'and a webmention is looked for outside one');
             $this->assertContains('standardsitesync/sync', $events, 'and a post saved normally is queued for the PDS: the absence during the import is the guard\'s');

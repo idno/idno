@@ -29,7 +29,7 @@ final class WebSubCallbackTest extends PermalinkSiteCase
 
     private const BROKEN_WHY = 'a pending list or a mode that is not what the callback reads is a request it does not verify (403), where the legacy page ended in the 500 page';
 
-    private const DELIVERY_WHY = 'a delivery is handed to the listeners of websub/received, and the answer is 200 with no body (the legacy page triggered pubsubhubbub/ping, whose listener of the site\'s own hub failed on content with no `object`: the 500 page)';
+    private const DELIVERY_WHY = 'a delivery is handed to the listeners of websub/received, and the answer is 200 with no body (the legacy page triggered websub/ping, whose listener of the site\'s own hub failed on content with no `object`: the 500 page)';
 
     private const METHOD_WHY = 'a method the callback does not take is the legacy router\'s 404 page, as for every page that moved to a controller';
 
@@ -296,7 +296,7 @@ final class WebSubCallbackTest extends PermalinkSiteCase
         $expected = '';
         foreach (array_filter(explode("\n", $recorded)) as $line) {
             $event = json_decode($line, true);
-            $this->assertSame('pubsubhubbub/ping', $event['event'], $case);
+            $this->assertSame('websub/ping', $event['event'], $case);
             $expected .= json_encode(array_replace($event, ['event' => 'websub/received', 'user' => null])) . "\n";
         }
         $this->assertSame($expected, $events, $case . ': the events');

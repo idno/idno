@@ -1,12 +1,12 @@
 <?php
 
-namespace Tests\Pages\Pubsubhubbub {
+namespace Tests\Pages\WebSub {
 
     use Idno\Core\Idno;
     use Idno\Core\Webservice;
 
     /**
-     * A WebSub (PubSubHubbub) hub verifies a subscription by asking the callback to repeat
+     * A WebSub hub verifies a subscription by asking the callback to repeat
      * the hub.challenge it sends. The challenge comes from the request, so the answer must be
      * plain text that a browser will not treat as a web page.
      */

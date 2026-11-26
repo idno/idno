@@ -13,7 +13,7 @@ use Symfony\Component\HttpClient\Response\MockResponse;
 use Tests\IdnoTestCase;
 
 /**
- * What the site records when a member follows or unfollows someone with a hub (the listeners of `follow` and `unfollow` in `Idno\Core\PubSubHubbub`): the
+ * What the site records when a member follows or unfollows someone with a hub (the listeners of `follow` and `unfollow` in `Idno\Core\WebSub`): the
  * list of subscriptions the member is waiting for a hub to verify, whatever shape an earlier release left it in, and the secret a hub is given. The
  * members are objects that save nothing, and the hub and the feed are played by a mock client, so nothing is stored and no request is made.
  */

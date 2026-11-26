@@ -25,7 +25,7 @@ final class WebSubController
 
     #[Route('/{lead}pubsub/callback/{subscriber}/{subscription}{slash}', name: 'idno_websub_callback', requirements: ['lead' => '/?', 'slash' => '/?', 'subscriber' => '[A-Za-z0-9\-]+', 'subscription' => '[A-Za-z0-9\-]+'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS', 'POST'])]
     #[SitePage(
-        name: 'Idno\Pages\Pubsubhubbub\Callback',
+        name: 'Idno\Pages\WebSub\Callback',
         publicOnPrivateSite: true,
         methods: ['GET', 'POST'],
         formTokenReplacedBy: 'WebSub content distribution: the hub is another server with no session; a delivery is accepted only for a subscription the subscriber really has, and one made with a secret only with a valid X-Hub-Signature; the body is only handed to the listeners of websub/received'

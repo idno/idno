@@ -1,5 +1,5 @@
 status 200
 content-type: text/plain
 
-{"event":"pubsubhubbub\/ping","subscriber":"bob","subscription":"ada","data":"","user":null}
+{"event":"websub\/ping","subscriber":"bob","subscription":"ada","data":"","user":null}
 

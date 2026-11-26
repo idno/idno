@@ -1435,10 +1435,10 @@ Every answer carries `X-Content-Type-Options: nosniff`, and the JSON of a refusa
 a sender's cookie, a single-user and a multi-user home page, a private site), with each deliberate difference in `CHANGED` and what it answers now in `EXPECTED`; the sources are real (`Tests\Fixtures\RemoteDocumentController`, see "Kernel and
 services"), so a mention goes through the checks, the fetch and the page it is aimed at. `Tests/Characterisation/WebmentionAnnotationKeysTest` sends real webmentions through the endpoint and asks what members can do afterwards, and `WebmentionLegacyPageTest` one to a plugin's legacy page (`Tests\Fixtures\MentionablePage`).
 
-**The WebSub callback.** `/pubsub/callback/<subscriber>/<subscription>` is `Idno\Http\Controller\WebSubController` (one route, `idno_websub_callback`, GET, HEAD, OPTIONS and POST; `#[SitePage(name: 'Idno\Pages\Pubsubhubbub\Callback',
+**The WebSub callback.** `/pubsub/callback/<subscriber>/<subscription>` is `Idno\Http\Controller\WebSubController` (one route, `idno_websub_callback`, GET, HEAD, OPTIONS and POST; `#[SitePage(name: 'Idno\Pages\WebSub\Callback',
 publicOnPrivateSite: true, methods: ['GET', 'POST'], formTokenReplacedBy: ...)]`) and one call of `Idno\Http\Controller\WebSub\WebSubCallbacks` (`verify()` for GET and HEAD, `distribute()` for POST); the class
-`Idno\Pages\Pubsubhubbub\Callback` is deleted (the page's name is the legacy class's, which the events and the body class know it by) and core still registers `/pubsub/callback/:id/:id/?` where it always did
-(`Idno\Core\PubSubHubbub::registerPages()`, not public: the attribute opens it), held by `Idno\Legacy\ControllerRoute`. The address is the one hubs hold subscriptions to and never changes. What the service asks the site is
+`Idno\Pages\WebSub\Callback` is deleted (the page's name is the deleted class's name, which the events and the body class know it by) and core still registers `/pubsub/callback/:id/:id/?` where it always did
+(`Idno\Core\WebSub::registerPages()`, not public: the attribute opens it), held by `Idno\Legacy\ControllerRoute`. The address is the one hubs hold subscriptions to and never changes. What the service asks the site is
 `Idno\Http\Controller\WebSub\Subscriptions` (`user()`, `entity()`, `topic()`, `isSubscribed()`, `secret()`, `now()`, `pending()`, `savePending()`, `trigger()`, `maxBody()`, `log()`; `Idno\Legacy\LegacySubscriptions` is the adapter), so it
 is unit-tested on doubles (`Tests/Unit/Http/Controller/WebSub/WebSubCallbacksTest`). The POST is EXEMPT from the form token (listed in `Tests/Kernel/fixtures/form-token-exemptions.php`): a hub is another server with no
 session, and the request ACTS AS NOBODY, whatever cookie it carries. The callback is open to a hub on a private site (`publicOnPrivateSite`: a hub is no visitor; the legacy page ran the walled garden's check on its GET, so a private
@@ -1452,16 +1452,16 @@ site could not be verified). The ids in an address are NOT secret (a member's id
   subscribe and unsubscribe), compared with `hash_equals()`, and a subscription with none is never verified; `hub.challenge` is at most `WebSubCallbacks::MAX_CHALLENGE` (512) bytes, or the 403 page; and the subscription's uuid OR id must be in
   that mode's list and inside its lease. Then the entry is removed, the list stays an OBJECT of lists (the legacy page stored the list of the mode as a plain array with the entry still in it, so the next follow failed on it; it also compared uuids
   only, so an unsubscription was never verified), and the challenge is answered as `text/plain; charset=utf-8` with `X-Content-Type-Options: nosniff`. Anything else is the 403 page and changes nothing. A HEAD gets the same answer and removes
-  nothing. `hub.challenge` that is not text is empty. The challenge is reflected nowhere but in that body: the `Link: rel="self"` the `page/head` listener of `Idno\Core\PubSubHubbub` sends is the page's path alone here (it carried the query).
+  nothing. `hub.challenge` that is not text is empty. The challenge is reflected nowhere but in that body: the `Link: rel="self"` the `page/head` listener of `Idno\Core\WebSub` sends is the page's path alone here (it carried the query).
   The list is stored by one field of the member's record read again just before it is written (`LegacySubscriptions::savePending()`, through the record store), so a profile edit made meanwhile is not written over; the follow request that is
   still running holds its own copy of the member and can save its list after, the whole-record hazard every save of a member has.
 - POST `distribute()`: both must be members, the subscriber must follow the subscription and the subscription must have a hub (`Subscriptions::isSubscribed()`), else the 410 page and nothing is read or triggered (any pair of ids, a member
   posting to themselves, is refused). The body is read through the request's stream up to `Subscriptions::maxBody()` bytes (`webservice_max_download`, 10 MB by default: the legacy page read the whole of `php://input`; a longer body is a 413
   and handed to nobody). When the site sent the hub a secret for this subscription (`Subscriptions::secret()`) the delivery needs `X-Hub-Signature: <method>=<hex>` with the method `sha256`, `sha384` or `sha512` (not `sha1`) and the hex the HMAC
   of the raw body with the secret, compared with `hash_equals()`; one that fails is answered 200 with no body, as an accepted delivery is (WebSub: the sender is not told), and triggers nothing. Then the body, trimmed, is handed to the listeners
-  of the event `websub/received` with `subscriber`, `subscription` and `data`; 200 and no body. The legacy page triggered `pubsubhubbub/ping`, the event the site's own hub is pinged with (its listener failed on content with no `object`, and
+  of the event `websub/received` with `subscriber`, `subscription` and `data`; 200 and no body. The legacy page triggered `websub/ping`, the event the site's own hub is pinged with (its listener failed on content with no `object`, and
   anyone who knew an address fired the event a plugin listens to for the site's own hub); that event is the site's own again. The new event is named for the protocol, and nothing used it before.
-- Secrets. The `follow` listener of `Idno\Core\PubSubHubbub` sends the hub `hub.secret`, `bin2hex(random_bytes(32))`, only when the hub's address is https (WebSub forbids sending it over plain http), and keeps it on the SUBSCRIBER, in the map
+- Secrets. The `follow` listener of `Idno\Core\WebSub` sends the hub `hub.secret`, `bin2hex(random_bytes(32))`, only when the hub's address is https (WebSub forbids sending it over plain http), and keeps it on the SUBSCRIBER, in the map
   `pubsub_secrets` by the subscription's id (the callback and the subscription are per subscriber, and the followed user's record is shared by everyone who follows them). It is an attribute of the member's record, which no page, JSON form or
   feed prints (a member's `jsonSerialize()` lists named fields), and it is never logged (the listener logs the hub's status only). The record is in `exported_data.sql` as every attribute is. A subscription made before secrets were sent has none
   and is held to the rule of a real subscription alone (Known limits). A secret is not removed when the member unfollows: a delivery for a subscription they no longer have is refused before the signature is read.
@@ -1469,7 +1469,7 @@ site could not be verified). The ids in an address are NOT secret (a member's id
 - The unfollow listener started the `unsubscribe` list only when `subscribe` was not a list, which reset the pending unsubscriptions of a list that had none; both listeners now use `PendingList`.
 - Pinned by `Tests/Characterisation/WebSubCallbackTest` (the recordings `fixtures/answers/websub`, `websub-pending` and `websub-events`, captured from the legacy page; the cases that differ are listed with their reasons),
   `Tests/Characterisation/WebSubDeliveryTest` (the topic, the lease, HEAD, the challenge's cap, real subscriptions and signatures over HTTP, the secret printed nowhere), the unit tests above and `PendingListTest`, and
-  `Tests/Core/WebSubPendingTest` (every stored shape, the secret sent over https and not over http, on a mock hub) and `Tests/Pages/Pubsubhubbub/CallbackTest`.
+  `Tests/Core/WebSubPendingTest` (every stored shape, the secret sent over https and not over http, on a mock hub) and `Tests/Pages/WebSub/CallbackTest`.
 
 **Replacing the home page: the event `homepage/replace`.** A plugin that wants the site's root to be something other than the stream does not extend a shell or
 `hijackRoute()` the root: it listens to the event `homepage/replace`, which `HomePages::home($page, root: true)` triggers FIRST, through `EventTrigger::trigger('homepage/replace',
@@ -1551,7 +1551,7 @@ page class `name` is kept and core still registers it for the path) and the lega
   key replaces the handler IN PLACE (an identical pattern replaces the placeholder and keeps core's place); `hijackRoute()` removes the key and puts it in FRONT of every other (the
   home page's alias key `/blog/` for `hijackRoute('/')` on a site in a subdirectory too: `LegacyDispatcher::routes()` writes it); a plugin's pattern registered before core's matches
   first and one registered after loses (core registers `Idno::registerPages()`' pages before the plugins are built, at its end: `Idno.php` "These must be loaded last"; the routes of
-  `Webfinger`, `Account`, `Admin`, `Webmention` and `PubSubHubbub` are registered after the plugins', so there a plugin's broader pattern, and a plugin's `hijackRoute()` core's
+  `Webfinger`, `Account`, `Admin`, `Webmention` and `WebSub` are registered after the plugins', so there a plugin's broader pattern, and a plugin's `hijackRoute()` core's
   later `addRoute()` of the same key overwrites, behave as before); a registration core makes later overwrites an earlier one under the same key.
   `Idno\Legacy\LegacyRouteOverride` (`kernel.request`, priority 31, just after `RouterListener` at 32) therefore asks ONE question of the legacy router's own lookup over the whole table
   (`PageHandler::claimsOf()` over `handlerFor()`: the exact key first, then the patterns in order, Toro's algorithm, pinned against Toro by `Tests/Unit/Markdown/RouteLookupTest`): which
@@ -1591,7 +1591,7 @@ page class `name` is kept and core still registers it for the path) and the lega
   site's real table (core and the plugins the site enables), from the registrations alone: for each site page route, when a snapshot pattern (or a placeholder or the route's shell in the
   table) matches a sample path of the route, the legacy router's choice for that path is the placeholder or the route's OWN shell (its `name`, when it says `shell`), under a key core
   registered, so a route whose path core's pattern matches must have its placeholder or shell registered; a page whose shell is a `MarkdownPermalink` says `markdownPermalink`; and the keys of the WHOLE core table, in order and on the same side of the plugins' marker, are `Tests/Kernel/fixtures/core-routes.php`, generated from the tree before any page moved (less `/bookmarklet\.js` and
-  StaticPages' own routes, each listed with its reason), whichever component registers them (`Idno`, `Account`, `Admin`, `Webfinger`, `Webmention`, `PubSubHubbub`), so a page that moves cannot silently drop, reorder or re-side one. Synthetic tables and
+  StaticPages' own routes, each listed with its reason), whichever component registers them (`Idno`, `Account`, `Admin`, `Webfinger`, `Webmention`, `WebSub`), so a page that moves cannot silently drop, reorder or re-side one. Synthetic tables and
   controllers prove each check can fail. It sees the plugins the rig enables only (Styles and StandardSiteSync are not among them).
 - Cost: the listener does nothing for any request that is not a site page's (a check of the request and one attribute lookup, cached per controller), and
   builds nothing when the legacy application is not booted (the dispatcher is a service closure: `LegacyRouteOverrideTest::testNothingHappensWithoutTheLegacyApplication`;
@@ -4783,7 +4783,7 @@ work). `Idno\Core\Migration`'s static methods are deprecated delegates for one r
 - Nothing an import brings in is announced. `Idno\Portability\ImportMode` (a public service) holds a depth
   counter; the importers wrap their work in `during()` (reset in a `finally`: a worker lives on). The places
   that would announce ask `Idno::importInProgress()`: the ActivityPub and StandardSiteSync `saved`/`updated`
-  hooks, `Entity::syndicate()`, the PubSubHubbub `published` hook and `Webmention::pingMentions()` (the
+  hooks, `Entity::syndicate()`, the WebSub `published` hook and `Webmention::pingMentions()` (the
   `IDNO_NOMENTION` constant still works for scripts). Pinned by `ImportTest` (a follower's sink on the rig)
   and `QueuedPortabilityTest` (the worker).
 - `PortabilityJobs`: `beginExport()` (one export at a time; `ExportState::begin()` refuses while one runs unless
@@ -5146,9 +5146,35 @@ Each content plugin has an `Entry.php` entity class that defines
 | **IndieAuth** | `IdnoPlugins\IndiePub` — authorization at `/indieauth/auth`, token at `/indieauth/token` |
 | **Webfinger** | `Idno\Http\Controller\WebfingerController` and `Discovery\Webfinger` — `/.well-known/webfinger`; the links are the `webfinger` event's (`LegacyWebfingerDirectory`); `Idno\Core\Webfinger` only registers the legacy route's placeholder |
 | **Microformats2** | Templates emit `h-entry`, `h-card`, `h-event` markup; `mf2/mf2` parser included |
-| **PubSubHubbub** | `Idno\Core\PubSubHubbub` — real-time feed notification |
+| **WebSub** | `Idno\Core\WebSub` — tells the site's hub about new posts, subscribes to the hubs of followed members; callback at `/pubsub/callback/{subscriber}/{subscription}` (`WebSubController`) |
 | **Markdown** | A post's permalink and the listing, profile, login and error pages are also served as Markdown with YAML front matter by `?_t=markdown` (or `md`); a settings page (`/account`, `/admin`, however its address is written: decided from how its route was registered) answers a title and one line, and the pages of the installation stay HTML; a post's permalink also by `<permalink>.md`, `?format=markdown` or `Accept: text/markdown` (see "Markdown output") |
 | **POSSE** | `Idno\Core\Syndication` — syndicate to external services; Bridgy plugin for backfeed |
+
+### WebSub (formerly PubSubHubbub), and the names it had
+
+The protocol is WebSub (the W3C's name), and nothing is named after what it was called before: `Idno\Core\WebSub`, the page name
+`Idno\Pages\WebSub\Callback`, the event `websub/ping` (`WebSub::PING_EVENT`: queued when a public post is published, to ping the site's hub),
+the event `websub/received`, the tests, the recorded answers and the fixtures. What existing sites, hubs and plugins hold was kept, and must stay:
+
+- **The callback address** is `/pubsub/callback/<subscriber id>/<subscription id>` (`WebSub::CALLBACK_PATH`, `WebSub::callbackUrl()`, the route of
+  `WebSubController`, the legacy pattern core registers for the placeholder). Hubs hold it for every subscription already made; there is one address,
+  not two. The body classes of its page (`page-pubsub...`) are made from it.
+- **Stored names**: the `hub` setting, and `pubsub_pending`, `pubsub_self`, `pubsub_hub` and `pubsub_secrets` on members. No data is migrated.
+- **The protocol's own names** are not ours to change: `rel="hub"`, `rel="self"`, `hub.mode`, `hub.topic`, `hub.challenge`, `hub.callback`,
+  `hub.secret`, `X-Hub-Signature`.
+- **The earlier class name** of the component is an alias (`class_alias()` at the foot of `Idno/Core/WebSub.php`), and a stub file at the earlier
+  path only loads the class, so the autoloader finds the earlier name too. The page class of the callback was deleted when the page became a
+  controller (see "The WebSub callback"): there is no alias for it.
+- **The earlier event name** is in `EventDispatcher::RENAMED` (earlier name => name now). The dispatcher adds a listener for an earlier name to the
+  event under its name of today (and `removeListener()` finds it there), triggers that event when the earlier name is triggered (plugins do, and so
+  does an event that was queued before the upgrade), and keeps a listener that is added under both names once. Rename an event by adding it there,
+  never by triggering two events.
+- `docs/install/upgrade.md` ("Names that changed") and `docs/developers/plugins/upgrading.md` are the places that spell the earlier names, for the
+  one who upgrades. `Tests/Unit/Core/WebSubNamingTest` reads every tracked file (contents and paths) and fails if an earlier name is anywhere but the
+  files it lists, with each exception's reason there (the stub, the alias, the dispatcher, the two upgrade documents, the compatibility test), or
+  outside the kept spellings above, and unless this section's heading is the one place outside them that tells the history. `Tests/Core/WebSubCompatibilityTest` checks
+  that the earlier class name and event name still work, that a listener added under both runs once, and that the callback address is where core
+  registers it.
 
 ## Code Style
 
@@ -5471,7 +5497,7 @@ no installer writes one.
   (`templates/email-text/admin/oops.txt.twig`) is not HTML and is not escaped.
   `Tests/Core/RemoteFeedOutputTest.php` checks this.
 - SSRF protection: the plain client (`Webservice::send()` and its wrappers, the `idno.http_client`
-  service) is for the site's own URLs and for services the site's ADMIN configured (the PuSH hub, a
+  service) is for the site's own URLs and for services the site's ADMIN configured (the WebSub hub, a
   webhook the admin configured in the site's `webhook_syndication` setting, an API endpoint; a webhook
   from a member's own `webhook_syndication` list goes through `safeSend()`). Every other URL goes through `Webservice::safeSend()` or
   `Webservice::safeFileGetContents()` (new code: the injected `$remoteClient`), which refuse a host
@@ -5488,7 +5514,7 @@ no installer writes one.
   is made; it does not see redirects, which the remote client now does). The fetches are
   `Idno\Legacy\LegacyWebmentionSources::fetch()` (the webmention endpoint's), `Idno\Core\MentionClient`,
   `Idno\Core\Webmention` (`getIconFromURL()`, `addSyndicatedReplyTargets()`), `Idno\Core\Reader`,
-  `Idno\Entities\Reader\Feed::retrieveItems()`, `Idno\Core\PubSubHubbub` (feed and topic fetches and
+  `Idno\Entities\Reader\Feed::retrieveItems()`, `Idno\Core\WebSub` (feed and topic fetches and
   the subscribe and unsubscribe requests to a hub a feed advertised; its publish ping to the hub of
   the site's own `hub` setting stays on the site client), `Idno\Pages\Entity\Share`, the following
   bookmarklet, `UnfurledUrl::unfurl()`, `IdnoPlugins\Like\Like::getTitleFromURL()`,
@@ -5746,7 +5772,7 @@ no installer writes one.
   `Tests/Pages/File/RangeRequestTest.php` and `Tests/Characterisation/FileServingTest` check this.
 - WebSub: the callback (`WebSubCallbacks::verify()`) answers the hub's challenge, which comes from the
   request, as `text/plain` with `X-Content-Type-Options: nosniff`, so it is never run as HTML, and only for a subscription the subscriber has pending (inside its lease) and the topic the site subscribed to.
-  `Tests/Pages/Pubsubhubbub/CallbackTest.php` checks this.
+  `Tests/Pages/WebSub/CallbackTest.php` checks this.
 - No Content Security Policy header is sent by the site: only the upgrade page has one (a strict per-response
   nonce policy, `UpgradePage::contentSecurityPolicy()`), and no template sends one. Output escaping, above, is what
   keeps a value from becoming markup.

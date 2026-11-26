@@ -82,7 +82,7 @@ x-powered-by: https://idno.co
 <!-- Webmention endpoint -->
 <link href="{site}/webmention/" rel="http://webmention.org/"/>
 <link href="{site}/webmention/" rel="webmention"/>
-<!-- Pubsubhubbub -->
+<!-- WebSub hub -->
 <link href="https://hub.example/" rel="hub"/>
 <link rel="openid.delegate" href="{site}/" />
 <link rel="openid.server" href="https://indieauth.com/openid" />
@@ -96,7 +96,7 @@ x-powered-by: https://idno.co
 <script type="text/javascript" src="{site}/IdnoPlugins/Checkin/external/stamen-maps/tile.stamen.min.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 </head>
-<body class="idno_pages_pubsubhubbub_callback page-pubsub page-pubsub-callback page-pubsub-callback-00000000-0000-4000-8000-000000000002 page-pubsub-callback-00000000-0000-4000-8000-000000000002-00000000-0000-4000-8000-000000000001 logged-out">
+<body class="idno_pages_websub_callback page-pubsub page-pubsub-callback page-pubsub-callback-00000000-0000-4000-8000-000000000002 page-pubsub-callback-00000000-0000-4000-8000-000000000002-00000000-0000-4000-8000-000000000001 logged-out">
 <div class="idno-shell">
 <nav class="idno-nav-sidebar" aria-label="Main navigation">
 <a href="{site}/" class="idno-nav-logo">

@@ -61,7 +61,7 @@ final class QueuedDeliveryTest extends AsyncSiteTestCase
         }
         $names = array_keys($byName);
         sort($names);
-        $this->assertSame(['activitypub/deliver', 'pubsubhubbub/ping', 'webmention/sendall'], $names, 'one event of each kind');
+        $this->assertSame(['activitypub/deliver', 'websub/ping', 'webmention/sendall'], $names, 'one event of each kind');
         foreach ($byName as $name => $list) {
             $this->assertCount(1, $list, $name);
         }
@@ -281,7 +281,7 @@ final class QueuedDeliveryTest extends AsyncSiteTestCase
             'activitypub/deliver' => $userUuid,
             'idno/queue/probe' => null,
             'idno/queue/probe-named' => $userUuid,
-            'pubsubhubbub/ping' => $userUuid,
+            'websub/ping' => $userUuid,
             'webmention/sendall' => $userUuid,
         ], $stored);
     }
@@ -329,7 +329,7 @@ final class QueuedDeliveryTest extends AsyncSiteTestCase
             $this->assertCount(1, array_filter($lines, static fn (string $line): bool => str_starts_with($line, 'Error dispatching event ' . $id . ': ')), 'the worker reports the failure of ' . $name);
         }
         // The good ones around them were all dispatched.
-        foreach (['activitypub/deliver', 'webmention/sendall', 'pubsubhubbub/ping'] as $event) {
+        foreach (['activitypub/deliver', 'webmention/sendall', 'websub/ping'] as $event) {
             $this->assertNotEmpty(array_filter($lines, static fn (string $line): bool => preg_match('/^Dispatching event \d+: ' . preg_quote($event, '/') . '$/', $line) === 1), $event);
         }
 

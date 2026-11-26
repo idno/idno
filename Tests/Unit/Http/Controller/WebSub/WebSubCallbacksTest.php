@@ -156,7 +156,7 @@ final class WebSubCallbacksTest extends TestCase
     /** @param array<string, string> $query */
     private function context(array $query = [], string $method = 'GET', string $body = ''): PageContext
     {
-        return new PageContext(Request::create('/pubsub/callback/bob/ada', $method, $query, [], [], [], $body), new SitePage('Idno\Pages\Pubsubhubbub\Callback', methods: ['GET', 'POST'], formTokenReplacedBy: 'a test'));
+        return new PageContext(Request::create('/pubsub/callback/bob/ada', $method, $query, [], [], [], $body), new SitePage('Idno\Pages\WebSub\Callback', methods: ['GET', 'POST'], formTokenReplacedBy: 'a test'));
     }
 
     /** @param array<string, mixed> $query the hub's request; the topic of the subscription is added unless it is given */
@@ -189,7 +189,7 @@ final class WebSubCallbacksTest extends TestCase
             $request->headers->set($name, $value);
         }
 
-        return $this->callbacks->distribute(new PageContext($request, new SitePage('Idno\Pages\Pubsubhubbub\Callback', methods: ['GET', 'POST'], formTokenReplacedBy: 'a test')), 'bob', self::ID);
+        return $this->callbacks->distribute(new PageContext($request, new SitePage('Idno\Pages\WebSub\Callback', methods: ['GET', 'POST'], formTokenReplacedBy: 'a test')), 'bob', self::ID);
     }
 
     public function testAPendingSubscriptionIsVerifiedWithThePlainTextChallenge(): void
@@ -388,7 +388,7 @@ final class WebSubCallbacksTest extends TestCase
     {
         $this->callbacks->distribute($this->context([], 'POST', 'x'), 'bob', self::ID);
 
-        $this->assertNotContains('pubsubhubbub/ping', array_column($this->triggered, 0));
+        $this->assertNotContains('websub/ping', array_column($this->triggered, 0));
     }
 
     public function testTheTopicMustBeTheSubscriptionsOwnForBothModes(): void

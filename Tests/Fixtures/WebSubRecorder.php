@@ -10,13 +10,13 @@ use Idno\Core\Idno;
 
 /**
  * Test-environment only (installed by TestEventHooks): when the environment variable IDNO_TEST_RECORD_WEBSUB names a file, the events a content
- * distribution can trigger, `pubsubhubbub/ping` (the site's own hub is pinged with it) and `websub/received`, append one JSON line each to it: the event's name, the handle of its
+ * distribution can trigger, `websub/ping` (the site's own hub is pinged with it) and `websub/received`, append one JSON line each to it: the event's name, the handle of its
  * `subscriber` and of its `subscription` (null when they are not users), its `data` and the uuid of the user logged on while the event runs (null when
  * nobody is). Listeners only record, and run before every other listener of the event. With the variable unset nothing is registered.
  */
 final class WebSubRecorder
 {
-    public const EVENTS = ['pubsubhubbub/ping', 'websub/received'];
+    public const EVENTS = ['websub/ping', 'websub/received'];
 
     public static function install(EventDispatcher $dispatcher): void
     {

@@ -341,7 +341,7 @@ final class PhaseWalkthroughTest extends AsyncSiteTestCase
         $this->step('7 nothing imported was announced to the follower; a post published by hand is');
         // What an import that announced its posts would leave: events still queued (the worker handles what it finds
         // when it starts, and what the import queues is queued after that) or deliveries already made. Neither.
-        $this->assertSame(0, $this->queued('activitypub/deliver') + $this->queued('pubsubhubbub/ping') + $this->queued('webmention/sendall'), $this->step . ': the import queued no announcement');
+        $this->assertSame(0, $this->queued('activitypub/deliver') + $this->queued('websub/ping') + $this->queued('webmention/sendall'), $this->step . ': the import queued no announcement');
         $this->assertSame([], $this->sink($inbox), $this->step . ': the follower was told nothing of the import');
         $this->assertSame(0, $this->runWorkerOnce()['exit'], $this->step . ': a second run, which would deliver what the import queued');
         $this->assertSame([], $this->sink($inbox), $this->step . ': and the follower still knows nothing of the import');

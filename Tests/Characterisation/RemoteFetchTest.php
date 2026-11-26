@@ -233,14 +233,14 @@ final class RemoteFetchTest extends CharacterisationTestCase
         $this->assertAllRemote($this->recorded($name));
     }
 
-    public function testPubSubHubbubFetchesPagesThroughTheRemoteClient(): void
+    public function testWebSubFetchesPagesThroughTheRemoteClient(): void
     {
-        $name = $this->sink('pubsub');
+        $name = $this->sink('websub');
         $url = $this->sinkUrl($name);
-        $hubbub = new \Idno\Core\PubSubHubbub();
+        $websub = new \Idno\Core\WebSub();
 
         foreach (['discoverHubs', 'findFeed', 'findSelf'] as $method) {
-            (new \ReflectionMethod($hubbub, $method))->invoke($hubbub, $url);
+            (new \ReflectionMethod($websub, $method))->invoke($websub, $url);
         }
 
         $requests = $this->recorded($name);
@@ -252,14 +252,14 @@ final class RemoteFetchTest extends CharacterisationTestCase
      * The page advertises the sink as its feed, so the feed itself is fetched (and recorded) by
      * hub discovery and by the search for the feed's self link: one request each.
      */
-    public function testPubSubHubbubFetchesAFeedThroughTheRemoteClient(): void
+    public function testWebSubFetchesAFeedThroughTheRemoteClient(): void
     {
-        $name = $this->sink('pubsubfeed');
+        $name = $this->sink('websubfeed');
         $page = $this->site()->baseUrl() . '_test/page/' . $name . '?feed=1';
-        $hubbub = new \Idno\Core\PubSubHubbub();
+        $websub = new \Idno\Core\WebSub();
 
         foreach (['discoverHubs', 'findSelf'] as $method) {
-            (new \ReflectionMethod($hubbub, $method))->invoke($hubbub, $page);
+            (new \ReflectionMethod($websub, $method))->invoke($websub, $page);
 
             $requests = $this->recorded($name);
             $this->assertCount(1, $requests, $method . ' fetched the feed once');

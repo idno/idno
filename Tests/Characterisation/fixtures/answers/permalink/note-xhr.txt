@@ -83,7 +83,7 @@ x-powered-by: https://idno.co
 <!-- Webmention endpoint -->
 <link href="{site}/webmention/" rel="http://webmention.org/"/>
 <link href="{site}/webmention/" rel="webmention"/>
-<!-- Pubsubhubbub -->
+<!-- WebSub hub -->
 <link href="https://hub.example/" rel="hub"/>
 <link rel="openid.delegate" href="{site}/" />
 <link rel="openid.server" href="https://indieauth.com/openid" />

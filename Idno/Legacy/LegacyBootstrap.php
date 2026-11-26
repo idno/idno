@@ -68,7 +68,7 @@ final class LegacyBootstrap
         new \Idno\Core\Admin();
         new \Idno\Core\Webfinger();
         new \Idno\Core\Webmention();
-        new \Idno\Core\PubSubHubbub();
+        new \Idno\Core\WebSub();
         // The link preview listens for an event the queue runs in the worker (the console) too.
         new \Idno\Core\LinkPreview();
 

@@ -11,6 +11,7 @@ Unreleased
 These changes are on the `dev` branch and will be part of the next release.
 
 * PHP 8.4 or later is now required
+* The protocol that tells a hub about new posts is called WebSub throughout, as the W3C names it: in the settings, the documentation and the code, including in older entries of this list. Nothing changes for a site, its hub or its subscriptions; plugins that use the earlier component or event names keep working, and [the upgrade notes](install/upgrade.md) list the new names
 * New built-in look, Idno 2026, built with Tailwind CSS instead of Bootstrap, with a Tiptap editor. It is what a site with no theme draws; the `Twenty26` theme directory is gone
 * New StandardSiteSync plugin, which syncs posts to standard.site records on an AT Protocol PDS
 * Every post can also be fetched as Markdown with YAML front matter: add `.md` to its address, add `?format=markdown`, or send `Accept: text/markdown`. Proposed and first built by John Evdemon ([#3407](https://github.com/idno/idno/issues/3407))
@@ -175,7 +176,7 @@ February 20, 2016
 * Notifications
 * Improved webmention support
 * Improved RSS feed import
-* Pubsubhubbub now pings the homepage
+* WebSub now pings the homepage
 * Improved MongoDB compatibility
 * Fixed a bug with some hashtag links
 * Fixed an issue with APC caching detection
@@ -316,7 +317,7 @@ May 16, 2015
 May 4, 2015
 
 * Hashtags now handle unicode character sets
-* Improved PubSubHubbub handling
+* Improved WebSub handling
 * Installation now detects rewrite rule support more reliably
 * Sessions do not persist between http and https
 * Site URL in public comments is now optional
@@ -350,7 +351,7 @@ March 31, 2015
 * Improved session handling
 * Thumbnails are higher quality
 * Further improvement to Open Graph tag handling
-* Improvement to PubSubHubbub HTTP headers
+* Improvement to WebSub HTTP headers
 * A number of fixes across plugins
 * Experimental release of WordPress importer
 
@@ -398,7 +399,7 @@ November 24, 2014
 
 * API improvements
 * Cleaner hashtag and username parsing
-* PubSubHubbub implemented by default
+* WebSub implemented by default
 * KML output template
 * Delete users from the user admin panel
 * Better button behavior when saving content
