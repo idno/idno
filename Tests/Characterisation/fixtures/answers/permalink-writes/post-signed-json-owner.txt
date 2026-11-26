@@ -1,4 +1,4 @@
-status 302
+status 200
 cache-control: no-store, no-cache, must-revalidate
 content-type: text/html; charset=UTF-8
 expires: <past>
@@ -9,8 +9,8 @@ link: <{site}/webmention/>; rel="http://webmention.org/"
 link: <{site}/webmention/>; rel="webmention"
 link: <https://hub.example/>; rel="hub"
 link: <{site}/2026/bob-publishes-a-note-anyone-can-read?_t=json>; rel="self"
-location: {site}/?_t=json
 pragma: no-cache
 x-clacks-overhead: GNU Terry Pratchett
 x-powered-by: https://idno.co
 
+{"location":"{site}\/2026\/bob-publishes-a-note-anyone-can-read?_t=json"}

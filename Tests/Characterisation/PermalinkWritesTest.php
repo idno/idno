@@ -245,8 +245,7 @@ final class PermalinkWritesTest extends PermalinkSiteCase
         $this->record('patch-token-owner', 'PATCH', $note . '?__bTk=' . $this->tokenOf('owner'), [], 'owner', ['body' => 'x'], $this->scrubAll());
         $this->record('patch-visitor', 'PATCH', $note, [], 'visitor', ['body' => 'x'], $this->scrubAll());
 
-        // a signed API request, last: the session of a browser that is open does not survive it on this rig (the requests after it carry no cookie)
-        // a signed API request needs no token
+        // a signed API request needs no token and carries no cookie: the stored key of the member signs the request's address (path and query)
         $signed = self::signedHeadersFor('bob', $this->bobsKey(), $note);
         $this->record('post-signed-owner', 'POST', $note, $signed, 'visitor', ['body' => 'Bob changes it, signed.'], self::scrubbed([], true));
         $signedJson = self::signedHeadersFor('bob', $this->bobsKey(), $note . '?_t=json');
@@ -255,5 +254,11 @@ final class PermalinkWritesTest extends PermalinkSiteCase
         $disposable = $this->disposableNote();
         $this->record('delete-signed-owner', 'DELETE', $disposable . '?x=1', self::signedHeadersFor('bob', $this->bobsKey(), $disposable . '?x=1') + $referer, 'visitor', null, self::scrubbed([], true));
         $this->record('delete-signed-owner-then', 'GET', $disposable);
+        // another member's signed requests are refused and change nothing
+        $carol = $this->storedKeyOf('carol');
+        $this->record('post-signed-other-member', 'POST', $note, self::signedHeadersFor('carol', $carol, $note), 'visitor', ['body' => 'Carol changes it, signed.'], self::scrubbed([], true));
+        $disposable = $this->disposableNote();
+        $this->record('delete-signed-other-member', 'DELETE', $disposable . '?x=1', self::signedHeadersFor('carol', $carol, $disposable . '?x=1') + $referer, 'visitor', null, self::scrubbed([], true));
+        $this->record('delete-signed-other-member-then', 'GET', $disposable);
     }
 }

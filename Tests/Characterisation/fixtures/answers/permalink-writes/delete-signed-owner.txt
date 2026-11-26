@@ -1,10 +1,6 @@
-status 500
-access-control-allow-credentials: true
-access-control-allow-headers: Authorization, Content-Type
-access-control-allow-origin: *
+status 200
 cache-control: no-store, no-cache, must-revalidate
-content-length: <not the length of the body>
-content-type: application/json
+content-type: text/html; charset=UTF-8
 expires: <past>
 link: <{site}/indieauth/auth>; rel="authorization_endpoint"
 link: <{site}/indieauth/token>; rel="token_endpoint"
@@ -17,13 +13,4 @@ pragma: no-cache
 x-clacks-overhead: GNU Terry Pratchett
 x-powered-by: https://idno.co
 
-{
-    "exception": {
-        "class": "Idno\\Exceptions\\SecurityException",
-        "message": "The page you were on timed out.",
-        "file": "{file}",
-        "line": 704
-    },
-    "title": "Exception",
-    "messages": []
-}
+{"location":"{site}\/?_t=json"}

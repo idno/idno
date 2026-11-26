@@ -32,9 +32,6 @@ abstract class PermalinkSiteCase extends RenderedSiteTestCase
     /** @var array<string, string> the session cookie of a viewer, by site address and handle */
     private static array $cookies = [];
 
-    /** @var array<string, string> the API key of Bob, by site address */
-    private static array $keys = [];
-
     public static function tearDownAfterClass(): void
     {
         foreach (array_keys(self::$extras) as $key) {
@@ -53,11 +50,13 @@ abstract class PermalinkSiteCase extends RenderedSiteTestCase
      */
     protected function seedPermalinkContent(): array
     {
-        $paths = $this->seedSite();
+        // a site is seeded ONCE, whether the class shares it or not: seeding again writes the users again (`setPassword()` ends their sessions and the record
+        // loses its API key)
         $key = static::class . '|' . $this->baseUrl();
         if (isset(self::$extras[$key])) {
-            return $this->merged(self::$extras[$key], $paths);
+            return self::$extras[$key];
         }
+        $paths = $this->seedSite();
         $password = $this->literal(self::PASSWORD);
         $publicKey = $this->literal((string) (new \ReflectionClassConstant(RenderedSiteTestCase::class, 'PUBLIC_KEY'))->getValue());
         $code = <<<'PHP'
@@ -167,9 +166,9 @@ abstract class PermalinkSiteCase extends RenderedSiteTestCase
         PHP;
         $extras = $this->runInSite(str_replace(['%PASSWORD%', '%KEY%', '%OWNED%'], [$password, $publicKey, $this->seedsOwnedPosts() ? 'true' : 'false'], $code));
         $this->assertIsArray($extras);
-        self::$extras[$key] = $extras;
+        self::$extras[$key] = $this->merged($extras, $paths);
 
-        return $this->merged($extras, $paths);
+        return self::$extras[$key];
     }
 
     /** @return array<string, mixed> */
@@ -326,9 +325,25 @@ abstract class PermalinkSiteCase extends RenderedSiteTestCase
         return getenv('IDNO_TEST_CAPTURE_GOLDENS') === 'verify' ? 2 : 1;
     }
 
-    /** The API key of Bob, whom a signed request acts as. */
+    /** The API key of Bob, whom a signed request acts as: the one the site stores, which a signed request is verified with. */
     protected function bobsKey(): string
     {
-        return self::$keys[$this->baseUrl()] ??= (string) $this->seedPermalinkContent()['bob-key'];
+        return $this->storedKeyOf('bob');
+    }
+
+    /**
+     * The API key the site stores for a member (made and stored when there is none), checked: a signed request with it must be answered as the member. An
+     * empty or stale key makes a signed request anonymous, which would record the wrong answer without a failure.
+     */
+    protected function storedKeyOf(string $handle): string
+    {
+        $key = $this->apiKeyOf($handle);
+        $path = '/currentUser?_t=json';
+        $answer = $this->site()->request('GET', $path, self::signedHeadersFor($handle, $key, $path));
+        $this->assertSame(200, $answer->status, 'the key of ' . $handle . ' verifies');
+        $uuid = $this->runInSite('return \\Idno\\Entities\\User::getByHandle(' . $this->literal($handle) . ')->getUUID();');
+        $this->assertSame($uuid, $answer->json()['user']['uuid'] ?? $answer->json()['user']['id'] ?? null, 'a signed request with the key of ' . $handle . ' acts as ' . $handle);
+
+        return $key;
     }
 }
