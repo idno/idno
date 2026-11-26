@@ -101,11 +101,8 @@ final class ConditionalSitePageTest extends PrivateSiteTestCase
         // and that answer's status, headers and (no) body are what the controller's page answers too
         $response = $this->answer(self::CONTROLLER, self::LAST_CHANGE + 86400);
 
-        $this->assertSame(self::comparable(self::recorded('legacy-304')), self::comparable(self::normalise($response, $this->baseUrl()), ['access-control-allow-origin']));
+        $this->assertSame(self::comparable(self::recorded('legacy-304')), self::comparable(self::normalise($response, $this->baseUrl())));
         $this->assertSame('', $response->body);
-        // The one line more: the legacy page exited before it drew anything, so its 304 had none of the headers the page's own draw sends; this
-        // one keeps them (a cross-origin client may read what a 304 says)
-        $this->assertSame('*', $response->header('Access-Control-Allow-Origin'));
     }
 
     public function testAnOlderCopyGetsThePage(): void
@@ -147,7 +144,7 @@ final class ConditionalSitePageTest extends PrivateSiteTestCase
         $path = '/_test/fixture-shell/?case=conditional';
 
         $current = $this->answer($path, self::LAST_CHANGE + 86400);
-        $this->assertSame(self::comparable(self::recorded('legacy-304')), self::comparable(self::normalise($current, $this->baseUrl()), ['access-control-allow-origin']));
+        $this->assertSame(self::comparable(self::recorded('legacy-304')), self::comparable(self::normalise($current, $this->baseUrl())));
         $this->assertSame('', $current->body);
 
         $older = $this->answer($path, self::LAST_CHANGE - 86400);
@@ -162,7 +159,7 @@ final class ConditionalSitePageTest extends PrivateSiteTestCase
         $controller = $this->answer('/_test/fixture-shell-controller?case=conditional', self::LAST_CHANGE + 86400);
 
         $this->assertSame(304, $shell->status);
-        // (the controller's page says it is a permalink and so varies by `Accept`; the shell's page is not, so far, one)
+        // (the controller's attribute says `markdownPermalink` and the shell's page is built without the attribute's flags, so only the controller varies by `Accept`)
         $this->assertSame(
             self::comparable(self::normalise($shell, $this->baseUrl()), ['vary']),
             self::comparable(self::normalise($controller, $this->baseUrl()), ['vary'])
@@ -189,5 +186,58 @@ final class ConditionalSitePageTest extends PrivateSiteTestCase
         $this->assertSame(200, $older->status);
         $this->assertSame('streamed', $older->body);
         $this->assertFileExists(self::$marker);
+    }
+
+    public function testAskingThroughTheCurrentPageAnswersAsTheLegacyPageDid(): void
+    {
+        // the call legacy code and templates make: the current page's gatekeeper, on a real legacy page and on a controller's page
+        $legacy = $this->answer('/_test/site-page/draw-legacy?case=conditional-page', self::LAST_CHANGE - 86400);
+        $controller = $this->answer('/_test/site-page/draw-new?case=conditional-page', self::LAST_CHANGE + 86400);
+
+        $this->assertSame(304, $legacy->status);
+        $this->assertSame(304, $controller->status);
+        $this->assertSame(self::comparable(self::normalise($legacy, $this->baseUrl())), self::comparable(self::normalise($controller, $this->baseUrl())));
+        $this->assertSame(self::comparable(self::recorded('legacy-304')), self::comparable(self::normalise($controller, $this->baseUrl())));
+
+        // and a copy that is not current is sent the page, with its date
+        $legacy = $this->answer('/_test/site-page/draw-legacy?case=conditional-page', self::LAST_CHANGE + 86400);
+        $controller = $this->answer('/_test/site-page/draw-new?case=conditional-page', self::LAST_CHANGE - 86400);
+        $this->assertSame(200, $legacy->status);
+        $this->assertSame(200, $controller->status);
+        $this->assertSame($legacy->header('Last-Modified'), $controller->header('Last-Modified'));
+    }
+
+    public function testAPageWithNoDateIsAlwaysSent(): void
+    {
+        // a post with no `updated` has no change to compare with: whatever date the client's copy has, the page is sent (as the legacy page did)
+        foreach (['/_test/site-page/draw-legacy', '/_test/site-page/draw-new'] as $page) {
+            foreach ([self::LAST_CHANGE - 86400, self::LAST_CHANGE + 86400, self::LAST_CHANGE + 86400 * 3650] as $since) {
+                $response = $this->answer($page . '?case=conditional-missing', $since);
+
+                $this->assertSame(200, $response->status, $page . ' ' . $since);
+                $this->assertStringContainsString('A drawn page', $response->body);
+                $this->assertNull($response->header('Last-Modified'));
+            }
+        }
+    }
+
+    public function testAPendingMessageSurvivesA304AndIsShownOnTheNextPage(): void
+    {
+        // The legacy page ended at its 304, before it drew anything, so the session's pending message was still there for the next page
+        foreach (['legacy' => ['draw-legacy', self::LAST_CHANGE - 86400], 'controller' => ['draw-new', self::LAST_CHANGE + 86400]] as $kind => [$page, $since]) {
+            $queued = $this->site()->request('GET', '/_test/site-page/' . $page . '?case=queue-message');
+            $cookie = self::sessionCookie($queued);
+            $this->assertSame('queued', $queued->body, $kind);
+
+            $current = $this->site()->request('GET', '/_test/site-page/' . $page . '?case=conditional', ['If-Modified-Since' => self::date($since), 'Cookie' => $cookie]);
+            $this->assertSame(304, $current->status, $kind);
+
+            $next = $this->site()->request('GET', '/_test/site-page/' . $page . '?case=conditional', ['Cookie' => $cookie]);
+            $this->assertSame(200, $next->status, $kind);
+            $this->assertStringContainsString('A message to be shown once', $next->body, $kind . ': the message was used up by the 304');
+
+            $after = $this->site()->request('GET', '/_test/site-page/' . $page . '?case=conditional', ['Cookie' => $cookie]);
+            $this->assertStringNotContainsString('A message to be shown once', $after->body, $kind . ': the message is shown once');
+        }
     }
 }

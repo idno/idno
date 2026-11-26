@@ -12,7 +12,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 /**
  * Test-environment only: the one implementation of the fixture page that a controller (`FixtureShellController`) and a shell
  * (`FixtureShell`) both serve, for each `case` of the request:
- *  - `conditional`: the page asks to answer a conditional request, last changed at 1700000000, and sends that as its `Last-Modified`;
+ *  - `conditional`: the page answers a conditional request (last changed at 1700000000: a current copy stops it with a 304) and sends that as its `Last-Modified`;
  *  - `stream`: a streamed response that writes the file `IDNO_TEST_STREAM_MARKER` names (when the stream is sent) and prints `streamed`;
  *  - any other: a drawn page that prints what the context holds.
  */
@@ -47,7 +47,7 @@ final class FixtureShellPages
         return $this->renderer->page($page, [
             'title' => 'A drawn page',
             'description' => 'A page drawn for a test.',
-            'body' => '<p>permalink=' . ($page->isPermalink() ? 'yes' : 'no') . ' status=' . $page->status() . ' conditional=' . (string) ($page->conditionalTimestamp() ?? 'none') . '</p>',
+            'body' => '<p>permalink=' . ($page->isPermalink() ? 'yes' : 'no') . ' status=' . $page->status() . '</p>',
         ]);
     }
 }

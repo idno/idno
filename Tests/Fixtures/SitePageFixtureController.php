@@ -163,6 +163,19 @@ final class SitePageFixtureController
                 $response->headers->set('Expires', 'Wed, 01 Jan 2031 00:00:00 GMT');
 
                 return $response;
+            case 'conditional-page':
+                // through the current page, as legacy code and templates ask it (the same as LegacyDrawPage's)
+                Idno::site()->currentPage()->lastModifiedGatekeeper(1700000000);
+                Idno::site()->currentPage()->setLastModifiedHeader(1700000000);
+                break;
+            case 'conditional-missing':
+                $missing = null;
+                Idno::site()->currentPage()->lastModifiedGatekeeper($missing);
+                break;
+            case 'queue-message':
+                Idno::site()->session()->addMessage('A message to be shown once');
+
+                return new Response('queued');
             case 'conditional':
             case 'conditional-stream':
                 // a page that answers a conditional request (the same as LegacyDrawPage's `conditional`, with a streamed body for the second)

@@ -263,14 +263,17 @@ final class ControllerPage extends Page
     }
 
     /**
-     * Asks to answer a conditional request: the page last changed at `$timestamp`. A legacy page sent the 304 here and exited, and a controller's
-     * page does not exit, so this returns and the code after it runs on; the answer is decided last, on the response the page made
-     * (`ConditionalRequest::apply()`): a GET or HEAD whose `If-Modified-Since` is not before `$timestamp`, and that has no `If-None-Match`, is
-     * answered 304 with no body. (A legacy page compared the other way round: it answered 304 to a date NOT AFTER the change.)
+     * Answers a conditional request: the page last changed at `$timestamp`. A GET or HEAD whose `If-Modified-Since` is not before it, with no
+     * `If-None-Match`, stops the page here with `PageNotModified` (answered 304 with no body), as the legacy page sent the 304 and exited;
+     * otherwise this returns. Nothing is asked for a `$timestamp` that is not a positive number. (A legacy page compared the other way round: it
+     * answered 304 to a date NOT AFTER the change.)
      */
     public function lastModifiedGatekeeper($timestamp)
     {
-        $this->context->answerConditionally((int) $timestamp);
+        // a page with no date (a record with no `updated` gives null or 0) has no change to compare with: it is always sent, as the legacy page did
+        if (is_numeric($timestamp) && (int) $timestamp > 0) {
+            $this->context->answerConditionally((int) $timestamp);
+        }
     }
 
     /**

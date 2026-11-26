@@ -6,8 +6,8 @@ namespace Idno\Legacy;
 
 use Idno\Common\Page;
 use Idno\Core\Idno;
-use Idno\Http\Page\ConditionalRequest;
 use Idno\Http\Page\PageContext;
+use Idno\Http\Page\PageNotModified;
 use Idno\Http\Page\PageRedirect;
 use Idno\Http\Page\SitePage;
 use Idno\Templating\ShellHeaders;
@@ -32,7 +32,7 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
  * page ended it where it drew (`exit`): nothing a subclass does after `parent::getContent()`, no router hook after the handler and no
  * `kernel.terminate` runs for a page served through a shell, as none did for the page it replaced. What the
  * service throws is what a legacy page did: a refusal, a missing page, a gone page and a forward are the page's own `deniedContent()`,
- * `noContent()`, `goneContent()` and `forward()`.
+ * `noContent()`, `goneContent()` and `forward()`, and a current copy (`PageNotModified`) is the 304 that ended the request.
  */
 abstract class PageShell extends Page
 {
@@ -65,7 +65,7 @@ abstract class PageShell extends Page
         $site->setCurrentPage($page);
         try {
             $response = $serve($context);
-        } catch (PageRedirect | AccessDeniedHttpException | NotFoundHttpException | GoneHttpException $e) {
+        } catch (PageRedirect | PageNotModified | AccessDeniedHttpException | NotFoundHttpException | GoneHttpException $e) {
             $thrown = $e;
         } finally {
             $site->setCurrentPage($this);
@@ -80,6 +80,11 @@ abstract class PageShell extends Page
             $this->forward($thrown->location);
 
             return;
+        }
+        if ($thrown instanceof PageNotModified) {
+            // the page sent its 304 where it asked, and the request ended there, as the legacy gatekeeper's did
+            $this->write($thrown->toResponse(), $context);
+            exit;
         }
         if ($thrown instanceof AccessDeniedHttpException) {
             $this->deniedContent($thrown->getMessage());
@@ -166,8 +171,6 @@ abstract class PageShell extends Page
     {
         // the headers the page asked for, as the controller's listener puts them on its response
         $context->applyTo($response);
-        // a page that asked answers a current copy with a 304 and no body, decided last as the listener does (the headers the page asked for are on the response)
-        $response = ConditionalRequest::apply($context, $context->request(), $response);
 
         $php = new PhpHeaders();
         (new LegacyHeaderReconciler(Idno::container()->get('kernel'), $php))->reconcile($response, $context, false);

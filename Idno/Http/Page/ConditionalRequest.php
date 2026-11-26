@@ -5,11 +5,10 @@ declare(strict_types=1);
 namespace Idno\Http\Page;
 
 use Symfony\Component\HttpFoundation\Request;
-use Symfony\Component\HttpFoundation\Response;
 
 /**
- * Answers a conditional request (`If-Modified-Since`) to a page that asked for it (`PageContext::answerConditionally()`). Static and
- * pure: not a service.
+ * Whether a request's copy of a page is current (`If-Modified-Since`). Static and pure: not a service. A page asks with
+ * `PageContext::answerConditionally()`, which stops it with `PageNotModified` when this says so.
  */
 final class ConditionalRequest
 {
@@ -27,30 +26,5 @@ final class ConditionalRequest
         // A client that has a copy from before the change is sent the page; one whose copy is as new as the change, or newer, is told it is current.
         // (The legacy `Page::lastModifiedGatekeeper()` compared the other way round.)
         return $since !== null && $lastChange <= $since;
-    }
-
-    /**
-     * The 304 the page answers when it asked, the answer is a 200 or a 206 (a conditional request is judged before a range: RFC 9110 section
-     * 13.2.2) and the client's copy is current; otherwise the response itself. The 304 is a NEW response with the answer's headers less the ones
-     * that describe a body (`Content-Type`, `Content-Length`, `Content-Range`, `Last-Modified` and the others `Response::setNotModified()`
-     * removes) and no content, so a streamed or file response's body is never sent.
-     */
-    public static function apply(PageContext $page, Request $request, Response $response): Response
-    {
-        $lastChange = $page->conditionalTimestamp();
-        if ($lastChange === null || !in_array($response->getStatusCode(), [200, 206], true) || !self::notModified($request, $lastChange)) {
-            return $response;
-        }
-        $answer = new Response('', 304);
-        foreach ($response->headers->allPreserveCaseWithoutCookies() as $name => $values) {
-            $answer->headers->set($name, $values);
-        }
-        foreach ($response->headers->getCookies() as $cookie) {
-            $answer->headers->setCookie($cookie);
-        }
-        $answer->setNotModified();
-        $answer->headers->remove('Content-Range');
-
-        return $answer;
     }
 }

@@ -6,6 +6,7 @@ namespace Tests\Unit\Http\Page;
 
 use Idno\Http\Page\PageContext;
 use Idno\Http\Page\PageLifecycle;
+use Idno\Http\Page\PageNotModified;
 use Idno\Http\Page\PageRedirect;
 use Idno\Http\Page\PageRequestListener;
 use Idno\Http\Page\SitePage;
@@ -418,6 +419,20 @@ final class PageRequestListenerTest extends TestCase
         $keep = $this->exceptionEvent(Request::create('/'), new PageRedirect('https://example.com/post', null, 307));
         $this->listener()->onException($keep);
         $this->assertSame(307, $keep->getResponse()->getStatusCode());
+    }
+
+    public function testAPageNotModifiedBecomesA304Response(): void
+    {
+        $event = $this->exceptionEvent(Request::create('/'), new PageNotModified());
+
+        $this->listener()->onException($event);
+
+        $this->assertSame(304, $event->getResponse()->getStatusCode());
+        $this->assertSame('', $event->getResponse()->getContent());
+
+        $sub = $this->exceptionEvent(Request::create('/'), new PageNotModified(), HttpKernelInterface::SUB_REQUEST);
+        $this->listener()->onException($sub);
+        $this->assertNull($sub->getResponse());
     }
 
     public function testAnApiRequestGetsTheBodyInsteadOfARedirect(): void

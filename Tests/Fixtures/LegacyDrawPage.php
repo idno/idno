@@ -36,6 +36,23 @@ class LegacyDrawPage extends Page
                 $this->setLastModifiedHeader(1700000000);
                 $t->__(['title' => 'A drawn page', 'description' => 'A page drawn for a test.', 'body' => $t->__(['offset' => 0])->draw('pages/home/blurb')])->drawPage();
                 break;
+            case 'conditional-page':
+                // through the current page, as legacy code and templates ask it (a controller's page answers the same call)
+                Idno::site()->currentPage()->lastModifiedGatekeeper(1700000000);
+                Idno::site()->currentPage()->setLastModifiedHeader(1700000000);
+                $t->__(['title' => 'A drawn page', 'description' => 'A page drawn for a test.', 'body' => $t->__(['offset' => 0])->draw('pages/home/blurb')])->drawPage();
+                break;
+            case 'conditional-missing':
+                // a page with no date (a record with no `updated`): it has no change to compare with and is always sent
+                $missing = null;
+                Idno::site()->currentPage()->lastModifiedGatekeeper($missing);
+                $t->__(['title' => 'A drawn page', 'description' => 'A page drawn for a test.', 'body' => $t->__(['offset' => 0])->draw('pages/home/blurb')])->drawPage();
+                break;
+            case 'queue-message':
+                // a message for the next page that is drawn, and an answer that draws none
+                Idno::site()->session()->addMessage('A message to be shown once');
+                echo 'queued';
+                break;
             case 'no-cache':
                 $this->setNoCache();
                 $t->__(['title' => 'A drawn page', 'description' => 'A page drawn for a test.', 'body' => $t->__(['offset' => 0])->draw('pages/home/blurb')])->drawPage();

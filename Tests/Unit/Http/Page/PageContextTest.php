@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Http\Page;
 
+use Idno\Http\Page\HttpDate;
 use Idno\Http\Page\PageContext;
+use Idno\Http\Page\PageNotModified;
 use Idno\Http\Page\SitePage;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\Request;
@@ -332,5 +334,39 @@ final class PageContextTest extends TestCase
         $this->assertSame([$work], $context->afterResponseWork());
         $this->assertSame(302, $redirect->status);
         $this->assertNull($redirect->body);
+    }
+
+    public function testAskingToAnswerConditionallyStopsThePageForACurrentCopy(): void
+    {
+        $request = Request::create('/x');
+        $request->headers->set('If-Modified-Since', HttpDate::format(1700000000));
+        $context = $this->context($request);
+
+        $this->expectException(PageNotModified::class);
+
+        $context->answerConditionally(1700000000);
+    }
+
+    public function testAskingToAnswerConditionallyGoesOnWhenTheCopyIsOlderOrThereIsNone(): void
+    {
+        $older = Request::create('/x');
+        $older->headers->set('If-Modified-Since', HttpDate::format(1699999999));
+        $this->context($older)->answerConditionally(1700000000);
+        $this->context(Request::create('/x'))->answerConditionally(1700000000);
+
+        $post = Request::create('/x', 'POST');
+        $post->headers->set('If-Modified-Since', HttpDate::format(1800000000));
+        $this->context($post)->answerConditionally(1700000000);
+
+        $this->addToAssertionCount(3);
+    }
+
+    public function testSetLastModifiedAddsTheDate(): void
+    {
+        $context = $this->context(Request::create('/x'));
+
+        $context->setLastModified(1700000000);
+
+        $this->assertSame(['Last-Modified' => [HttpDate::format(1700000000)]], $context->headers());
     }
 }

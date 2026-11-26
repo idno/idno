@@ -203,23 +203,29 @@ final class PageRequestListener
             }
             $response->headers->set('Content-Length', (string) strlen((string) $response->getContent()));
         }
-        // Last of all, so that the 304 carries every header the page made: a page that asked for it answers a current copy with no body
-        // (a new response, so a stream or a file is never sent)
-        $answer = ConditionalRequest::apply($context, $request, $response);
-        if ($answer !== $response) {
-            $event->setResponse($answer);
-        }
     }
 
     /**
      * Where a legacy page forwarded and exited, a controller's page throws a PageRedirect: the response is the redirect (or, for
-     * an API request, the JSON the page echoed). The headers and caching the page asked for are added on the way out.
+     * an API request, the JSON the page echoed); where it sent a 304 and exited, a PageNotModified: the response is the 304. The headers and
+     * caching the page asked for are added on the way out.
      */
     #[AsEventListener(event: KernelEvents::EXCEPTION, priority: 10)]
     public function onException(ExceptionEvent $event): void
     {
         $redirect = $event->getThrowable();
-        if (!$redirect instanceof PageRedirect || !$event->isMainRequest()) {
+        if (!$event->isMainRequest()) {
+            return;
+        }
+        // Where a legacy page sent `304 Not Modified` and exited, the page throws PageNotModified: that is the answer (the response listeners give it
+        // the headers of any answer), logged as nothing and reported as nothing
+        if ($redirect instanceof PageNotModified) {
+            $event->allowCustomResponseCode();
+            $event->setResponse($redirect->toResponse());
+
+            return;
+        }
+        if (!$redirect instanceof PageRedirect) {
             return;
         }
         $response = $redirect->toResponse();

@@ -239,7 +239,7 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
   `markTestIncomplete()` when it sees the defect, so it takes over by itself when the defect is fixed. Run it
   with `composer test -- Tests/Acceptance` on each database; the manual checks that no test replaces are in
   `docs/developers/release-checklist.md`.
-- Pages that controllers serve are pinned at four levels. Unit tier: `Tests/Unit/Http/Page/` (the attribute, the context, the renderer with doubles, the two listeners, `AddedHeaders`, `PageRedirect`, `ConditionalRequest`, `HttpDate`),
+- Pages that controllers serve are pinned at four levels. Unit tier: `Tests/Unit/Http/Page/` (the attribute, the context, the renderer with doubles, the two listeners, `AddedHeaders`, `PageRedirect`, `PageNotModified`, `ConditionalRequest`, `HttpDate`),
   `Tests/Unit/Http/Controller/` (each service on doubles of its interfaces, `HomepageControllerTest` and `DiscoveryControllersTest` for the routes and attributes), `Tests/Unit/Http/PageRouteConventionTest` and
   `PageShellsTest` (the shells that exist: `Idno\Pages\Homepage` alone). Kernel: `ControllerPageTest`, `ControllerPageEquivalenceTest` and `ControllerPageMembersTest` (the current page against a real legacy page),
   `LegacyPageLifecycleTest`, `LegacyPageDrawerTest`, `LegacyHeaderReconcilerTest`, `LegacyRouteOverrideTest`, `PageHandlerChoiceTest`, `PageRoutesTest`, `SitePageRoutesTest`, `SitePageClaimsTest` (the route table against
@@ -946,17 +946,22 @@ and `Tests/Upgrade/UpgradeEndToEndTest`. Do not add another.
   `#[Cache]`, are refused in debug mode and ignored otherwise). A plugin replaces the home page with the event `homepage/replace`, not a route. A legacy `Page` class still works for a third-party plugin.
   `PageContext::addHeader()` refuses the three caching names.
 - ASKING FOR CONDITIONAL REQUESTS. A site page whose answer has a last change (a permalink, a file) calls `PageContext::answerConditionally(int $lastChange)` and sends the date with
-  `PageContext::setLastModified(int $timestamp)` (`addHeader('Last-Modified', HttpDate::format($timestamp))`; `ControllerPage::lastModifiedGatekeeper()` and `setLastModifiedHeader()` are the same two calls for code that
-  asks the current page). `Idno\Http\Page\ConditionalRequest::apply(PageContext, Request, Response)` decides LAST: `PageRequestListener::onResponse()` calls it after the page's headers and a forward are on the response and
-  sets the event's response, and `PageShell::write()` calls it after `PageContext::applyTo()`. For a page that asked, a GET or HEAD with no `If-None-Match` (which makes `If-Modified-Since` ignored: RFC 9110 section
-  13.1.3) whose `If-Modified-Since` is an HTTP-date (`Idno\Http\Page\HttpDate::parse()`: IMF-fixdate, RFC 850 or asctime, in GMT, exactly: never `strtotime()`, which reads `tomorrow`) NOT BEFORE the last change, and
-  whose response is a 200 or a 206 (the condition is judged before a range: section 13.2.2), is answered 304: a NEW `Response` with the response's headers less `Content-Type`, `Content-Length`, `Content-Range`,
-  `Last-Modified` and the others `Response::setNotModified()` removes, and no content, so a streamed or file response's body is never sent. The session's caching lines, `Link` and `Vary` stay (the legacy 304 had the
-  session's lines and the page's `Link` headers; this one also keeps the headers the page's draw sent, such as `Access-Control-Allow-Origin`, where the legacy page exited before it drew). DELIBERATE: the legacy
-  `Page::lastModifiedGatekeeper()` answered 304 when the request's date was NOT AFTER the change (`strtotime($ims) <= $timestamp`), the wrong way round: a client holding a copy from before the change was told it was
-  current, and one holding a newer copy was sent the page. `HttpDate::format()` is the one date formatter (`Time::timestampToRFC2616()` delegates to it). Pinned by `Tests/Unit/Http/Page/ConditionalRequestTest` and
-  `HttpDateTest`, and over HTTP by `Tests/Characterisation/ConditionalSitePageTest` against a recording of the legacy page's 304 (`Tests/Characterisation/fixtures/answers/conditional/`), for the controller path, the shell
-  path (`Tests\Fixtures\FixtureShell`, with `IDNO_TEST_FIXTURE_SHELL=1`, and `FixtureShellController`, which call one service, `FixtureShellPages`) and a streamed response.
+  `PageContext::setLastModified(int $timestamp)` (`addHeader('Last-Modified', HttpDate::format($timestamp))`); `ControllerPage::lastModifiedGatekeeper($timestamp)` and `setLastModifiedHeader()` are the same two calls for code
+  that asks the current page, and the gatekeeper asks only for a `$timestamp` that is a positive number (a record with no `updated` gives null or 0, has no change to compare with and is always sent, as the legacy page
+  did). When the request's copy is current the call STOPS THE PAGE THERE, as the legacy gatekeeper sent `304 Not Modified` and `exit`ed: it throws `Idno\Http\Page\PageNotModified` (a small final class like `PageRedirect`, with a pure
+  `toResponse()`: an empty 304), which `PageRequestListener::onException()` answers beside a redirect (`allowCustomResponseCode()`; logged and reported as nothing) and a deprecated shell's `delegate()` writes as the legacy
+  304 and then ends the request. Nothing after the call runs: nothing is drawn (a 304 costs no draw), the session's pending messages are not used up and a streamed or file body is never begun. So a page calls it AFTER its own access
+  checks (the walled garden, the API refusal and `#[IsGranted]` have run before any controller; the entity's `canRead()` and the draft rule are the page's), exactly as a legacy page called the gatekeeper: a viewer who may
+  not see the page is refused before it, and never told the page is unchanged. A page that never calls it never gets a 304 (the home page, the profile and the feeds). When the copy is not current nothing is thrown and the page
+  goes on. The condition (`ConditionalRequest::notModified()`, pure): a GET or HEAD with no `If-None-Match` (which makes `If-Modified-Since` ignored: RFC 9110 section 13.1.3) whose `If-Modified-Since` is an HTTP-date
+  (`Idno\Http\Page\HttpDate::parse()`: IMF-fixdate, RFC 850 or asctime, in GMT, exactly: never `strtotime()`, which reads `tomorrow`) NOT BEFORE the last change. The 304 has the headers of any answer (the session's caching
+  lines, `Link`, the standard headers and what the page asked for before the call) and, as the legacy 304, none that its draw would have sent (`Access-Control-Allow-Origin`): it equals the legacy recording line for line.
+  A page that serves a range (a file) asks before it opens the stream: the condition is judged before a range (RFC 9110 section 13.2.2). DELIBERATE: the legacy `Page::lastModifiedGatekeeper()` answered 304 when the request's
+  date was NOT AFTER the change (`strtotime($ims) <= $timestamp`), the wrong way round: a client holding a copy from before the change was told it was current, and one holding a newer copy was sent the page.
+  `HttpDate::format()` is the one date formatter (`Time::timestampToRFC2616()` delegates to it). Pinned by `Tests/Unit/Http/Page/ConditionalRequestTest`, `HttpDateTest`, `PageNotModifiedTest`, `PageContextTest` and
+  `Tests/Kernel/ControllerPageTest`, and over HTTP by `Tests/Characterisation/ConditionalSitePageTest` against a recording of the legacy page's 304 (`Tests/Characterisation/fixtures/answers/conditional/`) and against the
+  legacy fixture page itself: the controller path, the current page's gatekeeper, a page with no date, a pending session message that survives a 304, the shell path (`Tests\Fixtures\FixtureShell`, with
+  `IDNO_TEST_FIXTURE_SHELL=1`, and `FixtureShellController`, which call one service, `FixtureShellPages`) and a streamed response that is never sent.
 - Tests of the kernel's own handling of requests: `Tests/Kernel/FrontControllerTest` (the controllers' routes match in a kernel with no legacy application, a request Symfony rejects falls back to the
   legacy router with a warning, any other exception before routing is not served by it, the body is not consumed), `Tests/Kernel/KernelExceptionTest` (an exception before routing or from a controller
   that is not a site page is logged once, the catch-all logs nothing) and `Tests/Characterisation/KernelRoutingTest` (a controller's route wins over the catch-all, the header names of a legacy page and of a
@@ -1144,7 +1149,7 @@ for classes that extend `PageShell`, and holds each to the rule); it is `Idno\Pa
   never run after a page served through a shell, as they never ran after the legacy page (`HomepageShellTest::testAPageEndsWhereTheLegacyPageEnded`, with a subclass
   that draws after the parent; `PageShellTest::testEveryResponseTheShellWritesEndsThePage`). What `$serve` throws is the legacy
   exit: a `PageRedirect` is `$this->forward()`, `AccessDeniedHttpException` `deniedContent()`, `NotFoundHttpException` `noContent()` and `GoneHttpException`
-  `goneContent()`, run with the shell as the current page.
+  `goneContent()`, run with the shell as the current page, and a `PageNotModified` is the legacy 304 (written as any response is, then `exit`).
 - Constructing or serving a SUBCLASS of a shell (not the shell itself) logs one line for each shell in a process (the flag is keyed by the shell, so a subclass of one shell does not hide a subclass of another), through the site's logger at warning level: `Deprecated: <class>
   extends <shell>, which is a deprecated shell ...`, naming `docs/developers/plugins/upgrading.md`. No bundled plugin extends a shell: the StaticPages plugin's static home page is the `homepage/replace` event's
   (below), so a site with one logs nothing (`StaticPagesHomepageTest::testASiteWithAStaticHomePageLogsNoDeprecation`).
@@ -1383,7 +1388,7 @@ the tag pages and the small public endpoints are served through them (and the fi
   controller page registers its work on the context (`PageContext::afterResponse()`) and forwards, the listener runs it on `kernel.terminate`
   (no time limit; a failure goes to `reportException()`), and the PageRedirect is turned into the response by `PageRequestListener::onException()`
   (`kernel.exception`, priority 10, which calls `allowCustomResponseCode()`: without it Symfony makes a 500 of the 200 an API request's forward or
-  the empty answer of work after the response is; `Tests/Kernel/PageRedirectKernelTest` goes through the real kernel; a forward that went on, then one that exits: the second wins); `lastModifiedGatekeeper($timestamp)` asks the context to answer a conditional request (`PageContext::answerConditionally()`: it returns and the code after it runs on; the answer is decided last, see "Adding a route") and
+  the empty answer of work after the response is; `Tests/Kernel/PageRedirectKernelTest` goes through the real kernel; a forward that went on, then one that exits: the second wins); `lastModifiedGatekeeper($timestamp)` answers a conditional request through the context (`PageContext::answerConditionally()`: a current copy stops the page with `PageNotModified`, as the legacy gatekeeper sent a 304 and exited; see "Adding a route") and
   `data()` is always empty (the context reads a JSON payload on demand). The Markdown members work from the request: `wantsMarkdown()` (the
   request's `Accept`, `format`, `_t` and the context's suffix flag), `sendVaryAccept()` (a `Vary: Accept` added to the context),
   `selectMarkdownIfWanted()`, and `drawMarkdown()`, which RETURNS the document (a legacy page echoed it and exited) and records the Markdown
@@ -1479,6 +1484,7 @@ the tag pages and the small public endpoints are served through them (and the fi
     `AccessDeniedHttpException` (`deniedContent($title)`, its message the title, and the walled garden's refusal): `denied()`; each logs nothing.
   - a Security exception (`AccessDeniedException`: `#[IsGranted]`, the lifecycle's API refusal; `AuthenticationException`, a failed `#[IsCsrfTokenValid]` among them):
     `denied()` with no title, as `deniedContent()` with none; nothing logged, nothing reported.
+  - a `PageNotModified` (`answerConditionally()`) never reaches it: `PageRequestListener::onException()` answers it with its 304 before this listener runs, logging and reporting nothing.
   - a `PageRedirect` (`forward()`) never reaches it: `PageRequestListener::onException()` (priority 10) answers every one of a main request first, with
     `PageRedirect::toResponse()`, logs nothing and forgets a forward the page made and went on from. A forward the page made and went on from is carried by the
     page's own response by the same rules (`PageRedirect::statusWithLocation()` and `PageRedirect::contentType()`, the JSON type, the one deliberate addition: a legacy page sent none).
@@ -5415,7 +5421,7 @@ no installer writes one.
   - `framework.handle_all_throwables` is off: an `\Error` is the site's 500 page only inside a site page's controller or its own events; anywhere else it ends at `FatalErrorPage`.
   - The legacy route table decides what a plugin's registration does for a moved path, so a plugin's page registered after core's with another pattern does not take it, and a plugin that extends a deleted page
     class stops the site booting until it is disabled.
-  - A site page answers a conditional request with a 304 only when it asks (see "Adding a route"); the home page, the profile and the feeds do not, and always answer the whole page.
+  - A site page answers a conditional request with a 304 only when it asks (see "Adding a route"), and then stops before it draws; the home page, the profile and the feeds do not ask and always answer the whole page.
   - Every state-changing method of a site page needs the session's form token (or a signed API request): a site page cannot take a POST from another
     server (a webmention, a WebSub callback, an inbox), so such an endpoint stays a legacy page or a plain controller.
 - The first administrator: an uninstalled site as shipped can be installed by whoever reaches it first (no code to

@@ -61,8 +61,6 @@ final class PageContext
 
     private bool $markdownSuffix = false;
 
-    private ?int $lastChange = null;
-
     private ?PageRedirect $redirect = null;
 
     /** @var list<\Closure> */
@@ -253,20 +251,18 @@ final class PageContext
     }
 
     /**
-     * The page asks to be answered with a 304 when the client's copy is current: the page last changed at `$lastChange` (a timestamp). The
-     * answer is decided last, on the response the page made (`ConditionalRequest::apply()`).
+     * The page answers a conditional request: it last changed at `$lastChange` (a timestamp). When the request's copy is current (a GET or HEAD
+     * whose `If-Modified-Since` is not before it, with no `If-None-Match`) the page stops here with `PageNotModified`, as a legacy page sent a
+     * 304 and exited, and nothing after the call runs; otherwise it returns and the page goes on. A page calls this AFTER its own access checks,
+     * as a legacy page called the gatekeeper: a viewer who may not see the page must be refused before it, never told the page is unchanged.
+     *
+     * @throws PageNotModified
      */
     public function answerConditionally(int $lastChange): void
     {
-        $this->lastChange = $lastChange;
-    }
-
-    /**
-     * When the page last changed, if it asked to answer a conditional request.
-     */
-    public function conditionalTimestamp(): ?int
-    {
-        return $this->lastChange;
+        if (ConditionalRequest::notModified($this->request, $lastChange)) {
+            throw new PageNotModified();
+        }
     }
 
     /**

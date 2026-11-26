@@ -271,6 +271,46 @@ final class ControllerPageTest extends TestCase
         $this->assertSame(['Last-Modified' => [\Idno\Core\Time::timestampToRFC2616(1700000000)]], $page->context()->headers());
     }
 
+    public function testTheGatekeeperStopsThePageForACurrentCopy(): void
+    {
+        $page = $this->page('/', 'GET', [], ['HTTP_IF_MODIFIED_SINCE' => \Idno\Http\Page\HttpDate::format(1700000000 + 86400)]);
+
+        $this->expectException(\Idno\Http\Page\PageNotModified::class);
+
+        $page->lastModifiedGatekeeper(1700000000);
+    }
+
+    public function testTheGatekeeperGoesOnForACopyFromBeforeTheChange(): void
+    {
+        $page = $this->page('/', 'GET', [], ['HTTP_IF_MODIFIED_SINCE' => \Idno\Http\Page\HttpDate::format(1700000000 - 1)]);
+
+        $page->lastModifiedGatekeeper(1700000000);
+        $page->lastModifiedGatekeeper('1700000000');
+
+        $this->addToAssertionCount(1);
+    }
+
+    /**
+     * @dataProvider timesThatAreNoDate
+     */
+    public function testTheGatekeeperNeverAsksWithoutADate(mixed $timestamp): void
+    {
+        // a post with no `updated` gives null or 0: it has no change to compare with, and the legacy page never answered 304 for one
+        $page = $this->page('/', 'GET', [], ['HTTP_IF_MODIFIED_SINCE' => \Idno\Http\Page\HttpDate::format(PHP_INT_MAX >> 33)]);
+
+        $page->lastModifiedGatekeeper($timestamp);
+
+        $this->addToAssertionCount(1);
+    }
+
+    /**
+     * @return array<string, array{0: mixed}>
+     */
+    public static function timesThatAreNoDate(): array
+    {
+        return ['null' => [null], 'an empty string' => [''], 'zero' => [0], 'zero as text' => ['0'], 'a negative number' => [-5], 'text' => ['yesterday'], 'false' => [false]];
+    }
+
     public function testGetIconUsesTheContextsOwner(): void
     {
         Idno::site()->config()->user_avatar_favicons = true;
