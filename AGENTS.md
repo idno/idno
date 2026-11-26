@@ -257,8 +257,9 @@ looks the post up, replies to it or is shown a quote of it. Both must read the s
   `Content-Type: application/activity+json`. Mastodon reads a document only with that type
   (or `ld+json` with the profile), status 200, no redirect, and an `id` equal to the address
   it asked for.
-- A check-in whose place is to be kept vague (`Checkin::isAnonymous()`) has no `location`
-  in its object: other servers are never signed in, and are not given the exact position.
+- A check-in whose location is protected has no `location` in its object: the object is
+  built from `Entity::publicLocation()`, what a visitor who is not signed in may be told,
+  which is what any other server is (see "Where a post is" under Security).
 - `IdnoPlugins/ActivityPub/Tests/PostDocumentTest.php` checks all of this for every bundled
   content type, over HTTP with Mastodon's `Accept` header.
 
@@ -1233,6 +1234,28 @@ something). What existing sites, hubs and plugins hold was kept, and must stay:
   again where they are printed (the `entity/RSVP` templates and `RSVP::getDescription()`,
   which is HTML given to feeds), because RSVPs stored earlier are not rewritten.
   `IdnoPlugins/Event/Tests/RSVPOutputTest.php` checks this.
+- Where a post is, and who may be told: `Entity::locationFor($viewer)` is the one place that says
+  what a viewer (a member, or `null` for a visitor who is not signed in, which is also what any
+  other server is) may be told of an entity's position, place name and address: `precise`,
+  `latitude`, `longitude`, `placename`, `address`, with the parts the viewer may not have empty.
+  `location()` asks it for whoever is signed in for the request and `publicLocation()` for a
+  visitor. Every form of an entity reads these and never the stored `lat`, `long`, `placename`
+  and `address` (only the edit form does): the check-in templates of both looks,
+  `Entity::jsonSerialize()`, the RSS item, the KML shell, the JSON Feed metadata, JSON-LD and
+  the ActivityPub object. A check-in overrides `locationFor()`: while its location is protected
+  (`Checkin::isLocationProtected()`: its author turned on "Protect my location for 24 hours" and
+  it is less than 24 hours old), a visitor gets no place name, no address, and a position
+  rounded to two decimal places (about a kilometre; the same every time, where it was once a
+  random one for each request, which enough requests averaged out). Members who are signed in
+  see everything, as the form says. The title follows: `getTitle()` is for whoever is signed in
+  ("Checked into somewhere nearby" for a visitor), and `Entity::getPublicTitle()` is the title a
+  visitor reads, whoever is signed in. Use `getPublicTitle()` and `publicLocation()` for
+  anything that outlives the request or leaves the site, because that is put together while
+  the owner is signed in: the slug (`Entity::save()`), the stored `title` (which search looks
+  in), ActivityPub objects, AT Protocol records, webhooks. So a check-in made with a protected
+  location has an address that does not name the place; one made before November 2026 keeps
+  the address it has. `IdnoPlugins/Checkin/Tests/ProtectedLocationTest.php` checks every form
+  over HTTP as a visitor, another member and the owner, in both looks.
 - Video posts (`IdnoPlugins/Video`): a member gives the address of a video. For YouTube, Vimeo,
   Dailymotion and TikTok, `VideoUrl::parse()` reads the provider and the id of the video out
   of the address and makes no request to anything (so there is nothing to protect from

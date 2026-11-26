@@ -60,7 +60,7 @@ class PostSource
         }
 
         $source['title'] = is_string($entity->title) ? $entity->title : '';
-        $source['fallback_title'] = (string) $entity->getTitle();
+        $source['fallback_title'] = (string) $entity->getPublicTitle();
         $source['html'] = is_string($entity->body) ? $entity->body : '';
 
         if ($kind === 'media' && ($file = self::file($entity))) {

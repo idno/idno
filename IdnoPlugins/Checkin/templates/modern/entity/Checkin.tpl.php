@@ -5,6 +5,9 @@
      * @var \Idno\Common\Entity $object
      */
 
+    // Where the check-in was made, as far as whoever is reading may be told
+    $location = $object->location();
+
 ?>
 
 <div class="idno-checkin">
@@ -16,16 +19,18 @@
     <?php } ?>
 
     <span class="p-location u-checkin h-card">
-        <data class="p-name" value="<?= htmlspecialchars((string) $object->placename) ?>"></data>
-        <data class="p-latitude" value="<?= $object->lat() ?>"></data>
-        <data class="p-longitude" value="<?= $object->long() ?>"></data>
+        <?php if ($location['placename'] !== '') { ?>
+        <data class="p-name" value="<?= htmlspecialchars($location['placename']) ?>"></data>
+        <?php } ?>
+        <data class="p-latitude" value="<?= (float) $location['latitude'] ?>"></data>
+        <data class="p-longitude" value="<?= (float) $location['longitude'] ?>"></data>
     </span>
 
     <?php if (empty($vars['feed_view'])) { ?>
-        <div id="map_<?= $object->_id ?>" class="idno-map" role="img" aria-label="<?= htmlspecialchars(\Idno\Core\Idno::site()->language()->_('Map: %s', [(string) $object->placename])) ?>"></div>
-        <?php if (!empty($object->address)) { ?>
+        <div id="map_<?= $object->_id ?>" class="idno-map" role="img" aria-label="<?= htmlspecialchars(\Idno\Core\Idno::site()->language()->_('Map: %s', [$location['placename'] !== '' ? $location['placename'] : \Idno\Core\Idno::site()->language()->_('somewhere nearby')])) ?>"></div>
+        <?php if ($location['address'] !== '') { ?>
         <p class="idno-entry-kicker idno-entry-kicker-place">
-            <span><?= htmlspecialchars(strip_tags((string) $object->address)) ?></span>
+            <span><?= htmlspecialchars(strip_tags($location['address'])) ?></span>
         </p>
         <?php } ?>
     <?php } ?>
@@ -48,13 +53,13 @@
                 var map = L.map('map_<?= $object->_id ?>', {
                     touchZoom: false,
                     scrollWheelZoom: false
-                }).setView([<?= $object->lat() ?>, <?= $object->long() ?>], 16);
+                }).setView([<?= (float) $location['latitude'] ?>, <?= (float) $location['longitude'] ?>], 16);
                 // OpenStreetMap's own tiles: the Stamen tile servers this used are gone
                 L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
                     maxZoom: 19,
                     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                 }).addTo(map);
-                var marker = L.marker([<?= $object->lat() ?>, <?= $object->long() ?>]);
+                var marker = L.marker([<?= (float) $location['latitude'] ?>, <?= (float) $location['longitude'] ?>]);
                 marker.addTo(map);
                 map.scrollWheelZoom.disable();
                 map.touchZoom.disable();
