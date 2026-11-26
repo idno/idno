@@ -202,7 +202,8 @@ final class HomePages implements ReceivesWebmentions
         if (!$this->receivesFor($route)) {
             return false;
         }
-        ($this->logger)()->info("received homepage mention from {$mention->source}");
+        // (the source is the sender's: no control characters, and no more than 200 bytes, in a log line)
+        ($this->logger)()->info('received homepage mention from ' . substr((string) preg_replace('/[\x00-\x1f\x7f]+/', ' ', $mention->source), 0, 200));
 
         if ($this->stream->isSingleUser()) {
             $user = $this->stream->firstAdministrator();

@@ -41,4 +41,33 @@ final class BootOnlySettingsTest extends TestCase
             $config->load();
         }
     }
+
+    public function testWebmentionTargetHostsAreNeverSavedAndNeverReadFromTheStoredSettings(): void
+    {
+        $db = Idno::site()->db();
+        $config = Idno::site()->config();
+        $original = $db->getAnyRecord('config');
+        $this->assertNotEmpty($original);
+        $settings = &$config->config;
+
+        try {
+            // Saving: the key is not written.
+            $settings['webmention_target_hosts'] = 'old.example';
+            $this->assertTrue($config->save());
+            $stored = $db->getAnyRecord('config');
+            $this->assertIsArray($stored);
+            $this->assertArrayNotHasKey('webmention_target_hosts', $stored);
+
+            // Loading: a stored value (written behind the application's back) is ignored.
+            unset($settings['webmention_target_hosts']);
+            $stored['webmention_target_hosts'] = 'old.example';
+            $db->saveRecord('config', $stored);
+            $config->load();
+            $this->assertArrayNotHasKey('webmention_target_hosts', $settings);
+        } finally {
+            unset($settings['webmention_target_hosts']);
+            $db->saveRecord('config', $original);
+            $config->load();
+        }
+    }
 }

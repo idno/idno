@@ -468,6 +468,20 @@ final class HomePagesTest extends TestCase
         $this->assertSame([['info', 'received homepage mention from https://a.example/post']], $this->logger->lines);
     }
 
+    public function testTheSourceOfAMentionIsLoggedWithoutControlCharactersAndCut(): void
+    {
+        $this->stream->single = false;
+        $source = "https://a.example/\r\nWARNING forged " . str_repeat('x', 400);
+
+        $this->pages->receiveWebmention('idno_home', [], $this->mention($source));
+
+        $line = $this->logger->lines[0][1];
+        $this->assertSame('received homepage mention from ', substr($line, 0, 31));
+        $this->assertStringNotContainsString("\n", $line);
+        $this->assertStringNotContainsString("\r", $line);
+        $this->assertLessThanOrEqual(31 + 200, strlen($line));
+    }
+
     public function testARootWebmentionOnAMultiUserSiteIsRefused(): void
     {
         $this->stream->single = false;

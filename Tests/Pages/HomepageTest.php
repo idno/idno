@@ -10,6 +10,8 @@ namespace Tests\Pages {
 
         function testHomepageLoads()
         {
+            $this->admin(); // a site with no user answers its home page 503: make sure there is one
+
             // Get the rendered homepage
             $contents = file_get_contents(\Idno\Core\Idno::site()->config()->getDisplayURL());
 

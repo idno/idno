@@ -4,18 +4,32 @@ declare(strict_types=1);
 
 namespace Tests\Kernel;
 
+use Idno\Common\ContentType;
+use Idno\Common\MarkdownPermalink;
 use Idno\Common\Page;
 use Idno\Config\BootConfig;
 use Idno\Core\Idno;
 use Idno\Http\Controller\Home\HomePages;
+use Idno\Http\Webmention\ReceivedWebmention;
+use Idno\Http\Webmention\ReceivesWebmentions;
 use Idno\Http\Webmention\WebmentionTarget;
 use Idno\Http\Webmention\WebmentionTargets;
 use Idno\Kernel;
 use Idno\Legacy\LegacyDispatcher;
 use Idno\Legacy\LegacyWebmentionTargets;
+use Idno\Portability\SiteFacts;
 use PHPUnit\Framework\TestCase;
+use Psr\Container\ContainerInterface;
+use Psr\Log\AbstractLogger;
+use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
+use Symfony\Component\DependencyInjection\ServiceLocator;
 use Symfony\Component\Routing\RequestContext;
+use Symfony\Component\Routing\Route;
+use Symfony\Component\Routing\RouteCollection;
 use Symfony\Component\Routing\RouterInterface;
+use Tests\Fixtures\PingController;
+use Tests\Fixtures\SitePageFixtureController;
 use Tests\Fixtures\WebmentionReceiverProbe;
 
 /**
@@ -72,17 +86,37 @@ final class WebmentionTargetsTest extends TestCase
         $this->assertSame(['page' => 'Idno\Pages\Homepage', 'route' => 'idno_content', 'arguments' => ['note/article'], 'legacy' => false], $this->answer($this->targets()->resolve($this->base() . 'content/note/article')));
     }
 
-    public function testTheFeedAndTagAddressesResolveToARouteTheirReceiverRefuses(): void
+    public function testTheAddressesOfPagesThatTakeNoMentionAreNotTargets(): void
+    {
+        // a page a controller serves whose receiver refuses its route (the feeds, the search and the tags of the home page's stream), and one with no receiver (the small
+        // public endpoints): no target, so a caller answers "no such target" before it fetches a source
+        foreach (['feed.xml', 'feed', 'rss.xml', 'search', 'tag/books', 'robots.txt', 'chrome/manifest.json', 'service-worker.min.js', 'search/mentions.json', 'service/security/csrftoken/', '.well-known/webfinger'] as $path) {
+            $this->assertNull($this->targets()->resolve($this->base() . $path), $path);
+        }
+    }
+
+    public function testThePagesOfTheHomePagesReceiverAreTargets(): void
     {
         $pages = Idno::container()->get(HomePages::class);
-        foreach (['feed.xml' => 'idno_feed_xml', 'feed' => 'idno_feed', 'rss.xml' => 'idno_rss_xml', 'search' => 'idno_search', 'tag/books' => 'idno_tag'] as $path => $route) {
+        foreach (['', 'content/note'] as $path) {
             $target = $this->targets()->resolve($this->base() . $path);
 
             $this->assertNotNull($target, $path);
-            $this->assertFalse($target->isLegacy(), $path);
-            $this->assertSame(['Idno\Pages\Homepage', $route], [$target->page, $target->route], $path);
-            $this->assertFalse($pages->receivesFor($target->route), $path);
+            $this->assertTrue($pages->receivesFor($target->route), $path);
         }
+    }
+
+    public function testAPageThatTakesNoMentionIsNoTarget(): void
+    {
+        // the legacy pages whose class does not declare a webmentionContent() of its own answered false: no target
+        foreach (['edit/abc123', 'webmention/', 'stream/', 'admin/', 'actor/ada', 'actor/ada/inbox', 'account/settings/', 'file/abc123', 'drafts/', 'status/edit/'] as $path) {
+            $this->assertNull($this->targets()->resolve($this->base() . $path), $path);
+        }
+    }
+
+    public function testTheFrontControllerIsTheHomePage(): void
+    {
+        $this->assertSame('idno_home', $this->targets()->resolve($this->base() . 'index.php')?->route);
     }
 
     public function testTheHomePageServiceIsTheReceiverOfTheHomePage(): void
@@ -122,58 +156,142 @@ final class WebmentionTargetsTest extends TestCase
     }
 
     /**
-     * @return array<string, array{0: string}>
+     * A path a registered pattern of the legacy route table matches, made from the pattern (null for one this does not know how to write out).
      */
-    public static function addresses(): array
+    private static function sampleOf(string $pattern): ?string
     {
-        return [
-            'the home page' => [''],
-            'a content stream' => ['content/note'],
-            'the feed' => ['feed.xml'],
-            'a tag' => ['tag/books'],
-            'a search' => ['search'],
-            'a short link' => ['s/abc123'],
-            'a post by its id' => ['view/abc123'],
-            'a profile' => ['profile/ada'],
-            'a static page' => ['pages/about'],
-            'a page of a controller that is no site page' => ['_test/ping'],
-            'the edit page' => ['edit/abc123'],
-            'an address no page serves' => ['no/such/page/here/at/all/x.y'],
-            'robots.txt' => ['robots.txt'],
-            'the webmention endpoint' => ['webmention/'],
-        ];
+        $sample = $pattern;
+        foreach (['[0-9]{4}' => '2026', '[0-9]{2}' => '11', '[A-Za-z\\-\\/]+' => 'note', '[A-Za-z0-9\\-]+' => 'abc123', '[A-Za-z0-9]+' => 'abc123', '[0-9]+' => '7', '[^/.]+' => 'abc', '[^\\/]+' => 'abc', '[^\\s]+' => 'abc', '.*' => 'x'] as $from => $to) {
+            $sample = str_replace($from, $to, $sample);
+        }
+        $sample = preg_replace(['~\)[+?]~', '~[()]~', '~([a-z])\?~', '~/\?$~'], [')', '', '$1', ''], $sample);
+        $sample = strtr((string) $sample, ['\\.' => '.', '\\-' => '-', '\\/' => '/']);
+        if (preg_match('~[\[\]()*+?|{}\\^$]~', $sample) === 1) {
+            return null;
+        }
+
+        return '/' . ltrim($sample, '/');
     }
 
     /**
-     * What the legacy lookup the endpoint used (`PageHandler::getRoute()`) built for an address is what the resolver names, with the same arguments, for every address
-     * a class served; and where the legacy lookup found no page (a page a controller serves, or nothing) the resolver names no legacy page.
+     * The addresses of the booted site: a sample of every pattern of its legacy route table, every content type's own permalink (an entity with a fixed id and slug, as it
+     * prints its address), its annotations, and the static page.
      *
-     * @dataProvider addresses
+     * @return list<string>
      */
-    public function testEveryAddressIsTheLegacyLookupsPageOrNoLegacyPage(string $path): void
+    private function addresses(): array
     {
-        $address = $this->base() . $path;
-        $current = Idno::site()->currentPage();
-        try {
-            $legacy = Idno::site()->routes()->getRoute($address);
-        } finally {
-            if ($current instanceof Page) {
-                Idno::site()->setCurrentPage($current);
+        $paths = [];
+        foreach (Idno::site()->routes() as $pattern => $handler) {
+            $sample = self::sampleOf((string) $pattern);
+            if ($sample !== null) {
+                $paths[] = $sample;
             }
         }
-        $target = $this->targets()->resolve($address);
+        foreach (ContentType::getRegistered() as $type) {
+            $class = $type->getEntityClass();
+            $entity = new $class();
+            $entity->_id = 'abc123def456';
+            $entity->slug = 'hello-world';
+            $entity->created = 1790000000;
+            $permalink = substr($entity->getURL(), strlen($this->base()) - 1);
+            array_push($paths, $permalink, $permalink . '/annotations/abc123', $permalink . '/annotations/abc123/delete');
+        }
+        $paths[] = '/';
+        $paths[] = '/pages/about';
+        $paths[] = '/content/note/article';
+        $paths[] = '/no/such/page/here/at/all/x.y';
 
-        if ($legacy instanceof Page) {
-            $this->assertNotNull($target, $path);
-            // (a shell a controller serves is the legacy lookup's page and the controller's page by name)
-            $this->assertTrue($target->isLegacy() || $target->page === get_class($legacy), $path);
-            $this->assertSame(get_class($legacy), $target->page, $path);
-            if ($target->isLegacy()) {
-                $this->assertSame($legacy->arguments, $target->arguments, $path);
+        return array_values(array_unique($paths));
+    }
+
+    /**
+     * Each address, and the spellings of it a sender may use: a trailing slash added or taken off, a query string, a fragment, a percent-encoded character in the last
+     * segment (both cases of the hex digits), and `.md`.
+     *
+     * @return list<string>
+     */
+    private static function spellingsOf(string $path): array
+    {
+        $plain = rtrim($path, '/') === '' ? '/' : rtrim($path, '/');
+
+        return array_values(array_unique([$path, $plain, $plain . '/', $plain . '?_t=json', $plain . '#frag', $plain . '%C3%A9', $plain . '%c3%a9', $plain . '.md']));
+    }
+
+    /**
+     * The lookup `PageHandler::getRoute()` made, without building the page (a page's constructor may send a header): the first registered pattern that matches the
+     * path of the address, and the class it names when that is a page.
+     *
+     * @return array{class: class-string<Page>, arguments: list<string>}|null
+     */
+    private function legacyLookup(string $address): ?array
+    {
+        $path = parse_url($address, PHP_URL_PATH) ?: '/';
+        $routes = Idno::site()->routes();
+        foreach ($routes as $pattern => $handler) {
+            if (preg_match('#^/?' . strtr((string) $pattern, $routes->routeTokens()) . '/?$#', $path, $matches)) {
+                if (!is_string($handler) || !class_exists($handler) || !is_a($handler, Page::class, true)) {
+                    return null;
+                }
+                unset($matches[0]);
+
+                return ['class' => ltrim($handler, '\\'), 'arguments' => array_values($matches)];
             }
-        } else {
-            $this->assertTrue($target === null || !$target->isLegacy(), $path);
         }
+
+        return null;
+    }
+
+    /**
+     * What the legacy lookup the endpoint made (`PageHandler::getRoute()`) built for each address a site has, against what the resolver says, for every spelling of it:
+     * a page that declares a `webmentionContent()` of its own is a target (a legacy one with the same class and arguments, or a page a controller serves whose receiver takes
+     * the route); a page that does not (the base page answers false) and an address no page serves are no target.
+     */
+    public function testEveryAddressOfTheSiteIsTheLegacyLookupsPageOrNoTarget(): void
+    {
+        $probe = Idno::container()->get(WebmentionReceiverProbe::class);
+        $mismatches = [];
+        $targets = 0;
+        $checked = 0;
+        foreach ($this->addresses() as $path) {
+            foreach (self::spellingsOf($path) as $spelling) {
+                $address = rtrim($this->base(), '/') . $spelling;
+                $legacy = $this->legacyLookup($address);
+                if ($legacy === null && str_ends_with($spelling, '.md')) {
+                    // the Markdown form of a permalink is the permalink (the legacy lookup did not strip the suffix)
+                    $stripped = $this->legacyLookup(substr($address, 0, -3));
+                    $legacy = $stripped !== null && is_a($stripped['class'], MarkdownPermalink::class, true) ? $stripped : null;
+                }
+                $target = $this->targets()->resolve($address);
+                ++$checked;
+
+                $takesMentions = $legacy !== null && (new \ReflectionMethod($legacy['class'], 'webmentionContent'))->getDeclaringClass()->getName() !== Page::class;
+                if (!$takesMentions) {
+                    if ($target !== null) {
+                        $mismatches[] = $address . ' is no page that takes mentions, and resolved to ' . json_encode($this->answer($target));
+                    }
+                    continue;
+                }
+                ++$targets;
+                if ($target === null) {
+                    $mismatches[] = $address . ' is the page ' . $legacy['class'] . ', which takes mentions, and resolved to nothing';
+                } elseif ($target->isLegacy()) {
+                    if ($target->page !== $legacy['class'] || $target->arguments !== $legacy['arguments']) {
+                        $mismatches[] = $address . ' is ' . $legacy['class'] . json_encode($legacy['arguments']) . ' and resolved to ' . json_encode($this->answer($target));
+                    }
+                } else {
+                    $receiver = $probe->receiverOf($target->page);
+                    if ($target->page !== $legacy['class'] || $receiver === null || !$receiver->receivesFor($target->route)) {
+                        $mismatches[] = $address . ' is ' . $legacy['class'] . ' and resolved to a page its receiver does not take: ' . json_encode($this->answer($target));
+                    }
+                }
+            }
+        }
+
+        $this->assertSame([], $mismatches);
+        // (the test is not vacuous: it looked at a good many addresses, and many of them are pages that take mentions)
+        $this->assertGreaterThan(600, $checked);
+        $this->assertGreaterThan(60, $targets);
     }
 
     // ------------------------------------------------------------------ whose address it is
@@ -205,6 +323,13 @@ final class WebmentionTargetsTest extends TestCase
         $this->assertNull($this->targets()->resolve($other));
     }
 
+    public function testAnAddressSymfonyWillNotMakeARequestOfIsNotFound(): void
+    {
+        // (a backslash in the path: building the request throws, and a sender must not be able to make the endpoint fail with it)
+        $this->assertNull($this->targets()->resolve($this->base() . 'view/abc\\123'));
+        $this->assertNull($this->targets()->resolve($this->base() . "view/abc\x00123"));
+    }
+
     public function testAnAddressNothingServesIsNotFound(): void
     {
         $this->assertNull($this->targets()->resolve($this->base() . 'no/such/page/here/at/all/x.y'));
@@ -217,38 +342,74 @@ final class WebmentionTargetsTest extends TestCase
         }
     }
 
-    /**
-     * @return array<string, array{0: string, 1: string, 2: bool}> the site's address, a target, whether it is the site's
-     */
-    public static function hostRules(): array
+    public function testTheWwwCounterpartOfTheSitesHostIsATarget(): void
     {
-        return [
-            'same address' => ['https://example.com/', 'https://example.com/feed.xml', true],
-            'the other scheme' => ['https://example.com/', 'http://example.com/feed.xml', true],
-            'the other scheme of a site over http' => ['http://example.com/', 'https://example.com/feed.xml', true],
-            'host in another case' => ['https://example.com/', 'https://EXAMPLE.com/feed.xml', true],
-            'a default port written out' => ['https://example.com/', 'https://example.com:443/feed.xml', true],
-            'the other scheme default port written out' => ['https://example.com/', 'http://example.com:80/feed.xml', true],
-            'the sites own port' => ['https://example.com:8443/', 'https://example.com:8443/feed.xml', true],
-            'the sites own port over the other scheme' => ['https://example.com:8443/', 'http://example.com:8443/feed.xml', true],
-            'another explicit port' => ['https://example.com/', 'https://example.com:8443/feed.xml', false],
-            'another explicit port than the sites' => ['https://example.com:8443/', 'https://example.com:9443/feed.xml', false],
-            'the default port of a site on another' => ['https://example.com:8443/', 'https://example.com:443/feed.xml', true],
-            'a subdomain' => ['https://example.com/', 'https://www.example.com/feed.xml', false],
-            'a longer host' => ['https://example.com/', 'https://example.com.evil.example/x', false],
-            'a user name in front of another host' => ['https://example.com/', 'https://example.com@evil.example/x', false],
-            'another host' => ['https://example.com/', 'https://evil.example/x', false],
-        ];
+        $this->assertNotNull($this->resolverFor('https://example.com/')->resolve('https://www.example.com/'));
+        $this->assertNotNull($this->resolverFor('https://www.example.com/')->resolve('https://example.com/'));
+        $this->assertNull($this->resolverFor('https://example.com/')->resolve('https://blog.example.com/'));
     }
 
-    /**
-     * @dataProvider hostRules
-     */
-    public function testTheHostRule(string $site, string $target, bool $accepted): void
+    public function testAHostTheConfigurationListsIsATarget(): void
     {
-        $targets = $this->resolverFor($site);
+        $resolver = $this->resolverFor('https://example.com/', listed: ['old.example']);
 
-        $this->assertSame($accepted, $targets->resolve($target) !== null, $target . ' against ' . $site);
+        $this->assertSame('idno_home', $resolver->resolve('https://old.example/')?->route);
+        $this->assertNull($resolver->resolve('https://other.example/'));
+        $this->assertNull($resolver->resolve('https://old.example:8443/'));
+        $this->assertNull($this->resolverFor('https://example.com/')->resolve('https://old.example/'));
+    }
+
+    public function testAnEntryThatIsNoHostStopsTheServiceBeingBuilt(): void
+    {
+        try {
+            $this->resolverFor('https://example.com/', listed: ['https://old.example/path']);
+            $this->fail('the service was built with an entry that is no host');
+        } catch (\LogicException $e) {
+            $this->assertStringContainsString('webmention_target_hosts', $e->getMessage());
+            $this->assertStringContainsString('https://old.example/path', $e->getMessage());
+        }
+    }
+
+    public function testASiteWithNoUrlSettingIsMatchedByTheAddressItDetected(): void
+    {
+        $logger = new class extends AbstractLogger {
+            /** @var list<array{0: mixed, 1: string}> */
+            public array $lines = [];
+
+            public function log($level, \Stringable|string $message, array $context = []): void
+            {
+                $this->lines[] = [$level, (string) $message];
+            }
+        };
+        $resolver = $this->resolverFor(null, detected: 'https://detected.example/', logger: $logger);
+
+        $this->assertSame('idno_home', $resolver->resolve('https://detected.example/')?->route);
+        $this->assertSame('idno_home', $resolver->resolve('http://detected.example/')?->route);
+        // never by the path alone
+        $this->assertNull($resolver->resolve('https://other.example/'));
+        $this->assertNull($resolver->resolve('/content/note'));
+        // one warning a process, naming the setting and no host
+        $this->assertCount(1, $logger->lines);
+        $this->assertSame('warning', $logger->lines[0][0]);
+        $this->assertStringContainsString('url', $logger->lines[0][1]);
+        $this->assertStringNotContainsString('detected.example', $logger->lines[0][1]);
+    }
+
+    public function testASiteWithAnUrlSettingLogsNothingAndIgnoresTheDetectedAddress(): void
+    {
+        $logger = new class extends AbstractLogger {
+            public int $count = 0;
+
+            public function log($level, \Stringable|string $message, array $context = []): void
+            {
+                ++$this->count;
+            }
+        };
+        $resolver = $this->resolverFor('https://example.com/', detected: 'https://detected.example/', logger: $logger);
+
+        $this->assertNotNull($resolver->resolve('https://example.com/'));
+        $this->assertNull($resolver->resolve('https://detected.example/'));
+        $this->assertSame(0, $logger->count);
     }
 
     // ------------------------------------------------------------------ no page is built, and the router is left as it was
@@ -262,7 +423,7 @@ final class WebmentionTargetsTest extends TestCase
         $current = Idno::site()->currentPage();
         Idno::site()->events()->addListener('page/ready', $listener);
         try {
-            foreach (['', 'feed.xml', 'view/abc123', 'pages/about'] as $path) {
+            foreach (['', 'content/note', 'view/abc123', 'pages/about'] as $path) {
                 $this->assertNotNull($this->targets()->resolve($this->base() . $path), $path);
             }
         } finally {
@@ -271,6 +432,73 @@ final class WebmentionTargetsTest extends TestCase
 
         $this->assertSame([], $events);
         $this->assertSame($current, Idno::site()->currentPage());
+    }
+
+    private function stubRouter(array $match, ?RouteCollection $routes = null): RouterInterface
+    {
+        return new class(Idno::container()->get('router'), $match, $routes ?? new RouteCollection()) implements RouterInterface {
+            public function __construct(private readonly RouterInterface $router, private readonly array $match, private readonly RouteCollection $routes)
+            {
+            }
+
+            public function setContext(RequestContext $context): void
+            {
+                $this->router->setContext($context);
+            }
+
+            public function getContext(): RequestContext
+            {
+                return $this->router->getContext();
+            }
+
+            public function getRouteCollection(): RouteCollection
+            {
+                return $this->routes;
+            }
+
+            public function generate(string $name, array $parameters = [], int $referenceType = self::ABSOLUTE_PATH): string
+            {
+                return $this->router->generate($name, $parameters, $referenceType);
+            }
+
+            public function match(string $pathinfo): array
+            {
+                return $this->match;
+            }
+        };
+    }
+
+    public function testTheArgumentsOfAPageAreInTheOrderOfItsPath(): void
+    {
+        // (the matcher's array puts a route's defaults first: the order of the path is the route's)
+        $routes = new RouteCollection();
+        $routes->add('idno_stub', new Route('/{lead}stub/{second}/{first}{slash}', ['lead' => '', 'slash' => '']));
+        $router = $this->stubRouter(['lead' => '', 'slash' => '', 'first' => 'one', 'second' => 'two', '_route' => 'idno_stub', '_controller' => SitePageFixtureController::class . '::state'], $routes);
+        $receiver = new class implements ReceivesWebmentions {
+            public function receivesFor(string $route): bool
+            {
+                return true;
+            }
+
+            public function receiveWebmention(string $route, array $arguments, ReceivedWebmention $mention): bool
+            {
+                return true;
+            }
+        };
+        $resolver = $this->resolverFor($this->base(), $router, receivers: new ServiceLocator(['Tests\Fixtures\SitePageFixture' => static fn (): ReceivesWebmentions => $receiver]));
+
+        $target = $resolver->resolve($this->base() . 'stub/two/one');
+
+        $this->assertSame(['Tests\Fixtures\SitePageFixture', 'idno_stub', ['two', 'one']], [$target?->page, $target?->route, $target?->arguments]);
+    }
+
+    public function testARouteThatIsNoSitePageIsNoPageOfTheSiteEvenWhereTheLegacyTableHasOne(): void
+    {
+        // the table serves /view/<id> with a page that takes mentions: a GET is answered by the route that matched, which is no page of the site's
+        $router = $this->stubRouter(['_route' => 'idno_test_ping', '_controller' => PingController::class]);
+
+        $this->assertNull($this->resolverFor($this->base(), $router)->resolve($this->base() . 'view/abc123'));
+        $this->assertNotNull($this->resolverFor($this->base())->resolve($this->base() . 'view/abc123'));
     }
 
     public function testTheRoutersContextIsRestored(): void
@@ -336,11 +564,26 @@ final class WebmentionTargetsTest extends TestCase
         return [$context->getBaseUrl(), $context->getPathInfo(), $context->getMethod(), $context->getHost(), $context->getScheme(), $context->getHttpPort(), $context->getHttpsPort(), $context->getQueryString(), $context->getParameters()];
     }
 
-    private function resolverFor(string $siteUrl, ?RouterInterface $router = null): LegacyWebmentionTargets
+    /**
+     * @param list<string>|string|null $listed the `webmention_target_hosts` setting
+     */
+    private function resolverFor(?string $siteUrl, ?RouterInterface $router = null, mixed $listed = null, string $detected = '/', ?LoggerInterface $logger = null, ?ContainerInterface $receivers = null): LegacyWebmentionTargets
     {
         $dispatcher = Idno::container()->get(LegacyDispatcher::class);
+        $facts = $this->createStub(SiteFacts::class);
+        $facts->method('url')->willReturn($detected);
+        $values = ($siteUrl !== null ? ['url' => $siteUrl] : []) + ($listed !== null ? ['webmention_target_hosts' => $listed] : []);
+        $logger ??= new NullLogger();
 
-        return new LegacyWebmentionTargets($router ?? Idno::container()->get('router'), static fn (): LegacyDispatcher => $dispatcher, Idno::container()->get('kernel'), new BootConfig(['url' => $siteUrl], false));
+        return new LegacyWebmentionTargets(
+            $router ?? Idno::container()->get('router'),
+            static fn (): LegacyDispatcher => $dispatcher,
+            Idno::container()->get('kernel'),
+            new BootConfig($values, false),
+            $facts,
+            $receivers ?? new ServiceLocator(['Idno\Pages\Homepage' => static fn (): HomePages => Idno::container()->get(HomePages::class)]),
+            static fn (): LoggerInterface => $logger,
+        );
     }
 
     // ------------------------------------------------------------------ a site configured another way, in a process of its own
@@ -376,7 +619,7 @@ final class WebmentionTargetsTest extends TestCase
             $answers = $this->resolveInAProcess('mentionable', $this->base(), [$address, $this->base() . '_test/mentionable/xyz/', $this->base() . 'feed.xml'], $record);
 
             $this->assertSame(['page' => 'Tests\Fixtures\MentionablePage', 'route' => '', 'arguments' => ['xyz'], 'legacy' => true, 'received' => true], $answers[$address]);
-            $this->assertSame('idno_feed_xml', $answers[$this->base() . 'feed.xml']['route']);
+            $this->assertNull($answers[$this->base() . 'feed.xml']);
             // the page was built as the router builds it: its arguments, marked a permalink, and given what the endpoint fetched
             $lines = array_map(static fn (string $line): array => json_decode($line, true), array_filter(explode("\n", (string) file_get_contents($record))));
             $this->assertCount(2, $lines);
@@ -393,7 +636,7 @@ final class WebmentionTargetsTest extends TestCase
 
         $this->assertSame('idno_home', $answers[$url]['route']);
         $this->assertSame(['idno_content', ['note']], [$answers[$url . 'content/note']['route'], $answers[$url . 'content/note']['arguments']]);
-        $this->assertSame('idno_feed_xml', $answers[$url . 'feed.xml']['route']);
+        $this->assertNull($answers[$url . 'feed.xml']);
         $this->assertSame(['Idno\Pages\Entity\View', ['abc123']], [$answers[$url . 'view/abc123']['page'], $answers[$url . 'view/abc123']['arguments']]);
         $this->assertSame('IdnoPlugins\StaticPages\Pages\View', $answers[$url . 'pages/about']['page']);
         // an address on the host that is not under the site's directory is not the site's page
@@ -407,7 +650,7 @@ final class WebmentionTargetsTest extends TestCase
         $kernel->boot();
         $resolver = new LegacyWebmentionTargets($kernel->getContainer()->get('router'), static function (): never {
             throw new \LogicException('the legacy dispatcher is not built without the legacy application');
-        }, $kernel, new BootConfig(['url' => 'https://example.com/'], false));
+        }, $kernel, new BootConfig(['url' => 'https://example.com/'], false), $this->createStub(SiteFacts::class), new ServiceLocator([]), static fn (): LoggerInterface => new NullLogger());
 
         $this->assertNull($resolver->resolve('https://example.com/'));
     }
