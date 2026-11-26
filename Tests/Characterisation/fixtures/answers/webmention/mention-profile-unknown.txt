@@ -1,0 +1,12 @@
+status 400
+cache-control: no-store, no-cache, must-revalidate
+content-type: text/html; charset=UTF-8
+expires: <past>
+link: <{site}/indieauth/auth>; rel="authorization_endpoint"
+link: <{site}/indieauth/token>; rel="token_endpoint"
+link: <{site}/micropub/endpoint>; rel="micropub"
+pragma: no-cache
+x-clacks-overhead: GNU Terry Pratchett
+x-powered-by: https://idno.co
+
+{"error":"source_not_supported","error_text":"Could not interpret source as a comment."}

@@ -2388,6 +2388,12 @@ the tag pages and the small public endpoints are served through them (and the fi
     CI's servers and tests (`http://localhost/`), the console (the same `config.ini`), and a subprocess
     server a test starts on another port (its `IDNO_URL`). Neither the wrapper nor the exemption exists
     outside the test container: both are in `Tests/` and wired only in `config/services_test.php`.
+    A test that needs the site to fetch a PAGE from a remote party (a webmention's source) with the real checks in front of the fetch stores the page with
+    `PUT /_test/remote/<name>` (`Tests\Fixtures\RemoteDocumentController`; `?status=` and `?type=`; `GET /_test/remote-fetched` lists, and forgets, the names
+    fetched) and names it `http://93.184.216.34/<name>`: a public address, which `UrlValidator::isSafeUrl()` accepts with no lookup, that
+    `LocalOnlyHttpClient` answers from that route when the site's environment has `IDNO_TEST_REMOTE_STAND_IN=93.184.216.34:80` (a stand-in for another
+    server: the request goes to the same path under `/_test/remote` of the site's own origin; read at each request like `IDNO_TEST_HTTP_ALLOW`).
+    The recordings of the webmention endpoint (`Tests/Characterisation/WebmentionAnswersTest`) are made so.
   - A plugin's test that needs a remote server to answer (the ActivityPub inbox fetching a sender's actor
     document for its key) installs mock clients with `Webservice::useClient()` and records what they were
     sent: `IdnoPlugins/ActivityPub/Tests/ServesTestActor` is the trait the inbox signature tests use. Tests

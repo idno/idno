@@ -51,7 +51,7 @@ In the test environment the site also serves `/_test/` routes (the controllers i
 No test may make a request to a real server. In the test environment (`APP_ENV=test`, the rig and PHPUnit) the site's
 HTTP clients refuse every host but the site's own origin, with `No network in tests: <host>`, so a forgotten request fails
 at once instead of reaching the internet. A test that needs another origin lists it in the `IDNO_TEST_HTTP_ALLOW`
-environment variable (`host:port`, comma separated). To stand in for a remote server, use the `/_test/` routes above, or
+environment variable (`host:port`, comma separated). To stand in for a remote server, use the `/_test/` routes above (for a page the site fetches from a remote party with the real address checks in front of it, such as a webmention's source: store it with `PUT /_test/remote/<name>`, give the site's environment `IDNO_TEST_REMOTE_STAND_IN=93.184.216.34:80` and name the page `http://93.184.216.34/<name>`), or
 pass a `Symfony\Component\HttpClient\MockHttpClient` to the code under test: `Webservice::useClient()` for
 `Idno\Core\Webservice`, a constructor argument for a service, or the setter a class offers
 (`IdnoPlugins\StandardSiteSync\ATProtoClient::useClient()`). A mock client records the method, URL, headers and body of each

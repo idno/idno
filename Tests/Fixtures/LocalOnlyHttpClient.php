@@ -23,7 +23,9 @@ use Symfony\Contracts\Service\ResetInterface;
  * The remote client refuses private networks; its test wiring gives the wrapper a second client, the
  * site's, for the site's own origin only (an origin listed in IDNO_TEST_HTTP_ALLOW still meets the
  * refusal), so that this site's routes (on a loopback address) can stand
- * in for remote servers. Nothing in production can reach this: the class is in Tests/ and only
+ * in for remote servers. The origins IDNO_TEST_REMOTE_STAND_IN lists (comma-separated host:port, read like IDNO_TEST_HTTP_ALLOW) are stand-ins for other
+ * servers: a request to one is made to the same path under `/_test/remote` of the site's own origin (`RemoteDocumentController`), so a test can
+ * serve a page that the site fetches from a public address, which no request may reach. Nothing in production can reach this: the class is in Tests/ and only
  * config/services_test.php wires it.
  */
 final class LocalOnlyHttpClient implements HttpClientInterface, ResetInterface
@@ -130,6 +132,7 @@ final class LocalOnlyHttpClient implements HttpClientInterface, ResetInterface
         $firstOrigin = self::origin($url);
 
         for ($hop = 0;; $hop++) {
+            $url = $this->standIn($url);
             [$origin, $client] = $this->admit($url);
 
             $headers = $options['headers'] ?? [];
@@ -161,6 +164,22 @@ final class LocalOnlyHttpClient implements HttpClientInterface, ResetInterface
                 $options['headers'] = self::withoutHeaders($options['headers'], ['authorization', 'cookie']);
             }
         }
+    }
+
+    /**
+     * The URL, or where a stand-in for the server it names is: the same path (and query) under `/_test/remote` of the site's own origin.
+     */
+    private function standIn(string $url): string
+    {
+        $stand = $_SERVER['IDNO_TEST_REMOTE_STAND_IN'] ?? '';
+        $origin = self::origin($url);
+        $site = ($this->siteOrigins)()[0] ?? null;
+        if ($origin === null || $site === null || !in_array($origin, array_map('trim', explode(',', strtolower(is_string($stand) ? $stand : ''))), true)) {
+            return $url;
+        }
+        $parts = parse_url($url);
+
+        return 'http://' . $site . '/_test/remote' . ($parts['path'] ?? '/') . (isset($parts['query']) ? '?' . $parts['query'] : '');
     }
 
     /**

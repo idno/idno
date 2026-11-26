@@ -1,0 +1,27 @@
+status 200
+content-type: text/plain
+
+{
+    "reply": {
+        "{site}/2026/bob-keeps-a-note-to-himself/annotations/{id}": {
+            "permalink": "http://93.184.216.34/owner-cookie",
+            "owner_name": "Remote Author",
+            "owner_url": "https://remote.example/",
+            "owner_image": "",
+            "content": "The text of owner-cookie",
+            "time": "{time}",
+            "title": "A page on another site",
+            "made_here": false
+        },
+        "{site}/2026/bob-keeps-a-note-to-himself/annotations/{id}": {
+            "permalink": "http://93.184.216.34/admin-private",
+            "owner_name": "Remote Author",
+            "owner_url": "https://remote.example/",
+            "owner_image": "",
+            "content": "The text of admin-private",
+            "time": "{time}",
+            "title": "A page on another site",
+            "made_here": false
+        }
+    }
+}
