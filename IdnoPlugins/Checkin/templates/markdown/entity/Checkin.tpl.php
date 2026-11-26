@@ -7,9 +7,10 @@
 $object = $vars['object'];
 $lang = \Idno\Core\Idno::site()->language();
 
-$place = $object->canSeePreciseLocation() ? trim(strip_tags((string) $object->placename)) : '';
-$lat = $object->lat();
-$long = $object->long();
+$location = $object->location();
+$place = trim(strip_tags($location['placename']));
+$lat = $location['latitude'];
+$long = $location['longitude'];
 
 if ($place !== '' || ($lat !== null && $long !== null)) {
     ?>

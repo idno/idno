@@ -545,6 +545,68 @@ namespace Idno\Common {
         }
 
         /**
+         * The title of this entity as a visitor who is not signed in reads it. This is the
+         * title for everything that leaves the request at hand: the entity's address (its slug),
+         * the title that is stored (which search looks in), and whatever is sent to other
+         * servers, all of which are put together while the owner is signed in. The same as
+         * getTitle() unless an entity's title depends on who reads it.
+         *
+         * @return string
+         */
+        function getPublicTitle()
+        {
+            return $this->getTitle();
+        }
+
+        /**
+         * Where this entity is, as far as a viewer may be told. An entity that keeps its
+         * location from some viewers (a check-in, for a while) overrides this method, and only
+         * this one: every form of an entity that gives a position, a place name or an address
+         * (templates, feeds, JSON, KML, Markdown, ActivityPub) reads them here and never from
+         * the stored fields.
+         *
+         * @param  \Idno\Entities\User|null $viewer A member, or null for a visitor who is not signed
+         *                                           in, which is also what any other server is
+         * @return array 'precise' (false when the viewer is given less than is stored),
+         *               'latitude', 'longitude', 'placename' and 'address'; a part the viewer
+         *               may not be told, or that the entity does not have, is empty
+         */
+        function locationFor($viewer = null): array
+        {
+            return [
+                'precise'   => true,
+                'latitude'  => $this->lat,
+                'longitude' => $this->long,
+                'placename' => $this->placename,
+                'address'   => $this->address,
+            ];
+        }
+
+        /**
+         * Where this entity is, as far as whoever is signed in for this request may be told
+         *
+         * @return array As locationFor()
+         */
+        function location(): array
+        {
+            $session = \Idno\Core\Idno::site()->session();
+            $viewer  = $session ? $session->currentUser() : null;
+
+            return $this->locationFor($viewer instanceof \Idno\Entities\User ? $viewer : null);
+        }
+
+        /**
+         * Where this entity is, as far as a visitor who is not signed in may be told: what to
+         * give other servers, whoever is signed in.
+         *
+         * @return array As locationFor()
+         */
+        function publicLocation(): array
+        {
+            return $this->locationFor(null);
+        }
+
+        /**
          * Return the created timestamp of the entity.
          * @return unix timestamp
          */
@@ -748,7 +810,8 @@ namespace Idno\Common {
             // Automatically add a slug (if one isn't set and this is a new entity)
 
             if (!$this->getSlug() && empty($this->_id)) {
-                if (!($title = $this->getTitle())) {
+                // The address is read by everybody, so it is made from the title everybody may read
+                if (!($title = $this->getPublicTitle())) {
                     if (!($title = $this->getDescription())) {
                         $title = md5(mt_rand() . microtime(true));
                     }
@@ -1325,7 +1388,7 @@ namespace Idno\Common {
          */
         function getPrettyURLTitle()
         {
-            $clean = preg_replace("/[^a-zA-Z0-9\/_| -]/u", '', $this->getTitle());
+            $clean = preg_replace("/[^a-zA-Z0-9\/_| -]/u", '', $this->getPublicTitle());
             $clean = strtolower(trim($clean, '_'));
             $clean = preg_replace("/[\/_| -]+/u", '-', $clean);
 
@@ -2123,11 +2186,15 @@ namespace Idno\Common {
                 'updated' => date(\DateTime::RFC3339, $this->updated),
                 'url' => $this->getURL()
             );
+            // Where the entity is, as far as whoever asks may be told
+            $location = $this->location();
+            foreach (['latitude' => 'latitude', 'longitude' => 'longitude', 'placename' => 'placeName', 'address' => 'address'] as $part => $parameter_name) {
+                if (!empty($location[$part])) {
+                    $object[$parameter_name] = $location[$part];
+                }
+            }
+
             $extra_properties = [
-                'lat' => 'latitude',
-                'long' => 'longitude',
-                'placename' => 'placeName',
-                'address' => 'address',
                 'tags' => 'tags',
                 'username' => 'username'
             ];
@@ -2254,9 +2321,10 @@ namespace Idno\Common {
 
             unset($drawn_content);
 
-            if (!empty($item->lat) && !empty($item->long)) {
-                $rssItem->appendChild($page->createElement('geo:lat', $item->lat));
-                $rssItem->appendChild($page->createElement('geo:long', $item->long));
+            $location = $item->location();
+            if (!empty($location['latitude']) && !empty($location['longitude'])) {
+                $rssItem->appendChild($page->createElement('geo:lat', (string) $location['latitude']));
+                $rssItem->appendChild($page->createElement('geo:long', (string) $location['longitude']));
             }
             if ($attachments = $item->getAttachments()) {
                 foreach ($attachments as $attachment) {

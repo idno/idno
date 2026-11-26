@@ -66,8 +66,8 @@ namespace IdnoPlugins\Webhooks {
                             $payload['username'] = $owner->getHandle();
                         }
                         $payload['content_type'] = $object->getActivityStreamsObjectType();
-                        $payload['text'] = $object->getTitle() . ' <' . $object->getURL() . '>';
-                        $payload['title'] = $object->getTitle();
+                        $payload['text'] = $object->getPublicTitle() . ' <' . $object->getURL() . '>';
+                        $payload['title'] = $object->getPublicTitle();
 
                         // A hook the admin configured is the site's to call; any other URL is one a member
                         // typed, and goes through the client that refuses private networks.

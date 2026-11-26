@@ -1,4 +1,4 @@
-{% set post_tags = entity_value(object, 'tags') %}{% set map_id = entity_value(object, '_id') %}
+{% set post_tags = entity_value(object, 'tags') %}{% set map_id = entity_value(object, '_id') %}{# Where the check-in was made, as far as whoever is reading may be told #}{% set location = object.location() %}
 
 <div>
 
@@ -9,9 +9,9 @@
     </h2>
 
     <span class="p-location u-checkin h-card">
-        <data class="p-name" value="{{ entity_value(object, 'placename') }}"></data>
-        <data class="p-latitude" value="{{ object.lat() }}"></data>
-        <data class="p-longitude" value="{{ object.long() }}"></data>
+        {% if location.placename != '' %}<data class="p-name" value="{{ location.placename }}"></data>{% endif %}
+        <data class="p-latitude" value="{{ location.latitude }}"></data>
+        <data class="p-longitude" value="{{ location.longitude }}"></data>
     </span>
 
     {% if not feed_view %}
@@ -29,10 +29,10 @@
                 var map = L.map('map_{{ map_id|e('js') }}', {
                     touchZoom: false,
                     scrollWheelZoom: false
-                }).setView([{{ object.lat() }}, {{ object.long() }}], 16);
+                }).setView([{{ location.latitude }}, {{ location.longitude }}], 16);
                 var layer = new L.StamenTileLayer("toner-lite");
                 map.addLayer(layer);
-                var marker = L.marker([{{ object.lat() }}, {{ object.long() }}]);
+                var marker = L.marker([{{ location.latitude }}, {{ location.longitude }}]);
                 marker.addTo(map);
                 map.scrollWheelZoom.disable();
                 map.touchZoom.disable();

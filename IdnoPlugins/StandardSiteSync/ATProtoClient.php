@@ -731,7 +731,7 @@ class ATProtoClient
 
         $record = [
             '$type'       => 'site.standard.document',
-            'title'       => $entity->getTitle(),
+            'title'       => $entity->getPublicTitle(),
             'description' => $entity->getDescription(),
             'site'        => $publicationUri,
             'path'        => $path,

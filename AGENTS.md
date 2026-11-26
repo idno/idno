@@ -5012,7 +5012,7 @@ its `#[AsEntity]`: `#[\Idno\Storage\Attribute\IndexedField('slug')]` (options: `
 | **Photo** | Photos with captions | `Note` + attachment | `/photo/edit` |
 | **Media** | Audio/video uploads | `Note` + attachment | `/media/edit` |
 | **Event** | Calendar events & RSVPs | `Event` | `/event/edit`, `/rsvp/edit` |
-| **Checkin** | Location check-ins | `Note` + location | `/checkin/edit` |
+| **Checkin** | Location check-ins (the location may be protected for 24 hours: see "Where a post is" under Security) | `Note` + location | `/checkin/edit` |
 | **Like** | Bookmarks / likes | `Note` | `/like/edit` |
 | **StaticPages** | CMS-style static pages | N/A (not federated) | `/staticpages/edit`, `/pages/{slug}` |
 
@@ -5087,9 +5087,10 @@ Each content plugin has an `Entry.php` entity class that defines
    moment they are built and carry that time; the follow `Accept` carries none. The object has
    `updated` only when it is later than `created`. A test never compares two separately
    generated times (`ActivityTimesTest`, `QueuedDeliveryTest`).
-   A check-in whose place is to be kept vague (`Checkin::isAnonymous()`) carries NO `location` in any object other servers get (the post's address, the outbox, a
-   delivery): the HTML page shows a visitor an inexact position and other servers are never signed in, so `buildObject()` sends none
-   (`IdnoPlugins/ActivityPub/Tests/CheckinLocationTest`).
+   A check-in whose location is protected carries NO `location` in any object other servers get (the post's address, the outbox, a delivery): `buildObject()`
+   builds the object from `Entity::publicLocation()`, what a visitor who is not signed in may be told, which is what any other server is, and sends a
+   `location` only when that position is precise; the name of a `Note` of type Article or image is `getPublicTitle()` (see "Where a post is" under Security;
+   `IdnoPlugins/ActivityPub/Tests/CheckinLocationTest`).
 2. **A post fetched by another server**: a GET of a post's address (its permalink, `/YYYY/slug`, and `/view/<id>`, which is the post's uuid and so the `id` other servers
    know it by) with an ActivityPub `Accept` is answered with the post: `ActivityBuilder::buildDocument()`, which is `buildObject()` (the object a `Create`, an `Update` and
    the outbox carry: one builder) under the context deliveries carry (`CONTEXT_WITH_QUOTES`), `Content-Type: application/activity+json`, `Access-Control-Allow-Origin: *`
@@ -5742,6 +5743,24 @@ no installer writes one.
   that stores an address a member typed (the Like plugin's bookmark, for example) keeps it
   only when `UrlValidator::httpUrl()` accepts it. `Tests/Core/MemberContentOutputTest.php`
   checks this for bookmarks, check-in place names and images embedded from a post's text.
+- Where a post is, and who may be told: `Entity::locationFor($viewer)` is the one place that says what a viewer (a member, or `null` for a visitor who is
+  not signed in, which is also what any other server is) may be told of an entity's position, place name and address: `precise`, `latitude`, `longitude`,
+  `placename`, `address`, with the parts the viewer may not have empty. `location()` asks it for whoever is signed in for the request and `publicLocation()` for a
+  visitor. Every form of an entity reads these and never the stored `lat`, `long`, `placename` and `address` (only the edit form does): the check-in templates
+  of the `default` (Twig), `classic` and `markdown` types, `Entity::jsonSerialize()`, the RSS item, the KML shell, the JSON Feed metadata (`getMetadataForFeed()`),
+  JSON-LD and the ActivityPub object. A check-in overrides `locationFor()`: while its location is protected (`Checkin::isLocationProtected()`: its author turned on
+  "Protect my location for 24 hours" (`anonymity`) and it is less than 24 hours old; `PROTECTED_FOR`), a visitor gets no place name, no address, and a position
+  rounded to two decimal places (about a kilometre; the same every time, where it was once a random one for each request, which enough requests averaged out), and
+  `precise` is false. Members who are signed in, the owner and administrators included, see everything, as the form says. The title follows: `getTitle()` is for
+  whoever is signed in ("Checked into somewhere near..." for a visitor), and `Entity::getPublicTitle()` is the title a visitor reads, whoever is signed in. Use
+  `getPublicTitle()` and `publicLocation()` for anything that outlives the request or leaves the site, because that is put together while the owner is signed in:
+  the slug (`Entity::save()`, `getPrettyURLTitle()`), the stored `title` (`Checkin::saveDataFromInput()`; search looks in it), the webmention text, ActivityPub
+  objects, the StandardSiteSync document record and webhooks. So a check-in made with a protected location has an address that does not name the place; one made
+  before this release keeps the address and the stored title it has (a stranger who knows its address reads the place in it, and search finds it by the place
+  until the check-in is edited and saved: `docs/install/upgrade.md`). The Markdown form's `Location:` line, the map script's coordinates (numbers only, and the
+  rounded ones for a visitor) and the structured data in the head follow the same rule. The administrator's archive and the owner's own export are drawn for people
+  who are signed in, so they hold the place. `IdnoPlugins/Checkin/Tests/ProtectedLocationTest` checks every form over HTTP as a visitor, another member, the owner
+  and an administrator, and `ProtectedLocationSentElsewhereTest` what is queued and sent while the owner is signed in.
 - RSVPs (`IdnoPlugins/Event/RSVP.php`): the text is passed through `sanitize_html()` and
   the address of the event through `UrlValidator::httpUrl()` when an RSVP is saved, and
   again where they are printed (the `entity/RSVP` templates and `RSVP::getDescription()`,

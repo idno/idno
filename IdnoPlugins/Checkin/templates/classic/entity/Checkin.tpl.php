@@ -5,6 +5,9 @@
      * @var \Idno\Common\Entity $object
      */
 
+    // Where the check-in was made, as far as whoever is reading may be told
+    $location = $object->location();
+
 ?>
 
 <div>
@@ -16,9 +19,9 @@
     </h2>
 
     <span class="p-location u-checkin h-card">
-        <data class="p-name" value="<?php echo htmlspecialchars((string) $object->placename) ?>"></data>
-        <data class="p-latitude" value="<?php echo $object->lat() ?>"></data>
-        <data class="p-longitude" value="<?php echo $object->long() ?>"></data>
+        <?php echo $location['placename'] !== '' ? '<data class="p-name" value="' . htmlspecialchars($location['placename']) . '"></data>' . "\n" : ''; ?>
+        <data class="p-latitude" value="<?php echo $location['latitude'] ?>"></data>
+        <data class="p-longitude" value="<?php echo $location['longitude'] ?>"></data>
     </span>
 
     <?php if (empty($vars['feed_view'])) { ?>
@@ -43,10 +46,10 @@
                 var map = L.map('map_<?php echo $object->_id?>', {
                     touchZoom: false,
                     scrollWheelZoom: false
-                }).setView([<?php echo $object->lat() ?>, <?php echo $object->long() ?>], 16);
+                }).setView([<?php echo $location['latitude'] ?>, <?php echo $location['longitude'] ?>], 16);
                 var layer = new L.StamenTileLayer("toner-lite");
                 map.addLayer(layer);
-                var marker = L.marker([<?php echo $object->lat()?>, <?php echo $object->long()?>]);
+                var marker = L.marker([<?php echo $location['latitude']?>, <?php echo $location['longitude']?>]);
                 marker.addTo(map);
                 map.scrollWheelZoom.disable();
                 map.touchZoom.disable();
