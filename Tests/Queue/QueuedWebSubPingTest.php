@@ -19,7 +19,7 @@ final class QueuedWebSubPingTest extends AsyncSiteTestCase
         $this->assertSame([], $this->queuedEvents());
 
         $sink = $this->newSink('hub');
-        $earlierName = 'pubsub' . 'hubbub/ping';
+        $earlierName = \Tests\Core\WebSubCompatibilityTest::OLD_EVENT;
         $this->runInSite(
             '\Idno\Core\Idno::site()->db()->setIgnoreAccess(true);' . "\n"
             . '$user = \Idno\Entities\User::getByHandle("alice");' . "\n"
