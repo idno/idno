@@ -948,14 +948,24 @@ draft or published. On for new sites (`Config`); not federated; not a content ty
   `deleteRequestedEntity($object)` in the pages that answer a `POST` or `DELETE` at a thing's
   own address (`Idno\Pages\Entity\View`, `Idno\Pages\User\View`, the StaticPages `View`). A
   refusal is `deniedContent()` (the 403 page), as `Idno\Pages\Entity\Delete` gives; something
-  the requester may not read is answered as something missing is. `forward()` does not end a
-  script's request (XMLHttpRequest), so a handler returns after a forward that was meant to
-  end it. An entity whose `saveDataFromInput()` removes something before saving asks
+  the requester may not read is answered as something missing is. Every page that deletes
+  (`Idno\Pages\Entity\Delete` and each plugin's `Pages\Delete`) calls
+  `deleteGatekeeper($object)`, which refuses the same way. An entity whose `saveDataFromInput()` removes something before saving asks
   `canEdit()` first as well (`Media`, which replaces its file). A new content type's edit page
   calls `editGatekeeper()`. `Tests/Pages/PermalinkWriteAccessTest.php` and
   `IdnoPlugins/Media/Tests/MediaReplaceAccessTest.php` check this over HTTP.
-- Deleting an account: a `DELETE` to a profile's address (or to `/view/<id>` of a member) is
-  answered only for an administrator's browser session (`adminGatekeeper()`, which no API
+- A script's request is not redirected: `Page::forward()` sends no `Location` for a POST, PUT
+  or DELETE made with `X-Requested-With: XMLHttpRequest`. It used to return to its caller
+  then, so a handler that refused with `forward()` and went on did what it had just refused
+  (every plugin's delete page deleted the post). `forward()` now ends such a request too
+  (`$exit` true, the default): the status already set, no body, or for an API request the page
+  with the session's messages, which is what a handler that returned there always answered.
+  Still, don't write a refusal as a redirect: call `deniedContent()`, `noContent()` or a
+  gatekeeper, and `return` after a `forward()` that is meant to be the end.
+  `Tests/Core/ForwardScriptRequestTest.php` and `Tests/Pages/ScriptRequestRefusalTest.php`
+  check this.
+- Deleting an account: a `DELETE` to a profile's address or to `/view/<id>` of a member, and a
+  `POST` to any delete page with a member's id (`deleteGatekeeper()`), is answered only for an administrator's browser session (`adminGatekeeper()`, which no API
   request passes), and never for one's own account. A member cannot delete their account
   there, and no API key can delete one: a credential for publishing does not reach account
   changes. The administrators' Users page is the other place accounts are deleted.

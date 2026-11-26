@@ -138,6 +138,8 @@ namespace Idno\Pages\User {
             }
             if (empty($user)) {
                 $this->forward(); // TODO: 404
+
+                return; // A script's request is not forwarded
             }
             if ($user->saveDataFromInput()) {
                 if ($onboarding = $this->getInput('onboarding')) {

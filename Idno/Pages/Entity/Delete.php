@@ -47,11 +47,12 @@ namespace Idno\Pages\Entity {
             }
             if (empty($object)) {
                 Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->_("We couldn't find the post to delete."));
-                $this->forward();
-            } // TODO: 404
-            if (!$object->canEdit()) {
-                $this->deniedContent();
+                $this->forward(); // TODO: 404
+
+                return; // A script's request is not forwarded
             }
+            // A post by whoever may edit it; an account only by an administrator's session
+            $this->deleteGatekeeper($object);
 
             if ($object->delete()) {
                 \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->esc_('%s was deleted.', [$object->getTitle()]));

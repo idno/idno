@@ -640,7 +640,37 @@ namespace Idno\Common {
                 if ($exit) {
                     exit;
                 }
+            } else if ($exit && $this->xhr) {
+                // A script's request (XMLHttpRequest) is not redirected, but the caller
+                // meant the request to end here: going on would run whatever follows a
+                // refusal that was written as a redirect. (A page whose forwarding was
+                // turned off for another reason, a webmention's, is left to go on.)
+                $this->endWithoutForwarding();
             }
+        }
+
+        /**
+         * End a request that would have been redirected, for a page that does not forward (a
+         * script's POST, PUT or DELETE): the answer a handler that returned at this point
+         * has always had. No Location, the status that was set, and no body, or, for an API
+         * request, the page with the session's messages.
+         */
+        private function endWithoutForwarding()
+        {
+            $session = \Idno\Core\Idno::site()->session();
+            if ($session->isAPIRequest()) {
+                if (http_response_code() == 200) {
+                    $this->setResponse(400);
+                }
+                $messages = $session->getMessages();
+                if (empty($messages)) {
+                    $session->addErrorMessage(\Idno\Core\Idno::site()->language()->_("Something went wrong."));
+                }
+                echo \Idno\Core\Idno::site()->template()->drawPage();
+            }
+            http_response_code($this->response);
+            $session->finishEarly();
+            exit;
         }
 
         /**
@@ -966,6 +996,28 @@ namespace Idno\Common {
         }
 
         /**
+         * For a page that deletes an entity: the requester must be allowed to edit it, and the
+         * answer to anybody else is the 403 page, which ends the request (a refusal written as
+         * a redirect does not end a script's request). An account is not a post: it is deleted
+         * only by an administrator's browser session (which a signed API request never is),
+         * and never one's own.
+         *
+         * @param \Idno\Common\Entity $object
+         */
+        function deleteGatekeeper($object)
+        {
+            $this->gatekeeper();
+            if ($object instanceof \Idno\Entities\User) {
+                $this->adminGatekeeper();
+                if ($object->getUUID() === \Idno\Core\Idno::site()->session()->currentUserUUID()) {
+                    $this->deniedContent();
+                }
+            } else if (!$object->canEdit()) {
+                $this->deniedContent();
+            }
+        }
+
+        /**
          * What a DELETE to the address of an entity does. Only a logged-in requester who may
          * edit it deletes it, and something they may not read is answered as something missing
          * is, for a script's request too. An account is deleted only by an administrator's
@@ -983,14 +1035,7 @@ namespace Idno\Common {
 
                 return;
             }
-            if ($object instanceof \Idno\Entities\User) {
-                $this->adminGatekeeper();
-                if ($object->getUUID() === \Idno\Core\Idno::site()->session()->currentUserUUID()) {
-                    $this->deniedContent();
-                }
-            } else if (!$object->canEdit()) {
-                $this->deniedContent();
-            }
+            $this->deleteGatekeeper($object);
             if ($object->delete()) {
                 \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->esc_('%s was deleted.', [$object->getTitle()]));
             }
