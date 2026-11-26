@@ -35,6 +35,9 @@ use Symfony\Component\Security\Core\Exception\AccessDeniedException;
  */
 final class PageRequestListener
 {
+    /** The request attribute that marks an answer that is made before the page is served and so says nothing of the Accept header */
+    private const NO_VARY = '_idno_page_no_vary';
+
     /**
      * @param \Closure(): PageLifecycle $lifecycle
      */
@@ -107,6 +110,9 @@ final class PageRequestListener
             // The walled garden: what `publicGatekeeper()` did was `deniedContent()`, the site's own 403 page in the request's template type
             // (PageExceptionListener draws it), so it is the page's refusal and not Security's.
             if (!$lifecycle->mayView($context)) {
+                // (refused before the page was served, as the router's gatekeeper refused before the page's handler ran: the answer has no `Vary`)
+                $request->attributes->set(self::NO_VARY, true);
+
                 throw new AccessDeniedHttpException();
             }
             $lifecycle->enter($context);
@@ -177,8 +183,10 @@ final class PageRequestListener
         }
         $context = PageContext::of($request);
         $response = $event->getResponse();
-        // A permalink's answer depends on the Accept header (the HTML or the Markdown form): every answer of it says so, a refusal and a HEAD too
-        if ($context->page()->markdownPermalink) {
+        // A permalink's answer depends on the Accept header (the HTML or the Markdown form): every answer of it says so, a refusal and a HEAD too. The answer to
+        // OPTIONS, which lists the methods and depends on nothing in the request, does not (the legacy page's never did), and nor does the refusal of a visitor
+        // of a private site, which was made before the page was served.
+        if ($context->page()->markdownPermalink && $request->getMethod() !== 'OPTIONS' && $request->attributes->get(self::NO_VARY) !== true) {
             $response->setVary('Accept', false);
         }
         foreach (($this->lifecycle)()->standardHeaders() as $name => $value) {

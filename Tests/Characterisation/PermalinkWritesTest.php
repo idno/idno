@@ -21,6 +21,19 @@ final class PermalinkWritesTest extends PermalinkSiteCase
 
     protected const GROUP = 'permalink-writes';
 
+    /**
+     * The cases the page that replaced the legacy one answers differently ON PURPOSE: the recordings are the legacy page's and are kept as they were, and the
+     * test of each asserts the answer of the page that serves it now.
+     */
+    private const CHANGED = [
+        'delete-no-token-owner' => 'a DELETE with no form token is refused with the site\'s 403 page, nothing reported and nobody mailed (the legacy page threw the exception of a timed out page: the reported 500 page)',
+        'delete-visitor' => 'the same, for a visitor',
+        'post-signed-owner' => 'the JSON that tells a signed request where to go is sent as application/json (the legacy page sent it as text/html)',
+        'post-signed-json-owner' => 'the same',
+        'post-signed-missing-post' => 'the same',
+        'delete-signed-owner' => 'the same',
+    ];
+
     /** The note the scenario deletes: Bob's, with a fixed id. */
     private const DISPOSABLE = '00000000000040008000000000000051';
 
@@ -80,6 +93,40 @@ final class PermalinkWritesTest extends PermalinkSiteCase
 
             return new SiteResponse($r->status, array_map($swap, $r->headers), $body, array_map($swap, $r->lines));
         };
+    }
+
+    /** The mail the site has sent since the last call, as a list (the log is emptied). */
+    private function mailLog(): array
+    {
+        $log = json_decode($this->site()->request('GET', '/_test/mail/log')->body, true);
+        $this->assertIsArray($log);
+
+        return $log;
+    }
+
+    /**
+     * A DELETE with no form token is the site's 403 page, which says the page timed out; nothing is reported (no line of the exception in the log) and no
+     * alert is mailed to the administrator, as the exception of the legacy page was.
+     */
+    private function assertRefusedAndNotReported(SiteResponse $answer, string $who): void
+    {
+        $this->assertSame(403, $answer->status, $who);
+        $this->assertStringContainsString('The page you were on timed out.', $answer->body, $who);
+        $this->assertStringNotContainsString('{main}', $answer->body, $who . ': no trace of an exception');
+        $this->assertSame([], $this->mailLog(), $who . ': nobody is mailed');
+        $this->assertStringNotContainsString('timed out', $this->serverLogContents(), $who . ': nothing is reported');
+    }
+
+    /**
+     * The answer to a signed request that is told where to go is the recording of the legacy page's answer, but for its type: the JSON `{"location": ...}`
+     * is sent as `application/json`, where the legacy page sent it as `text/html; charset=UTF-8`.
+     */
+    private function assertTheRecordingButForItsJsonType(string $case, SiteResponse $answer): void
+    {
+        $recorded = (string) file_get_contents(self::recordedAnswersDirectory() . '/' . self::GROUP . '/' . $case . '.txt');
+        $expected = str_replace("content-type: text/html; charset=UTF-8\n", "content-type: application/json\n", $recorded);
+        $this->assertNotSame($recorded, $expected, $case . ': the recording holds the legacy type');
+        $this->assertSame($expected, self::normalise(self::scrubbed([], true)($answer), $this->baseUrl()), $case);
     }
 
     /** Writes Bob's disposable note (again, after an earlier run deleted it) and returns its address. */
@@ -149,8 +196,11 @@ final class PermalinkWritesTest extends PermalinkSiteCase
 
         $referer = ['Referer' => $this->baseUrl()];
         $disposable = $this->disposableNote();
-        $this->record('delete-no-token-owner', 'DELETE', $disposable, $referer, 'owner', null, self::withoutTrace(...));
-        $this->record('delete-visitor', 'DELETE', $disposable, $referer, 'visitor', null, self::withoutTrace(...));
+        $this->mailLog();
+        $answer = $this->record('delete-no-token-owner', 'DELETE', $disposable, $referer, 'owner', null, self::withoutTrace(...));
+        $this->assertRefusedAndNotReported($answer, 'the owner');
+        $answer = $this->record('delete-visitor', 'DELETE', $disposable, $referer, 'visitor', null, self::withoutTrace(...));
+        $this->assertRefusedAndNotReported($answer, 'a visitor');
         $this->record('delete-no-token-still-there', 'GET', $disposable);
 
         // another member's DELETE with the token of their own session is refused and the post stays: these two answers, and the two of the visitor's
@@ -247,12 +297,12 @@ final class PermalinkWritesTest extends PermalinkSiteCase
 
         // a signed API request needs no token and carries no cookie: the stored key of the member signs the request's address (path and query)
         $signed = self::signedHeadersFor('bob', $this->bobsKey(), $note);
-        $this->record('post-signed-owner', 'POST', $note, $signed, 'visitor', ['body' => 'Bob changes it, signed.'], self::scrubbed([], true));
+        $this->assertTheRecordingButForItsJsonType('post-signed-owner', $this->record('post-signed-owner', 'POST', $note, $signed, 'visitor', ['body' => 'Bob changes it, signed.'], self::scrubbed([], true)));
         $signedJson = self::signedHeadersFor('bob', $this->bobsKey(), $note . '?_t=json');
-        $this->record('post-signed-json-owner', 'POST', $note . '?_t=json', $signedJson, 'visitor', ['body' => 'Bob changes it, signed, as JSON.'], self::scrubbed([], true));
-        $this->record('post-signed-missing-post', 'POST', '/2026/no-such-slug-here', self::signedHeadersFor('bob', $this->bobsKey(), '/2026/no-such-slug-here'), 'visitor', ['body' => 'x'], self::scrubbed([], true));
+        $this->assertTheRecordingButForItsJsonType('post-signed-json-owner', $this->record('post-signed-json-owner', 'POST', $note . '?_t=json', $signedJson, 'visitor', ['body' => 'Bob changes it, signed, as JSON.'], self::scrubbed([], true)));
+        $this->assertTheRecordingButForItsJsonType('post-signed-missing-post', $this->record('post-signed-missing-post', 'POST', '/2026/no-such-slug-here', self::signedHeadersFor('bob', $this->bobsKey(), '/2026/no-such-slug-here'), 'visitor', ['body' => 'x'], self::scrubbed([], true)));
         $disposable = $this->disposableNote();
-        $this->record('delete-signed-owner', 'DELETE', $disposable . '?x=1', self::signedHeadersFor('bob', $this->bobsKey(), $disposable . '?x=1') + $referer, 'visitor', null, self::scrubbed([], true));
+        $this->assertTheRecordingButForItsJsonType('delete-signed-owner', $this->record('delete-signed-owner', 'DELETE', $disposable . '?x=1', self::signedHeadersFor('bob', $this->bobsKey(), $disposable . '?x=1') + $referer, 'visitor', null, self::scrubbed([], true)));
         $this->record('delete-signed-owner-then', 'GET', $disposable);
         // another member's signed requests are refused and change nothing
         $carol = $this->storedKeyOf('carol');

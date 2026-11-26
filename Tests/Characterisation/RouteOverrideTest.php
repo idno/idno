@@ -579,14 +579,16 @@ final class RouteOverrideTest extends PrivateSiteTestCase
         }
     }
 
-    public function testAMarkdownPermalinkVariesOnAcceptInEveryAnswer(): void
+    public function testAMarkdownPermalinkVariesOnAcceptInEveryAnswerButTheOneToOptions(): void
     {
         $base = $this->server('');
 
         foreach (['abc', 'abc.md', 'denied', 'denied.md', 'gone', 'gone.md', 'missing', 'missing.md'] as $name) {
             foreach (['GET', 'HEAD', 'OPTIONS'] as $method) {
                 $response = $this->raw($base, $method, '/_test/markdown/' . $name);
-                $this->assertContains('Accept', array_map('trim', explode(',', implode(',', $response['headers']['vary'] ?? []))), $name . ' ' . $method . ' (' . $response['status'] . ')');
+                $varies = in_array('Accept', array_map('trim', explode(',', implode(',', $response['headers']['vary'] ?? []))), true);
+                // (the answer to OPTIONS lists the methods, depends on nothing in the request, and never said so)
+                $this->assertSame($method !== 'OPTIONS', $varies, $name . ' ' . $method . ' (' . $response['status'] . ')');
             }
         }
         $this->assertSame([403, 410, 404], [$this->raw($base, 'GET', '/_test/markdown/denied')['status'], $this->raw($base, 'GET', '/_test/markdown/gone.md')['status'], $this->raw($base, 'GET', '/_test/markdown/missing')['status']]);

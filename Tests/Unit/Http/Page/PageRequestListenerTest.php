@@ -403,6 +403,37 @@ final class PageRequestListenerTest extends TestCase
         }
     }
 
+    public function testTheAnswerToOptionsAndTheRefusalOfAVisitorOfAPrivateSiteDoNotVaryOnAccept(): void
+    {
+        // the answer to OPTIONS depends on nothing in the request, and was made by the router without the page
+        $listener = $this->listener();
+        $request = Request::create('/', 'OPTIONS');
+        $listener->onController($this->controllerEvent($request, new ListenerMarkdownController(), 'page'));
+        $options = new Response('', 204);
+        $listener->onResponse(new ResponseEvent($this->createMock(HttpKernelInterface::class), $request, HttpKernelInterface::MAIN_REQUEST, $options));
+        $this->assertNotContains('Accept', $options->getVary());
+
+        // the refusal of a visitor of a private site was made before the page's handler ran
+        $this->lifecycle->mayView = false;
+        $request = Request::create('/');
+        try {
+            $listener->onController($this->controllerEvent($request, new ListenerMarkdownController(), 'page'));
+            $this->fail('the visitor is refused');
+        } catch (AccessDeniedHttpException) {
+            $refusal = new Response('refused', 403);
+            $listener->onResponse(new ResponseEvent($this->createMock(HttpKernelInterface::class), $request, HttpKernelInterface::MAIN_REQUEST, $refusal));
+            $this->assertNotContains('Accept', $refusal->getVary());
+        }
+
+        // a refusal the page itself makes (a post the viewer may not read) varies, as every other answer of a permalink does
+        $this->lifecycle->mayView = true;
+        $request = Request::create('/');
+        $listener->onController($this->controllerEvent($request, new ListenerMarkdownController(), 'page'));
+        $page = new Response('refused', 403);
+        $listener->onResponse(new ResponseEvent($this->createMock(HttpKernelInterface::class), $request, HttpKernelInterface::MAIN_REQUEST, $page));
+        $this->assertContains('Accept', $page->getVary());
+    }
+
     public function testADefaultHeaderIsGivenOnlyToAResponseThatHasNone(): void
     {
         $listener = $this->listener();

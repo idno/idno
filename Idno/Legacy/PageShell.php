@@ -73,9 +73,10 @@ abstract class PageShell extends Page
         $this->noteSubclass();
         $site = Idno::site();
         $context = $this->contextFor($this->currentRequest());
-        // A permalink's answer depends on the Accept header (the HTML or the Markdown form): EVERY answer of it says so, a refusal, a missing page, a forward and a
-        // 304 too, as the controller's listener adds it to every response. (Sent here, once, before anything is answered: what answers goes through `header()`.)
-        if ($context->page()->markdownPermalink) {
+        // A permalink's answer depends on the Accept header (the HTML or the Markdown form): EVERY answer to a GET or a HEAD says so, a refusal, a missing page, a
+        // forward and a 304 too, as the controller's listener adds it to every response. (Sent here, once, before anything is answered: what answers goes through
+        // `header()`.) What answers a POST or a DELETE does not depend on it, and never said so.
+        if ($context->page()->markdownPermalink && in_array($context->request()->getRealMethod(), ['GET', 'HEAD'], true)) {
             (new PhpHeaders())->send('Vary: Accept', false);
         }
         // An account page is closed to an API request whatever route the shell (or a plugin's subclass of it) is registered on: the router refuses the
@@ -139,6 +140,21 @@ abstract class PageShell extends Page
             // hooks after the handler and the kernel's termination never ran after a page, and still do not
             exit;
         }
+    }
+
+    /**
+     * A DELETE with no valid form token to a shell that serves DELETE (it declares a `deleteContent()` of its own) is refused with the site's 403 page, as a
+     * controller's page refuses it: nothing is reported and the administrator is not mailed (a legacy page threw the exception of a timed out page, which was the
+     * reported 500 page). A shell that serves no DELETE keeps the legacy page's answer.
+     */
+    protected function refuseDeleteWithoutToken()
+    {
+        if ((new \ReflectionMethod($this, 'deleteContent'))->getDeclaringClass()->getName() === Page::class) {
+            parent::refuseDeleteWithoutToken();
+
+            return;
+        }
+        $this->deniedContent(Idno::site()->language()->_('The page you were on timed out.'));
     }
 
     /**

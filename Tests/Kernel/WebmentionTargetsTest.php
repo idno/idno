@@ -10,6 +10,7 @@ use Idno\Common\Page;
 use Idno\Config\BootConfig;
 use Idno\Core\Idno;
 use Idno\Http\Controller\Home\HomePages;
+use Idno\Http\Controller\Permalink\PermalinkPages;
 use Idno\Http\Webmention\ReceivedWebmention;
 use Idno\Http\Webmention\ReceivesWebmentions;
 use Idno\Http\Webmention\WebmentionTarget;
@@ -130,14 +131,14 @@ final class WebmentionTargetsTest extends TestCase
 
     // ------------------------------------------------------------------ the pages that are still classes
 
-    public function testAPermalinkIsTheShellsLegacyTargetUntilItMoves(): void
+    public function testAPermalinkIsATarget(): void
     {
         $target = $this->targets()->resolve($this->permalink());
 
         $this->assertNotNull($target);
-        $this->assertTrue($target->isLegacy());
+        $this->assertFalse($target->isLegacy());
         $this->assertSame('Idno\Pages\Entity\View', $target->page);
-        $this->assertSame('', $target->route);
+        $this->assertSame('idno_permalink', $target->route);
         $this->assertSame(['a-note'], array_slice($target->arguments, -1));
     }
 
@@ -581,7 +582,10 @@ final class WebmentionTargetsTest extends TestCase
             Idno::container()->get('kernel'),
             new BootConfig($values, false),
             $facts,
-            $receivers ?? new ServiceLocator(['Idno\Pages\Homepage' => static fn (): HomePages => Idno::container()->get(HomePages::class)]),
+            $receivers ?? new ServiceLocator([
+                'Idno\Pages\Homepage' => static fn (): HomePages => Idno::container()->get(HomePages::class),
+                'Idno\Pages\Entity\View' => static fn (): PermalinkPages => Idno::container()->get(PermalinkPages::class),
+            ]),
             static fn (): LoggerInterface => $logger,
         );
     }

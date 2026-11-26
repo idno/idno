@@ -283,10 +283,9 @@ final class MarkdownOutputTest extends MarkdownSiteTestCase
             $this->assertStringContainsStringIgnoringCase('accept', (string) $head->header('Vary'), 'HEAD ' . $path);
         }
 
-        // A request the permalink answers 304 to (Page::lastModifiedGatekeeper() answers it when the date is NOT after the
-        // post's last change, 20 March 2026, which is the wrong way round and not this test's business)
+        // A request the permalink answers 304 to: a copy dated a day after the post's last change (20 March 2026) is current
         foreach ([[$paths['article'], []], [$paths['article'] . '.md', []], [$paths['article'], ['Accept' => 'text/markdown']]] as [$path, $headers]) {
-            $response = $this->get($path, $headers + ['If-Modified-Since' => 'Thu, 01 Jan 2026 00:00:00 GMT']);
+            $response = $this->get($path, $headers + ['If-Modified-Since' => 'Sat, 21 Mar 2026 12:00:00 GMT']);
             $this->assertSame(304, $response->status, $path);
             $this->assertSame('', $response->body);
             $this->assertStringContainsStringIgnoringCase('accept', (string) $response->header('Vary'), '304 ' . $path);

@@ -26,10 +26,10 @@ final class PermalinkAnswersTest extends PermalinkSiteCase
     protected const GROUP = 'permalink';
 
     /**
-     * The cases a page that replaces the legacy one is expected to answer differently ON PURPOSE, with why: they are recorded from the legacy
-     * page, and a test of the page that replaces it lists them in its `CHANGED` and asserts its own answer.
+     * The cases the page that replaced the legacy one answers differently ON PURPOSE, with why: the recordings are the legacy page's and are kept as they
+     * were, and the test of each asserts the answer of the page that serves it now.
      */
-    private const DIFFERENT_BY_DESIGN = [
+    private const CHANGED = [
         'ims-article-before' => 'a copy dated before the post\'s change is not current: the legacy comparison was the wrong way round (it answered 304)',
         'ims-article-after' => 'a copy dated after the post\'s change is current: the legacy comparison answered the page',
         'ims-article-markdown-before' => 'the same, asked as Markdown',
@@ -37,6 +37,7 @@ final class PermalinkAnswersTest extends PermalinkSiteCase
         'ims-article-head-after' => 'the same, for a HEAD',
         'ims-article-garbage' => 'a date that is not an HTTP-date is ignored: the legacy rule read it with strtotime() and answered 304',
         'ims-article-garbage-head' => 'the same, for a HEAD',
+        'ims-site-member' => 'a member who may read a post and holds a copy dated after its change is told it is current (the legacy comparison sent the page)',
         'note-xhr' => 'an XHR GET gets the headers of the same request that is not XHR',
         'note-xhr-head' => 'an XHR HEAD gets the headers of the same request that is not XHR',
     ];
@@ -462,8 +463,14 @@ final class PermalinkAnswersTest extends PermalinkSiteCase
         $this->record('note-trailing-slash', 'GET', $note . '/');
         $this->record('note-wrong-year', 'GET', '/2025/' . basename($note));
         $this->record('note-no-route', 'GET', '/20x6/' . basename($note));
-        $this->record('note-xhr', 'GET', $note, ['X-Requested-With' => 'XMLHttpRequest']);
-        $this->record('note-xhr-head', 'HEAD', $note, ['X-Requested-With' => 'XMLHttpRequest']);
+        // An XHR request gets the headers of the same request that is not XHR (the legacy router's own lines for it, a JSON type, a date in 1997 and two
+        // Cache-Control lines, are no longer sent): its answer is the plain one's
+        $xhr = ['X-Requested-With' => 'XMLHttpRequest'];
+        foreach (['GET' => 'note-xhr', 'HEAD' => 'note-xhr-head'] as $method => $case) {
+            $answer = $this->record($case, $method, $note, $xhr);
+            $plain = $this->site()->request($method, $note);
+            $this->assertSame(self::normalise($plain, $this->baseUrl()), self::normalise($answer, $this->baseUrl()), $method . ' of the note as an XHR request');
+        }
         $this->record('note-signed-api', 'GET', $note, self::signedHeadersFor('bob', $this->bobsKey(), $note));
         $this->record('note-signed-api-json', 'GET', $note . '?_t=json', self::signedHeadersFor('bob', $this->bobsKey(), $note . '?_t=json'));
         $this->record('note-malformed-host', 'GET', $note, ['Host' => 'bad host!']);
@@ -486,23 +493,41 @@ final class PermalinkAnswersTest extends PermalinkSiteCase
         $date = static fn (int $time): string => gmdate('D, d M Y H:i:s', $time) . ' GMT';
         $before = ['If-Modified-Since' => $date($changed - 86400)];
         $after = ['If-Modified-Since' => $date($changed + 86400)];
-        $this->record('ims-article-before', 'GET', $article, $before);
-        $this->record('ims-article-after', 'GET', $article, $after);
-        $this->record('ims-article-markdown-before', 'GET', $article, $before + ['Accept' => 'text/markdown']);
-        $this->record('ims-article-markdown-after', 'GET', $article, $after + ['Accept' => 'text/markdown']);
-        $this->record('ims-article-head-after', 'HEAD', $article, $after);
-        // a date that is none: the legacy rule read it with strtotime(), which says false
-        $this->record('ims-article-garbage', 'GET', $article, ['If-Modified-Since' => 'not a date at all']);
-        $this->record('ims-article-garbage-head', 'HEAD', $article, ['If-Modified-Since' => 'not a date at all']);
+        // A copy dated before the post's last change is not current: the page is sent
+        $answer = $this->record('ims-article-before', 'GET', $article, $before);
+        $this->assertSame(200, $answer->status);
+        $this->assertStringContainsString('A longer article about templates', $answer->body);
+        // A copy dated after it is current: 304, which says it depends on the Accept header, and has no body
+        $answer = $this->record('ims-article-after', 'GET', $article, $after);
+        $this->assertNotModified($answer);
+        $answer = $this->record('ims-article-markdown-before', 'GET', $article, $before + ['Accept' => 'text/markdown']);
+        $this->assertSame(200, $answer->status);
+        $this->assertStringContainsString('text/markdown', (string) $answer->header('Content-Type'));
+        $this->assertNotModified($this->record('ims-article-markdown-after', 'GET', $article, $after + ['Accept' => 'text/markdown']));
+        $this->assertNotModified($this->record('ims-article-head-after', 'HEAD', $article, $after));
+        // a date that is none is ignored, as a header that was not sent: the page is sent
+        $answer = $this->record('ims-article-garbage', 'GET', $article, ['If-Modified-Since' => 'not a date at all']);
+        $this->assertSame(200, $answer->status);
+        $this->assertStringContainsString('A longer article about templates', $answer->body);
+        $answer = $this->record('ims-article-garbage-head', 'HEAD', $article, ['If-Modified-Since' => 'not a date at all']);
+        $this->assertSame(200, $answer->status);
+        $this->assertSame('', $answer->body);
         // a post the visitor may not read is not answered 304: the lookup comes first
         $this->record('ims-site-visitor', 'GET', $this->target('bob-site'), $after);
-        $this->record('ims-site-member', 'GET', $this->target('bob-site'), $after, 'member');
+        $this->assertNotModified($this->record('ims-site-member', 'GET', $this->target('bob-site'), $after, 'member'));
         $this->addToAssertionCount(1);
+    }
+
+    private function assertNotModified(SiteResponse $answer): void
+    {
+        $this->assertSame(304, $answer->status);
+        $this->assertSame('', $answer->body);
+        $this->assertStringContainsStringIgnoringCase('accept', (string) $answer->header('Vary'));
     }
 
     public function testEveryCaseThatDiffersOnPurposeIsARecordedCase(): void
     {
-        foreach (self::DIFFERENT_BY_DESIGN as $case => $why) {
+        foreach (self::CHANGED as $case => $why) {
             $this->assertNotSame('', $why, $case);
             if (self::captureMode() === 'compare') {
                 $this->assertFileExists(self::recordedAnswersDirectory() . '/' . self::GROUP . '/' . $case . '.txt', $case);

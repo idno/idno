@@ -11,6 +11,7 @@ declare(strict_types=1);
  * @return array<string, array{action: string, class: string}>
  */
 return [
+    'idno_permalink' => ['action' => 'Idno\Http\Controller\PermalinkController::view', 'class' => 'Idno\Pages\Entity\View'],
     'idno_test_routed' => ['action' => 'Tests\Fixtures\RoutedFixtureController::show', 'class' => 'Tests\Fixtures\RoutedPlaceholder'],
     'idno_test_routed_shell' => ['action' => 'Tests\Fixtures\RoutedFixtureController::showShell', 'class' => 'Tests\Fixtures\RoutedFixtureShell'],
 ];

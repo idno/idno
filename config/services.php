@@ -397,6 +397,10 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
     $services->alias(\Idno\Http\Controller\Home\HomeStream::class, \Idno\Legacy\LegacyHomeStream::class)->public();
     // The home page itself; public: the deprecated legacy page (Idno\Pages\Homepage) draws it through the service, as the controller does
     $services->set(\Idno\Http\Controller\Home\HomePages::class)->public();
+    // The post permalink, over the legacy finders; public: the deprecated legacy page (Idno\Pages\Entity\View) draws it through the service, as the controller does
+    $services->set(\Idno\Legacy\LegacyPermalinks::class);
+    $services->alias(\Idno\Http\Controller\Permalink\Permalinks::class, \Idno\Legacy\LegacyPermalinks::class)->public();
+    $services->set(\Idno\Http\Controller\Permalink\PermalinkPages::class)->public();
     // The page of this site an address is, for a webmention aimed at it (found as a GET of it is routed); public: the endpoint asks for it with Idno::container()->get()
     $services->set(\Idno\Legacy\LegacyWebmentionTargets::class)->public();
     $services->alias(\Idno\Http\Webmention\WebmentionTargets::class, \Idno\Legacy\LegacyWebmentionTargets::class)->public();

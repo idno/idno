@@ -6,143 +6,56 @@
 
 namespace Idno\Pages\Entity {
 
+    use Idno\Core\Idno;
+    use Idno\Http\Controller\Permalink\PermalinkPages;
+    use Idno\Http\Page\PageContext;
+    use Idno\Http\Webmention\ReceivedWebmention;
+    use Symfony\Component\HttpFoundation\Response;
+
     /**
-     * Default class to serve the homepage
+     * The page of a post, at its permalink: a deprecated shell, removed in 3.0.
+     *
+     * A post's permalink is served by \Idno\Http\Controller\PermalinkController, which the legacy route table hands the requests every content type's
+     * permalink pattern (and a plugin's, registered for this class) matches. This class has no logic of its own: it hands its requests to the same service
+     * (\Idno\Http\Controller\Permalink\PermalinkPages), so a plugin's page that extends it, a route a plugin registered for it, and the POST and DELETE of a
+     * permalink are served as before.
+     *
+     * @deprecated Use \Idno\Http\Controller\PermalinkController (the route `idno_permalink`), or extend \Idno\Common\Page; removed in 3.0.
      */
-    class View extends \Idno\Common\Page implements \Idno\Common\MarkdownPermalink
+    class View extends \Idno\Legacy\PageShell implements \Idno\Common\MarkdownPermalink
     {
+        protected const SHELL = self::class;
+
+        public const ACTION = [\Idno\Http\Controller\PermalinkController::class, 'view'];
 
         // Handle GET requests to the entity
 
         function getContent()
         {
-            // The same address answers as HTML or as Markdown, by the Accept header
-            $this->sendVaryAccept();
-            $this->selectMarkdownIfWanted();
-
-            if (!empty($this->arguments[0])) {
-                $object = \Idno\Common\Entity::getByID($this->arguments[0]);
-                if (empty($object)) {
-                    $object = \Idno\Common\Entity::getBySlug($this->arguments[0]);
-                }
-            }
-            if (empty($object)) {
-                $this->goneContent();
-            }
-
-            // From here, we know the object is set
-
-            // Check that we can see it
-            if (!$object->canRead()) {
-                $this->deniedContent();
-            }
-
-            // Just forward to the user's page
-            if ($object instanceof \Idno\Entities\User) {
-                $this->forward($object->getDisplayURL());
-            }
-
-            $this->setOwner($object->getOwner());
-            $this->setPermalink(true, $object); // This is a permalink
-
-            $this->lastModifiedGatekeeper($object->updated); // 304 if we've not updated the object
-
-            // We need to set pragma and expires headers
-            //header("Pragma: private");
-            //                header("Cache-Control: no-store, no-cache, must-revalidate"); // HTTP/1.1
-            //                header("Cache-Control: post-check=0, pre-check=0", false);
-            //                header("Expires: Sat, 26 Jul 1997 05:00:00 GMT"); // Date in the past
-            //                header("Pragma: no-cache"); // HTTP/1.0
-            //                header("Last-Modified: " . gmdate("D, d M Y H:i:s") . " GMT"); // Last modified right now
-
-            //header('Expires: ' . date(\DateTime::RFC1123, time() + (86400 * 30))); // Cache for 30 days!
-            $this->setLastModifiedHeader($object->updated); // Say when this was last modified
-            //                if ($cache = \Idno\Core\Idno::site()->cache()) {
-            //                    $cache->store("{$this->arguments[0]}_modified_ts", $object->updated);
-            //                }
-
-            // The post as Markdown, for a request that asks for it: the viewer may read it, or the answer was given above
-            if ($this->wantsMarkdown()) {
-                $this->drawMarkdown($object);
-            }
-
-            $t = \Idno\Core\Idno::site()->template();
-
-            $description = $object->getShortDescription();
-            if (empty($description)) {
-                $description = $t->sampleText($object->getDescription());
-            }
-
-            $t->__(
-                array(
-
-                'title'       => $object->getTitle(),
-                'body'        => $t->__(['object' => $object])->draw('entity/wrapper'),
-                'description' => $description
-
-                )
-            )->drawPage();
+            return $this->delegate(fn (PageContext $page): Response => Idno::container()->get(PermalinkPages::class)->view($page));
         }
 
         // Get webmention content and handle it
 
         function webmentionContent($source, $target, $source_response, $source_mf2)
         {
-            if (!empty($this->arguments[0])) {
-                $object = \Idno\Common\Entity::getByID($this->arguments[0]);
-                if (empty($object)) {
-                    $object = \Idno\Common\Entity::getBySlug($this->arguments[0]);
-                }
-            }
-            if (empty($object)) {
-                \Idno\Core\Idno::site()->logging()->error("No object was found with ID {$this->arguments[0]}.");
-
-                return false;
-            }
-
-            $return = true;
-
-            if ($object instanceof \Idno\Common\Entity && $source != $target && $source != $object->getObjectURL()) {
-                $return = $object->addWebmentions($source, $target, $source_response, $source_mf2);
-            }
-
-            return $return;
+            return $this->delegateWebmention(fn (): bool => Idno::container()->get(PermalinkPages::class)->receiveWebmention('idno_permalink', array_map('strval', array_values($this->arguments)), new ReceivedWebmention($source, $target, $source_response, $source_mf2)));
         }
 
         // Handle POST requests to the entity
 
         function postContent()
         {
-            if (!empty($this->arguments[0])) {
-                $object = \Idno\Common\Entity::getByID($this->arguments[0]);
-                if (empty($object)) {
-                    $object = \Idno\Common\Entity::getBySlug($this->arguments[0]);
-                }
-            }
-
-            if (!$this->editRequestedEntity($object ?? false)) {
-                return;
-            }
-            if ($object->saveDataFromInput()) {
-                $this->forward($object->getDisplayURL());
-            }
-            $this->forward(\Idno\Pages\Session\Login::sanitizeRedirectUrl($_SERVER['HTTP_REFERER'] ?? ''));
+            return $this->delegate(fn (PageContext $page): Response => Idno::container()->get(PermalinkPages::class)->save($page));
         }
 
         // Handle DELETE requests to the entity
 
         function deleteContent()
         {
-            if (!empty($this->arguments[0])) {
-                $object = \Idno\Common\Entity::getByID($this->arguments[0]);
-                if (empty($object)) {
-                    $object = \Idno\Common\Entity::getBySlug($this->arguments[0]);
-                }
-            }
-            $this->deleteRequestedEntity($object ?? false);
+            return $this->delegate(fn (PageContext $page): Response => Idno::container()->get(PermalinkPages::class)->delete($page));
         }
 
     }
 
 }
-

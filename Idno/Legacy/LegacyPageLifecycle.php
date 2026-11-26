@@ -52,10 +52,6 @@ final class LegacyPageLifecycle implements PageLifecycle
             }
         }
         $site->setCurrentPage($page);
-        // The request for a permalink's Markdown form (the `.md` the router took off its address): what a permalink page's `selectMarkdownIfWanted()` did first
-        if ($context->markdownSuffixRequested()) {
-            $page->selectMarkdownIfWanted();
-        }
 
         // Templates read the referrer from here, and it is never empty.
         $_SERVER['HTTP_REFERER'] = $_SERVER['HTTP_REFERER'] ?? '';
@@ -125,6 +121,11 @@ final class LegacyPageLifecycle implements PageLifecycle
         if ($page instanceof ControllerPage) {
             // What `<method>_xhr()` did once the visitor was let in: the page is an XHR page from here on.
             $page->startXhr();
+        }
+        // The request for a permalink's Markdown form (the `.md` the router took off its address): what a permalink page's `selectMarkdownIfWanted()` did, once the
+        // visitor was let in (the refusal of a visitor of a private site is drawn in the type `_t` names, as the router's gatekeeper drew it)
+        if ($context->markdownSuffixRequested()) {
+            $page->selectMarkdownIfWanted();
         }
         $site->template()->autodetectTemplateType();
 

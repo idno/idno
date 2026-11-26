@@ -683,6 +683,17 @@ namespace Idno\Common {
          * Performs some administration functions, checks for the
          * presence of a form token, and hands off to postContent().
          */
+        /**
+         * What a DELETE with no valid form token does: the exception of a timed out page (the reported 500 page). A page served through a shell refuses it
+         * with the site's 403 page instead.
+         *
+         * @throws \Idno\Exceptions\SecurityException
+         */
+        protected function refuseDeleteWithoutToken()
+        {
+            throw new \Idno\Exceptions\SecurityException(\Idno\Core\Idno::site()->language()->_('The page you were on timed out.'));
+        }
+
         function delete()
         {
             \Idno\Core\Idno::site()->session()->publicGatekeeper();
@@ -701,7 +712,7 @@ namespace Idno\Common {
                 $this->parseJSONPayload();
                 $return = $this->deleteContent();
             } else {
-                throw new \Idno\Exceptions\SecurityException(\Idno\Core\Idno::site()->language()->_('The page you were on timed out.'));
+                $this->refuseDeleteWithoutToken();
             }
 
             if (\Idno\Core\Idno::site()->session()->isAPIRequest()) {
