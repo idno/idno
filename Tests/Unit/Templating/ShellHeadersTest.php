@@ -24,7 +24,7 @@ final class ShellHeadersTest extends TestCase
         yield 'rss' => ['rss', [['Content-type', 'application/rss+xml']]];
         yield 'kml' => ['kml', [['Content-type', 'application/vnd.google-earth.kml+xml']]];
         yield 'jsonfeed' => ['jsonfeed', [['Content-type', 'application/json'], ['Access-Control-Allow-Origin', '*']]];
-        yield 'activitypub' => ['activitypub', [['Content-Type', 'application/activity+json']]];
+        yield 'activitypub' => ['activitypub', [['Content-Type', 'application/activity+json'], ['Access-Control-Allow-Origin', '*']]];
         yield 'markdown' => ['markdown', [
             ['Content-Type', 'text/markdown; charset=utf-8'],
             ['X-Content-Type-Options', 'nosniff'],
@@ -40,6 +40,14 @@ final class ShellHeadersTest extends TestCase
     public function testEachCoreTypeHasTheHeadersItsShellSent(string $type, array $expected): void
     {
         $this->assertSame($expected, ShellHeaders::for($type));
+    }
+
+    public function testAnActivityPubPageThatIsRefusedIsPlainJson(): void
+    {
+        foreach ([403, 404, 410] as $status) {
+            $this->assertSame([['Content-Type', 'application/json']], ShellHeaders::for('activitypub', $status));
+        }
+        $this->assertSame(ShellHeaders::for('activitypub'), ShellHeaders::for('activitypub', 200));
     }
 
     public function testMarkdownCanonicalLinkOnlyAt200(): void

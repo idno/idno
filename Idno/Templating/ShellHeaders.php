@@ -45,7 +45,12 @@ final class ShellHeaders
             case 'jsonfeed':
                 return [['Content-type', 'application/json'], ['Access-Control-Allow-Origin', '*']];
             case 'activitypub':
-                return [['Content-Type', 'application/activity+json']];
+                // A page that is refused is JSON that says why, not an ActivityPub object
+                if ($status >= 400) {
+                    return [['Content-Type', 'application/json']];
+                }
+
+                return [['Content-Type', 'application/activity+json'], ['Access-Control-Allow-Origin', '*']];
             case 'markdown':
                 // (the document is text, whatever a browser might make of its first bytes)
                 $headers = [

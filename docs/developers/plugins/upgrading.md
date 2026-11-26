@@ -141,7 +141,7 @@ The details, for the home page and then for each group of pages:
 * **The JSON that tells a signed API request where to go** after a POST or DELETE of a permalink (`{"location": ...}`) is sent as `application/json` (it was `text/html; charset=UTF-8`).
 * **A webmention to a post** is received by `PermalinkPages::receiveWebmention()` for the route `idno_permalink`; a post that is not there takes none, as before.
 * **`Vary: Accept`** is sent on every answer to a GET or a HEAD of a permalink (a refusal, a missing post, a 304) but not on the answer to OPTIONS or on the refusal of a visitor of a private site, which are made before the page is served; a POST or DELETE through the shell does not send it (the legacy page sent it from `getContent()` only).
-* **An ActivityPub request** (`Accept: application/activity+json`) to a permalink is answered with the post owner's actor document, not the post's object (the `activitypub` template type's shell draws the page's `user` before it draws the post). That is a known defect of this version, not something to rely on; it is not fixed here.
+* **An ActivityPub request** (`Accept: application/activity+json`) to a permalink is answered with the post's object (the one its followers are sent), not the post owner's actor document. The `activitypub` template type's shell is now the ActivityPub plugin's (`IdnoPlugins/ActivityPub/templates/activitypub/shell.tpl.php`), and it answers from the page being served (`PageDocument`), never from template variables: a plugin that overrides that shell should do the same, because a variable such as `user` may have been set by a template drawn earlier.
 
 ### Addresses the site decides at run time, and the router's hooks
 

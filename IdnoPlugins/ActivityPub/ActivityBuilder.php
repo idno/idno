@@ -65,7 +65,61 @@ class ActivityBuilder
     ];
 
     /**
+     * Is this entity a post that other servers may have: public, published, of a real content
+     * type, and by a member? Only such a post is served as an ActivityPub object when another
+     * server fetches it.
+     *
+     * A post with no publish status counts as published (posts from before there were drafts
+     * have none). A private site (`walled_garden`) answers no visitor, other servers included,
+     * before this is asked.
+     *
+     * @param mixed $entity
+     * @return bool
+     */
+    public static function isFederated($entity): bool
+    {
+        if (!($entity instanceof Entity) || $entity instanceof User) {
+            return false;
+        }
+        if ($entity instanceof \IdnoPlugins\ActivityPub\Entities\ActivityPubFollower
+            || $entity instanceof \Idno\Entities\AsynchronousQueuedEvent
+        ) {
+            return false;
+        }
+        if (!$entity->isPublic()) {
+            return false;
+        }
+        $status = $entity->getPublishStatus();
+        if (!empty($status) && $status !== 'published') {
+            return false;
+        }
+        $type = $entity->getActivityStreamsObjectType();
+        if (empty($type) || $type === 'entity') {
+            return false;
+        }
+
+        return $entity->getOwner() instanceof User;
+    }
+
+    /**
+     * A post as a document of its own: what a server gets when it fetches the post by its id
+     * or its address. It is buildObject() and the context that deliveries carry, and nothing
+     * else, so that a server that fetches a post reads exactly what a server that was sent it
+     * read.
+     *
+     * @param Entity $entity
+     * @return array
+     */
+    public static function buildDocument(Entity $entity): array
+    {
+        return ['@context' => self::CONTEXT_WITH_QUOTES] + self::buildObject($entity);
+    }
+
+    /**
      * Convert an Idno entity to an ActivityPub object (Note, Article, etc.).
+     *
+     * This is the only place a post is turned into an ActivityPub object. Deliveries, the
+     * outbox and the post's own address all use it.
      *
      * @param Entity $entity The Idno entity
      * @return array ActivityPub object
@@ -153,6 +207,68 @@ class ActivityBuilder
         }
 
         return $object;
+    }
+
+    /**
+     * A member as an ActivityPub actor. This is the only place a member is turned into one:
+     * the actor's own address and the member's profile, asked for as ActivityPub, both use it.
+     *
+     * @param User $user
+     * @return array
+     */
+    public static function buildActor(User $user): array
+    {
+        $actorId = $user->getActivityPubActorID();
+
+        $person = [
+            '@context' => [
+                'https://www.w3.org/ns/activitystreams',
+                'https://w3id.org/security/v1',
+                [
+                    'toot'                 => 'http://joinmastodon.org/ns#',
+                    'discoverable'         => 'toot:discoverable',
+                    'gts'                  => 'https://gotosocial.org/ns#',
+                    'interactionPolicy'    => ['@id' => 'gts:interactionPolicy', '@type' => '@id'],
+                    'canQuote'             => ['@id' => 'gts:canQuote', '@type' => '@id'],
+                    'automaticApproval'    => ['@id' => 'gts:automaticApproval', '@type' => '@id'],
+                ],
+            ],
+            'id'                        => $actorId,
+            'type'                      => 'Person',
+            'url'                       => $user->getURL(),
+            'preferredUsername'         => $user->getHandle(),
+            'name'                      => $user->getName(),
+            'summary'                   => $user->getDescription(),
+            'manuallyApprovesFollowers' => false,
+            'discoverable'              => true,
+            'inbox'                     => $actorId . '/inbox',
+            'outbox'                    => $actorId . '/outbox',
+            'followers'                 => $actorId . '/followers',
+            'following'                 => $actorId . '/following',
+            'publicKey'                 => $user->getPublicKey(),
+            'endpoints'                 => $user->getActivityPubEndpoints(),
+            'followersCount'            => \IdnoPlugins\ActivityPub\Entities\ActivityPubFollower::getFollowerCount($user->getUUID()),
+            'followingCount'            => 0,
+            'statusesCount'             => (int) Entity::countFromX(
+                self::NON_CONTENT_SUBTYPES, [
+                'owner'          => $user->getUUID(),
+                'publish_status' => 'published',
+                'access'         => 'PUBLIC',
+                ]
+            ),
+        ];
+
+        $icon = $user->getIcon();
+        if ($icon) {
+            $mime = Entity::getMediaMimeType($icon);
+            $person['icon'] = [
+                'type'      => 'Image',
+                'url'       => $icon,
+                'mediaType' => $mime ?: 'image/png',
+            ];
+        }
+
+        return $person;
     }
 
     /**

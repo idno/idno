@@ -53,7 +53,7 @@ final class ShellHeadersDrawTest extends TestCase
     {
         foreach (['default', 'json', 'jsonp', 'rss', 'kml', 'jsonfeed', 'activitypub'] as $type) {
             $this->assertSame(ShellHeaders::for($type), $this->template($type)->shellHeaders(200), $type);
-            $this->assertSame(ShellHeaders::for($type), $this->template($type)->shellHeaders(404), $type);
+            $this->assertSame(ShellHeaders::for($type, 404), $this->template($type)->shellHeaders(404), $type);
         }
     }
 

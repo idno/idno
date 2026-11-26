@@ -21,7 +21,8 @@ final class TemplateTypeRequestTest extends RenderedSiteTestCase
         'jsonp' => '200 application/x-javascript text',
         'jsonfeed' => '200 application/json json',
         'kml' => '200 application/vnd.google-earth.kml+xml xml',
-        'activitypub' => '200 application/activity+json json',
+        // (the home page is no post or member: it has no ActivityPub form, which the shell answers with a 406 and says so)
+        'activitypub' => '406 application/activity+json json',
         'email' => '200 text/html html',
         'email-text' => '200 text/html html',
         // Any page as Markdown (MarkdownOutputTest), and the type's short name.

@@ -170,10 +170,10 @@ final class SitePageDrawingTest extends PrivateSiteTestCase
     public function testADrawnPageInEveryTemplateType(): void
     {
         foreach (self::TYPES as $type) {
-            // (the ActivityPub shell has something to say about a page that has an owner: a person)
-            $response = $this->get('draw-new', 'plain', 'case=' . ($type === 'activitypub' ? 'permalink' : 'draw') . '&_t=' . $type, ['Cookie' => $this->member]);
+            $response = $this->get('draw-new', 'plain', 'case=draw&_t=' . $type, ['Cookie' => $this->member]);
 
-            $this->assertSame(200, $response->status, $type);
+            // (the ActivityPub shell answers a page that is no post or member with the 406 that says it has no ActivityPub form)
+            $this->assertSame($type === 'activitypub' ? 406 : 200, $response->status, $type);
             $this->assertNotSame('', trim($response->body), $type . ' has a body');
             $declared = ShellHeaders::for($type)[0] ?? null;
             $this->assertNotNull($declared, $type . ' declares a Content-Type');

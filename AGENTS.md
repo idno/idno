@@ -1211,8 +1211,8 @@ for classes that extend `PageShell`, and holds each to the rule); it is `Idno\Pa
   `SecurityException`, which is the reported 500 page and mails the administrator, and a stranger can send one; a POST with no token only logs a line and forwards, and stays as it was); (3) the JSON `{"location": ...}` that answers a signed API request
   is `application/json` (the rule of every site page; the legacy page sent it as `text/html`). Where `Vary: Accept` is and is not sent is as the legacy page's recordings have it (a GET or HEAD of a permalink, every answer, a 304 included; not
   the answer to OPTIONS, the refusal of a visitor of a private site, or a POST or DELETE: see "Legacy pages and routes"). A post with no `updated` gets no `Last-Modified` (the permalink asks nothing of a date it has not got; no
-  recording holds that case). KNOWN DEFECT of this branch, not fixed here: a request with an ActivityPub `Accept` to a permalink is answered with the OWNER's actor document, because the `activitypub` template type's shell tests the
-  page's `user` (the owner) before it draws the post; the `dev` branch answers with the post's object. A database statement
+  recording holds that case). A permalink asked for as ActivityPub (`Accept: application/activity+json`, or `application/ld+json` with the ActivityStreams profile) is the post's object, as the
+  plugin's `PageDocument` decides from the page (see "ActivityPub Plugin": the page service decides who may read the post first, as for HTML). A database statement
   is not added: `PermalinkAnswersTest::testTheStatementsOfAVisitorsGetOfTheArticle` records the count.
 - `PageShell::delegate(\Closure $serve)` runs `$serve(PageContext): Response` on the request being served as a controller would. The context is built from the
   request on Symfony's `RequestStack` (which `LegacyResponse` pushes while legacy code runs; the process's request where there is none) and from what the shell
@@ -4875,6 +4875,7 @@ Each content plugin has an `Entry.php` entity class that defines
 | `Delivery.php` | Signs and POSTs activities to remote inboxes; fan-out to followers via queue |
 | `HTTPSignature.php` | HTTP Signature signing (draft-cavage) and verification |
 | `RemoteActor.php` | Fetches and parses remote actor profiles, keys |
+| `PageDocument.php` | What a page answers when asked for as ActivityPub: a post's object, a member's actor, or an error (the `activitypub` shell prints it) |
 | `Pages/Actor.php` | Actor profile endpoint (Person object) |
 | `Pages/Inbox.php` | Per-user inbox (POST handling with CSRF bypass) |
 | `Pages/SharedInbox.php` | Shared inbox for multi-user delivery |
@@ -4889,6 +4890,7 @@ Each content plugin has an `Entry.php` entity class that defines
 
 ```
 /actor/{handle}               Person profile
+/YYYY/slug, /view/{id}        A post (Note, Article, ...) when asked with an ActivityPub Accept
 /actor/{handle}/inbox         Per-user inbox
 /actor/{handle}/outbox        Outbox (paginated OrderedCollection)
 /actor/{handle}/followers     Followers collection
@@ -4915,13 +4917,28 @@ Each content plugin has an `Entry.php` entity class that defines
    moment they are built and carry that time; the follow `Accept` carries none. The object has
    `updated` only when it is later than `created`. A test never compares two separately
    generated times (`ActivityTimesTest`, `QueuedDeliveryTest`).
-2. **Incoming**: `ActivityHandler::handle()` verifies HTTP signatures, routes by
+2. **A post fetched by another server**: a GET of a post's address (its permalink, `/YYYY/slug`, and `/view/<id>`, which is the post's uuid and so the `id` other servers
+   know it by) with an ActivityPub `Accept` is answered with the post: `ActivityBuilder::buildDocument()`, which is `buildObject()` (the object a `Create`, an `Update` and
+   the outbox carry: one builder) under the context deliveries carry (`CONTEXT_WITH_QUOTES`), `Content-Type: application/activity+json`, `Access-Control-Allow-Origin: *`
+   and `Vary: Accept`. The `activitypub` template type's shell is the plugin's (`IdnoPlugins/ActivityPub/templates/activitypub/shell.tpl.php`; core has none: a site without
+   the plugin draws no ActivityPub form) and prints what `PageDocument::forPage($currentPage)` decides, from the PAGE (the entity it is the permalink of, and the status it
+   answers with), never from template variables, which stay set between draws (drawing a member's default picture sets `user`, which once made every post answer with its
+   owner). The page service has decided who may read the post before the shell is drawn, as for HTML, so a post the viewer may not read, a deleted post and a slug nobody has
+   are the 403, 410 and 404 the page answers (`{"error": ...}`, `application/json`, by `ShellHeaders::for('activitypub', $status)`), and a visitor of a private site is
+   refused before the page is served, as HTML. A post that is not given to other servers (`ActivityBuilder::isFederated()`: public, published or with no status, of a
+   content type, by a member) is a 406 `{"error": ...}` even for a viewer who may read it (a draft read by its owner, a post for the members), and so is any page that is no
+   post or member (the home page, a static page): the status is set by the shell (`http_response_code()`, a template sends no header), so a 406 keeps the type's
+   `application/activity+json`. A member's profile is `ActivityBuilder::buildActor()`, which the actor's own address (`Pages/Actor.php`) prints too. The HTML permalink's
+   `<link rel="alternate" type="application/activity+json">` names the owner's actor (`templates/default/shell/activitypub.html.twig` reads a template variable). Pinned by
+   `IdnoPlugins/ActivityPub/Tests/PostDocumentTest` (every content type, both Accept spellings, the view address, a browser, HEAD, each state of a post, a third-party subclass
+   of the permalink page) and the permalink recordings (`PermalinkAnswersTest`'s `*-accept-activitypub` cases are `CHANGED`).
+3. **Incoming**: `ActivityHandler::handle()` verifies HTTP signatures, routes by
    activity type, and processes Follow (auto-accept), Undo, Delete, QuoteRequest.
-3. **Quote posts (FEP-044f)**: All outgoing notes include
+4. **Quote posts (FEP-044f)**: All outgoing notes include
    `interactionPolicy.canQuote.automaticApproval` set to `as:Public`. Incoming
    QuoteRequests are auto-accepted with an HMAC-signed stamp URL. The stamp
    endpoint serves `QuoteAuthorization` objects for third-party verification.
-4. **Context**: Activities use the GoToSocial namespace (`gts:`) for interaction
+5. **Context**: Activities use the GoToSocial namespace (`gts:`) for interaction
    policies. The extended `CONTEXT_WITH_QUOTES` constant in `ActivityBuilder`
    defines all required JSON-LD terms.
 
