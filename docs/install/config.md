@@ -190,19 +190,6 @@ a `socks5` proxy (names resolved by the server) or no proxy, the address checked
 A prefix length of 0 (`0.0.0.0/0`, `::/0`) is refused as an invalid entry: `*` is the way to switch the check off.
 Set `http_allow_private = *` if the server cannot resolve external names at all.
 
-**webmention_target_hosts**<br>
-Other host names whose addresses count as this site's when someone sends it a webmention. A webmention is accepted only
-when its target (the address of your page that was linked) is an address of this site: on the host of the `url` setting,
-on that host's `www.` or bare counterpart (`example.com` and `www.example.com`), or on a host listed here. List the former
-domain of a site that moved, or an alias that still points at it. Both `http` and `https` addresses are accepted for these
-hosts, on the default ports (write `old.example:8443` for a host that is reached on another). The setting is a list in
-`config.ini`, or a comma-separated string in the environment variable `IDNO_WEBMENTION_TARGET_HOSTS`, and is read from
-`config.ini` or the environment only, never from the settings saved in the database. An entry that is not a host name or an
-IP address (a URL, a path, a wildcard) stops the site, and says which.
-
-    webmention_target_hosts[] = 'old.example'
-    webmention_target_hosts[] = 'alias.example'
-
 **webservice_max_download**<br>
 The most bytes of a response an outgoing request keeps, 10 MB (10485760) by default. A response that declares a
 larger length is refused, and one with no declared length is cut at this size. It is also the largest file the site

@@ -34,10 +34,10 @@ use Symfony\Component\Routing\RouterInterface;
  * The endpoint used to ask the legacy router for the page CLASS of the target (`PageHandler::getRoute()`), which builds the class (its constructor's side
  * effects included) and cannot find a page that has no class. This asks what serves the address:
  *
- * 1. Whose address it is (`TargetHosts`). An http or https address, with no user information, on the host of the site's address, that host's `www.` or bare
- *    counterpart, or a host the boot configuration lists (`webmention_target_hosts`), on the site's port (when its address names one that is not its scheme's
- *    default) or its scheme's default port; for a site in a subdirectory, under it. The scheme is not compared. An address with no host is refused. The site's address is
- *    the boot `url`; without one it is the address the site detected for itself (`SiteFacts::url()`), with ONE warning a process naming the setting: the address
+ * 1. Whose address it is (`TargetHosts`). An http or https address, with no user information, no control character and no dot segment, on the site's own host and no
+ *    other (not its `www.` or bare counterpart), on the site's port (when its address names one that is not its scheme's default) or its scheme's default port; for a
+ *    site in a subdirectory, under it. The scheme is not compared. An address with no host is refused. The site's address is the boot `url`; without one it is the
+ *    address the site detected for itself (`SiteFacts::url()`, which can follow the request's Host header), with ONE warning a process naming the setting: the address
  *    is never matched by its path alone.
  * 2. A page a controller serves. A GET `Request::create()` for the address (the site's directory as the front controller's) is matched by Symfony's router, the
  *    router's `RequestContext` set from it and put back as it was, whatever happens; a route whose controller is a site page (`#[SitePage]`) that
@@ -55,16 +55,11 @@ use Symfony\Component\Routing\RouterInterface;
  */
 final class LegacyWebmentionTargets implements WebmentionTargets
 {
-    /** @var list<array{host: string, port: int|null}> */
-    private readonly array $listed;
-
     private bool $warned = false;
 
     /**
      * @param \Closure(): LegacyDispatcher $dispatcher
      * @param \Closure(): LoggerInterface  $logger
-     *
-     * @throws \LogicException for an entry of `webmention_target_hosts` that is no host name or IP address
      */
     public function __construct(
         private readonly RouterInterface $router,
@@ -80,7 +75,6 @@ final class LegacyWebmentionTargets implements WebmentionTargets
         private readonly \Closure $logger,
     )
     {
-        $this->listed = TargetHosts::entries($config->get('webmention_target_hosts'));
     }
 
     public function resolve(string $target): ?WebmentionTarget
@@ -88,7 +82,7 @@ final class LegacyWebmentionTargets implements WebmentionTargets
         if (!$this->kernel->legacyBooted()) {
             return null;
         }
-        $address = (new TargetHosts($this->siteAddress(), $this->listed))->locate($target);
+        $address = (new TargetHosts($this->siteAddress()))->locate($target);
         if ($address === null) {
             return null;
         }
@@ -193,7 +187,7 @@ final class LegacyWebmentionTargets implements WebmentionTargets
         }
         if (!$this->warned) {
             $this->warned = true;
-            ($this->logger)()->warning('The url setting is not configured: webmention targets are matched against the address the site detected for itself. Set url in config.ini.');
+            ($this->logger)()->warning('The url setting is not configured: webmention targets are matched against the host the site detected for itself, which can follow the request. Set url in config.ini.');
         }
 
         return $this->site->url();

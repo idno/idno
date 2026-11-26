@@ -143,7 +143,6 @@ namespace Idno\Core {
                 unset($config['proxy_string']);
                 unset($config['proxy_type']);
                 unset($config['http_allow_private']);
-                unset($config['webmention_target_hosts']);
                 unset($config['disable_ssl_verify']);
                 unset($config['upload_tmp_dir']);
                 unset($config['bypass_fulltext_search']);
@@ -232,7 +231,6 @@ namespace Idno\Core {
             unset($array['proxy_string']);
             unset($array['proxy_type']);
             unset($array['http_allow_private']);
-            unset($array['webmention_target_hosts']);
             unset($array['disable_ssl_verify']);
             unset($array['directloadplugins']);
             unset($array['bypass_fulltext_search']);

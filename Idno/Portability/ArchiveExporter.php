@@ -60,7 +60,7 @@ final class ArchiveExporter
         'database', 'dbname', 'dbuser', 'dbpass', 'dbhost', 'dbport', 'dbstring', 'dbauthsrc',
         'path', 'url', 'host', 'feed', 'uploadpath', 'upload_tmp_dir',
         'session_path', 'session_hash_function', 'sessions_database', 'sessions_storage',
-        'cookie_jar', 'proxy_string', 'proxy_type', 'disable_ssl_verify', 'http_allow_private', 'webmention_target_hosts',
+        'cookie_jar', 'proxy_string', 'proxy_type', 'disable_ssl_verify', 'http_allow_private',
         'antiplugins', 'alwaysplugins', 'bypass_fulltext_search',
     ];
 

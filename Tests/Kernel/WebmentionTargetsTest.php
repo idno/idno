@@ -343,32 +343,31 @@ final class WebmentionTargetsTest extends TestCase
         }
     }
 
-    public function testTheWwwCounterpartOfTheSitesHostIsATarget(): void
+    public function testOnlyTheSitesOwnHostIsATarget(): void
     {
-        $this->assertNotNull($this->resolverFor('https://example.com/')->resolve('https://www.example.com/'));
-        $this->assertNotNull($this->resolverFor('https://www.example.com/')->resolve('https://example.com/'));
+        // no www. or bare counterpart, no subdomain, no other host
+        $this->assertNotNull($this->resolverFor('https://example.com/')->resolve('https://example.com/'));
+        $this->assertNull($this->resolverFor('https://example.com/')->resolve('https://www.example.com/'));
+        $this->assertNull($this->resolverFor('https://www.example.com/')->resolve('https://example.com/'));
         $this->assertNull($this->resolverFor('https://example.com/')->resolve('https://blog.example.com/'));
-    }
-
-    public function testAHostTheConfigurationListsIsATarget(): void
-    {
-        $resolver = $this->resolverFor('https://example.com/', listed: ['old.example']);
-
-        $this->assertSame('idno_home', $resolver->resolve('https://old.example/')?->route);
-        $this->assertNull($resolver->resolve('https://other.example/'));
-        $this->assertNull($resolver->resolve('https://old.example:8443/'));
         $this->assertNull($this->resolverFor('https://example.com/')->resolve('https://old.example/'));
     }
 
-    public function testAnEntryThatIsNoHostStopsTheServiceBeingBuilt(): void
+    public function testNoSettingListsOtherHosts(): void
     {
-        try {
-            $this->resolverFor('https://example.com/', listed: ['https://old.example/path']);
-            $this->fail('the service was built with an entry that is no host');
-        } catch (\LogicException $e) {
-            $this->assertStringContainsString('webmention_target_hosts', $e->getMessage());
-            $this->assertStringContainsString('https://old.example/path', $e->getMessage());
-        }
+        // (the boot configuration is not asked for hosts: a setting that listed them is gone)
+        $resolver = new LegacyWebmentionTargets(
+            Idno::container()->get('router'),
+            static fn (): LegacyDispatcher => Idno::container()->get(LegacyDispatcher::class),
+            Idno::container()->get('kernel'),
+            new BootConfig(['url' => 'https://example.com/', 'webmention_target_hosts' => ['old.example']], false),
+            $this->createStub(SiteFacts::class),
+            new ServiceLocator(['Idno\\Pages\\Homepage' => static fn (): HomePages => Idno::container()->get(HomePages::class)]),
+            static fn (): LoggerInterface => new NullLogger(),
+        );
+
+        $this->assertNull($resolver->resolve('https://old.example/'));
+        $this->assertNotNull($resolver->resolve('https://example.com/'));
     }
 
     public function testASiteWithNoUrlSettingIsMatchedByTheAddressItDetected(): void
@@ -386,6 +385,7 @@ final class WebmentionTargetsTest extends TestCase
 
         $this->assertSame('idno_home', $resolver->resolve('https://detected.example/')?->route);
         $this->assertSame('idno_home', $resolver->resolve('http://detected.example/')?->route);
+        $this->assertNull($resolver->resolve('https://www.detected.example/'));
         // never by the path alone
         $this->assertNull($resolver->resolve('https://other.example/'));
         $this->assertNull($resolver->resolve('/content/note'));
@@ -565,15 +565,12 @@ final class WebmentionTargetsTest extends TestCase
         return [$context->getBaseUrl(), $context->getPathInfo(), $context->getMethod(), $context->getHost(), $context->getScheme(), $context->getHttpPort(), $context->getHttpsPort(), $context->getQueryString(), $context->getParameters()];
     }
 
-    /**
-     * @param list<string>|string|null $listed the `webmention_target_hosts` setting
-     */
-    private function resolverFor(?string $siteUrl, ?RouterInterface $router = null, mixed $listed = null, string $detected = '/', ?LoggerInterface $logger = null, ?ContainerInterface $receivers = null): LegacyWebmentionTargets
+    private function resolverFor(?string $siteUrl, ?RouterInterface $router = null, string $detected = '/', ?LoggerInterface $logger = null, ?ContainerInterface $receivers = null): LegacyWebmentionTargets
     {
         $dispatcher = Idno::container()->get(LegacyDispatcher::class);
         $facts = $this->createStub(SiteFacts::class);
         $facts->method('url')->willReturn($detected);
-        $values = ($siteUrl !== null ? ['url' => $siteUrl] : []) + ($listed !== null ? ['webmention_target_hosts' => $listed] : []);
+        $values = $siteUrl !== null ? ['url' => $siteUrl] : [];
         $logger ??= new NullLogger();
 
         return new LegacyWebmentionTargets(
@@ -636,7 +633,7 @@ final class WebmentionTargetsTest extends TestCase
     public function testATargetUnderASubdirectoryIsResolved(): void
     {
         $url = $this->base() . 'blog/';
-        $answers = $this->resolveInAProcess('subdirectory', $url, [$url, $url . 'content/note', $url . 'feed.xml', $url . 'view/abc123', $url . 'pages/about', $this->base() . 'content/note', $this->base()]);
+        $answers = $this->resolveInAProcess('subdirectory', $url, [$url, $url . 'content/note', $url . 'feed.xml', $url . 'view/abc123', $url . 'pages/about', $this->base() . 'content/note', $this->base(), $url . '../content/note', $url . 'a/../../content/note', $url . '%2e%2e/content/note']);
 
         $this->assertSame('idno_home', $answers[$url]['route']);
         $this->assertSame(['idno_content', ['note']], [$answers[$url . 'content/note']['route'], $answers[$url . 'content/note']['arguments']]);
@@ -646,6 +643,10 @@ final class WebmentionTargetsTest extends TestCase
         // an address on the host that is not under the site's directory is not the site's page
         $this->assertNull($answers[$this->base() . 'content/note']);
         $this->assertNull($answers[$this->base()]);
+        // a dot segment does not lead out of the directory
+        foreach (['../content/note', 'a/../../content/note', '%2e%2e/content/note'] as $path) {
+            $this->assertNull($answers[$url . $path], $path);
+        }
     }
 
     public function testNothingIsResolvedWithoutTheLegacyApplication(): void

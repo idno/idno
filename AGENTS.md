@@ -1292,17 +1292,15 @@ WebFinger answers a `resource` that is not text with the 404 page (was a 500 pag
 and the logger as a service closure), which asks what serves the address as a GET of it is routed and builds no page class (`PageHandler::getRoute()`, which the endpoint used, built the class with its constructor's
 side effects, which can send a header, and cannot find a page that has no class). A TARGET IS A PAGE THAT TAKES MENTIONS: an address whose page cannot receive one is null, so a caller answers `target_not_found` BEFORE it
 makes any request for the source. In order:
-1. WHOSE ADDRESS (`Idno\Http\Webmention\TargetHosts`, pure, `locate()`). The address must be http or https with a host and no user information. Its host is one of: the host of the site's address, its `www.` or bare counterpart
-   (`example.com` and `www.example.com`; not for an IP address), or a host listed in the boot-configuration setting `webmention_target_hosts` (below). Hosts compare ignoring case and a trailing dot, an
-   internationalised name in punycode (with the `intl` extension; without it a non-ASCII host is no host; `parse_url()` cannot read a host with a C1 control byte in its UTF-8, which is refused). The scheme is NOT compared:
-   either is accepted for an accepted host. The port, explicit or its scheme's default: when the site's address names a port that is not its scheme's default the target must name that port (a portless target is another
-   origin and is refused); otherwise the target must use its scheme's default (`:443` on https, `:80` on http, or none). A listed host takes its scheme's default unless the entry is written `host:port`, which is the port it must
-   have. An address with no host (`/view/abc`), another scheme (`ftp:`, `mailto:`), a host that only starts or ends like the site's (`example.com.evil.example`, `evilexample.com`, `example.com@evil.example`) and, for a site
-   in a subdirectory (the site's address has a path), an address outside that directory are not the site's. A listed host serves under the site's directory. The site's address is the boot `url`; with none it is the address the
-   site detected for itself (`SiteFacts::url()`, from `Config::detectBaseURL()`), and ONE warning a process says the `url` setting is not configured (naming the setting, never a host). An address is never matched by its path alone.
-   `webmention_target_hosts` is a boot-configuration setting like `http_allow_private`: a list in `config.ini` (`webmention_target_hosts[] = "old.example"`) or one comma-separated string in `IDNO_WEBMENTION_TARGET_HOSTS`,
-   never read from the stored settings (`Idno\Core\Config` drops it on load and on save, and the archive's `config.json` never holds it: `ArchiveExporter::SERVER_SETTINGS`); an entry that is not a host name or an IP address
-   (a url, a path, a wildcard, user information, a bad port) makes the service throw a `\LogicException` naming the setting and the entry when it is built.
+1. WHOSE ADDRESS (`Idno\Http\Webmention\TargetHosts`, pure, `locate()`): ONLY the site's own configured host, strictly. The address must be http or https with a host, and hold no control character, NUL or space anywhere (`parse_url()` turns
+   them into underscores, so such an address would be read as another), no user information and no `.` or `..` path segment (also written `%2e`). Its host is the host of the site's address and no other: NOT the `www.` or bare
+   counterpart, not a subdomain, not a former domain, and there is no setting that lists more. Hosts compare ignoring case and ONE trailing dot (`example.com..` is no host), an internationalised name in punycode (with the `intl`
+   extension; without it a non-ASCII host is no host; `parse_url()` cannot read a host with a C1 control byte in its UTF-8, which is refused). The scheme is NOT compared: either is accepted. The port, explicit or its scheme's default:
+   when the site's address names a port that is not its scheme's default the target must name that port (a portless target is another origin and is refused); otherwise the target must use its scheme's default (`:443` on https,
+   `:80` on http, or none). An address with no host (`/view/abc`), another scheme (`ftp:`, `mailto:`), a host that only starts or ends like the site's (`example.com.evil.example`, `evilexample.com`,
+   `example.com@evil.example`) and, for a site in a subdirectory (the site's address has a path), an address outside that directory (a dot segment cannot lead out of it) are not the site's. The site's address is the boot `url`;
+   with none it is the address the site detected for itself (`SiteFacts::url()`, from `Config::detectBaseURL()`), WHICH CAN FOLLOW THE REQUEST'S HOST HEADER or `SERVER_NAME`, so that a sender who picks the Host header picks the
+   host that is accepted: a site must set `url` for the check to mean anything. ONE warning a process says the `url` setting is not configured (naming the setting, never a host). An address is never matched by its path alone.
 2. A PAGE A CONTROLLER SERVES. A GET `Request::create()` for the address (the site's directory as the front controller's; an address Symfony refuses to make a request of, a backslash in it, is no target) is matched by Symfony's
    router, the router's `RequestContext` set from it and restored in a `finally`, whatever the match does. A route whose controller is a site page (`#[SitePage]`) that `LegacyRouteOverride::handsBack()` (the listener's own rule)
    does not hand back is the page: `page` the `#[SitePage]` name, `route` the route's name, `arguments` the route's path parameters but `lead` and `slash`, in the order of the PATH (the matcher's array puts defaults first).
@@ -1317,11 +1315,11 @@ makes any request for the source. In order:
 4. Otherwise null.
 `receiveWebmention($route, $arguments, ReceivedWebmention)` takes the mention of a page a controller serves (`HomePages` logs the sender's source with control characters replaced and at most 200 bytes). `Idno\Pages\Homepage` (the shell)
 takes a mention through the same method with the route `idno_home`. Differences from the lookup the endpoint made (`getRoute()`, which looked at the path alone, took the first pattern that matches and built the page): an address on
-another host (or port, or with user information) is refused, a host-less target is refused, an exact key wins over an earlier pattern (Toro's order), `<permalink>.md` and `/index.php` are the permalink and the home page, and a page that takes
-no mention (or whose receiver refuses its route) is no target, where the endpoint answered `source_not_supported` after it had fetched the source. The matching is pinned by `Tests/Unit/Http/Webmention/TargetHostsTest` (every host and port
-row with near-misses, the entries), `Tests/Unit/Http/Webmention/WebmentionTargetTest` and `Tests/Kernel/WebmentionTargetsTest`: every address of the booted site (a sample of each pattern of its route table, each content type's permalink,
+another host (a `www.` alias and a former domain included; or port, or with user information) is refused, a host-less target is refused, an exact key wins over an earlier pattern (Toro's order), `<permalink>.md` and `/index.php` are the permalink and the home page, and a page that takes
+no mention (or whose receiver refuses its route) is no target, where the endpoint answered `source_not_supported` after it had fetched the source. The matching is pinned by `Tests/Unit/Http/Webmention/TargetHostsTest` (every host, port, control-character and dot-segment
+row with near-misses), `Tests/Unit/Http/Webmention/WebmentionTargetTest` and `Tests/Kernel/WebmentionTargetsTest`: every address of the booted site (a sample of each pattern of its route table, each content type's permalink,
 its annotations), in eight spellings (trailing slash, query string, fragment, a percent-encoded character in both hex cases, `.md`), against a lookup that reproduces `getRoute()`'s without building pages; the fallback address and its warning;
-the listed hosts; a plugin's page in a process of its own (`Tests/Kernel/webmention_targets.php`, `Tests\Fixtures\MentionablePage`); a site in a subdirectory; no page built; the router's context restored; the tagged receivers through
+the host and port rules; a plugin's page in a process of its own (`Tests/Kernel/webmention_targets.php`, `Tests\Fixtures\MentionablePage`); a site in a subdirectory; no page built; the router's context restored; the tagged receivers through
 `Tests\Fixtures\WebmentionReceiverProbe`. The endpoint itself still uses `getRoute()`.
 
 **Replacing the home page: the event `homepage/replace`.** A plugin that wants the site's root to be something other than the stream does not extend a shell or
@@ -2226,10 +2224,6 @@ the tag pages and the small public endpoints are served through them (and the fi
     decorator keeps a DNS cache, and pins curl to the address it cached, for its whole life, which in a
     queue worker would be until the worker restarts. Fetch it at each use (`Webservice` and
     `ATProtoClient` do); do not keep it in a property.
-  - The boot-configuration setting `webmention_target_hosts` (a list, `webmention_target_hosts[] = "old.example"` in `config.ini`, or one comma-separated string in `IDNO_WEBMENTION_TARGET_HOSTS`; never read from the stored
-    settings, which `Idno\Core\Config` drops it from, and never in an archive's `config.json`) lists the host names or IP addresses, besides the site's own and its `www.` or bare counterpart, whose addresses are this site's
-    for a webmention (`host:port` for one reached on a port; see "Webmention targets"). It is read by `LegacyWebmentionTargets` through `Idno\Http\Webmention\TargetHosts::entries()`, which refuses an entry that is no host with a
-    `\LogicException` naming the setting and the entry (`Tests/Core/BootOnlySettingsTest`, `TargetHostsTest`).
   - The boot-configuration setting `http_allow_private` (a list, `http_allow_private[] = "192.168.1.0/24"`
     in `config.ini`, or one comma-separated string in `IDNO_HTTP_ALLOW_PRIVATE`; never read from the
     stored settings: `Idno\Core\Config` drops it) names the IP addresses and CIDR ranges (IPv4 or IPv6)
