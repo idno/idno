@@ -980,6 +980,11 @@ draft or published. On for new sites (`Config`); not federated; not a content ty
   request passes), and never for one's own account. A member cannot delete their account
   there, and no API key can delete one: a credential for publishing does not reach account
   changes. The administrators' Users page is the other place accounts are deleted.
+- The administrators' Users page (`Idno\Pages\Admin\Users`) takes rights away and deletes
+  accounts only when `User::canBeDemotedOrDeletedBy()` allows it: never the administrator's
+  own, and never those of the last administrator who can sign in (the rule bans follow,
+  `canBeBannedBy()`). The page offers neither for oneself, but the handler must refuse too.
+  `Tests/Pages/Admin/UsersPageSafeguardsTest.php` checks this.
 - Going back after a form: `Page::forwardBack()` goes to the `Referer` only when it is an
   address of this site, and `Page::forwardToTarget($default)` reads a form's `forward-to`
   field the same way (`Login::sanitizeRedirectUrl()`), as does `Page::forwardAfterDelete()`. Don't `forward()` to

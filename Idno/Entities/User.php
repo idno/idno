@@ -587,6 +587,19 @@ namespace Idno\Entities {
         }
 
         /**
+         * May a given administrator take this member's administration rights away, or delete
+         * this member's account? Never their own, and never those of the last administrator
+         * who can sign in: a site always keeps somebody who can administer it.
+         *
+         * @param  string $by_uuid The UUID of the administrator who asks
+         * @return bool
+         */
+        function canBeDemotedOrDeletedBy($by_uuid)
+        {
+            return $this->canBeBannedBy($by_uuid);
+        }
+
+        /**
          * Lift this member's ban. The caller saves the member.
          */
         function unban()
