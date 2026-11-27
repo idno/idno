@@ -38,6 +38,7 @@ final class ControllerPageMembersTest extends TestCase
         'selectMarkdownIfWanted' => 'wantsMarkdown() (overridden) and the template type',
         'getIcon' => 'the site\'s configuration and the current page\'s owner',
         'arguments' => 'returns the public property the constructor set',
+        'getTextInput' => 'getInput() (overridden) and Input::text()',
         // Static: they cannot see a page's request, and are called by the class (`\Idno\Common\Page::isSSL()`), never through a page.
         // For a request made from the process's globals (FrontController::requestFromGlobals()) they answer as the request does
         // (ControllerPageEquivalenceTest compares isSSL() with isSecure()).

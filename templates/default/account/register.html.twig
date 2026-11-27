@@ -1,60 +1,74 @@
-<div class="row">
+{#- The registration form. `invited` (the person arrived with an invitation), `email` (the invitation's address when invited: it cannot be changed here), `code`, `name`, `handle` (what was typed before a refusal; never a password), `inviter` (the name of whoever invited them), `is_admin` (the invitation is an administrator's). -#}
+{% set invited = invited|default(false) %}
+<div class="idno-gate idno-gate-wide">
+    <div class="idno-editor">
+        <h1 class="idno-editor-heading">
+            {% if invited %}{{ t('Join %s', [site_title()]) }}{% else %}{{ t('Create your account') }}{% endif %}
+        </h1>
 
-    <div class="col-md-8 col-md-offset-2">
-        <h3 class="register">
-            {{ t('Hello there!') }}
-        </h3>
-        <h4 class="register">{{ t('Create a new account to get started.') }}</h4>
-        <div class="jumbotron">
-            <p>
-
+        {% if invited %}
+            <p class="idno-gate-lead">
+                {% if inviter|default('') %}
+                    {{ t('%s invited you. Choose a name, a handle and a password to finish setting up your account.', [inviter]) }}
+                {% else %}
+                    {{ t('You have been invited. Choose a name, a handle and a password to finish setting up your account.') }}
+                {% endif %}
             </p>
-            <form action="{{ site_url() }}account/register" method="post" style="width: 100%" class="form-horizontal">
-                <div class="control-group">
-                   <label class="control-label" for="inputUsername">{{ t('Your name') }}</label>
-                    <div class="controls">
-                        <input type="text" id="inputName" placeholder="Henri Matisse" class="" style="width: 100%" name="name" value="">
-                    </div>
+            {% if is_admin|default(false) %}
+                <div class="idno-notice" role="note">
+                    <strong>{{ t('You are invited as an administrator.') }}</strong>
+                    {{ t("Administrators can change the site's settings, manage its members and see everything posted here.") }}
                 </div>
-                <div class="control-group">
-                    <label class="control-label" for="inputUsername">{{ t('Choose a handle') }}
-                        <br /><small>{{ t_html('Handles identify you throughout the site. Something simple is best: for example, <em>janedoe</em>.') }}</small></label>
-                    <div class="controls">
-                        <input type="text" id="inputUsername" placeholder="{{ t('username') }}" class="" style="width: 100%" name="handle" value="" autocapitalize="off" autocorrect="off" spellcheck="false">
-                    </div>
-                </div>
-                <div class="control-group">
-                    <label class="control-label" for="inputEmail">{{ t('Your email address') }}</label>
-                    <div class="controls">
-                        <input type="email" id="inputEmail" placeholder="you@email.com" class="" style="width: 100%" name="email" value="{{ email }}" autocapitalize="off">
-                    </div>
-                </div>
-                <div class="control-group">
-                    <label class="control-label" for="inputEmail">{{ t('Create a password') }}
-                        <br /><small>{{ t('At least 7 characters please.') }}</small></label>
-                    
-                    <div class="controls">
-                        <input type="password" id="inputPassword" placeholder="{{ t('secret-password') }}" class="" style="width: 100%" name="password" >
-                    </div>
-                    
-                </div>
-                <div class="control-group">
-                    <label class="control-label" for="inputEmail">{{ t('Your password again') }}</label>
-                    <div class="controls">
-                        <input type="password" id="inputPassword" placeholder="{{ t('secret-password') }}" class="" style="width: 100%" name="password2">
-                    </div>
-                </div>
-                <div class="control-group">
-                    <div class="controls">
-                        <button type="submit" class="btn btn-reg">{{ t('Create Account') }}</button>
-                        <input type="hidden" name="code" value="{{ code }}">
-                    </div>
-                </div>
-                {{ idno_include('forms/input/captcha', {action: '/account/register'}) }}
-                {{ form_token('/account/register') }}
+            {% endif %}
+        {% endif %}
 
-            </form>
-        </div>
+        <form action="{{ site_url() }}account/register" method="post">
+            <div class="idno-form-field">
+                <label class="idno-label" for="register-email">{{ t('Your email address') }}</label>
+                <input type="email" id="register-email" name="email" class="idno-input" required
+                       value="{{ email|default('') }}" autocapitalize="off" autocomplete="email"
+                       {%- if invited %} readonly aria-describedby="register-email-help"{% endif %}>
+                {% if invited %}
+                    <p class="idno-form-help" id="register-email-help">{{ t("The invitation is for this address, so it can't be changed here. You can change it in your settings afterwards.") }}</p>
+                {% endif %}
+            </div>
+
+            <div class="idno-form-field">
+                <label class="idno-label" for="register-name">{{ t('Your name') }}</label>
+                <input type="text" id="register-name" name="name" class="idno-input" autocomplete="name" value="{{ name|default('') }}">
+            </div>
+
+            <div class="idno-form-field">
+                <label class="idno-label" for="register-handle">{{ t('Choose a handle') }}</label>
+                <input type="text" id="register-handle" name="handle" class="idno-input" required maxlength="32"
+                       pattern="[A-Za-z0-9_]+" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="username"
+                       aria-describedby="register-handle-help" value="{{ handle|default('') }}">
+                <p class="idno-form-help" id="register-handle-help">{{ t("Your handle identifies you on the site and is part of your profile's address. Letters, numbers and underscores: for example, janedoe.") }}</p>
+            </div>
+
+            <div class="idno-form-field">
+                <label class="idno-label" for="register-password">{{ t('Create a password') }}</label>
+                <input type="password" id="register-password" name="password" class="idno-input" required minlength="7"
+                       autocomplete="new-password" aria-describedby="register-password-help">
+                <p class="idno-form-help" id="register-password-help">{{ t('At least 7 characters.') }}</p>
+            </div>
+
+            <div class="idno-form-field">
+                <label class="idno-label" for="register-password2">{{ t('Your password again') }}</label>
+                <input type="password" id="register-password2" name="password2" class="idno-input" required minlength="7" autocomplete="new-password">
+            </div>
+
+            {{ idno_include('forms/input/captcha', {action: '/account/register'}) }}
+
+            <div class="idno-gate-actions">
+                <button type="submit" class="idno-btn idno-btn-primary">{{ t('Create account') }}</button>
+            </div>
+            <input type="hidden" name="code" value="{{ code|default('') }}">
+            {{ form_token('/account/register') }}
+        </form>
+
+        <p class="idno-gate-foot">
+            <a href="{{ site_url() }}session/login">{{ t('Already have an account? Sign in') }}</a>
+        </p>
     </div>
-
 </div>

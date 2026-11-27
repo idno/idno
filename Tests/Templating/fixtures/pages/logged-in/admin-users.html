@@ -167,17 +167,39 @@ users.
     });
 </script>
 </div>
-<div class="idno-admin-card">
-<form action="{site}/admin/users" method="post">
-<h2 class="idno-admin-card-title">Invite new users</h2>
-<p>
-To invite new users to the site, enter one or more email addresses below.
-</p>
-<div class="idno-form-group">
-<textarea name="invitation_emails" class="idno-input" placeholder="friend@email.com"></textarea>
+<div class="idno-admin-card" id="invite">
+<h2 class="idno-admin-card-title">Invite people</h2>
+<form action="{site}/admin/users" method="post" class="invite-form">
+<div class="idno-notice idno-notice-warning" role="status">
+<strong>No mail service is set up, so invitation emails will probably not arrive.</strong>
+You can still invite people: each invitation gets a link that you can copy from the list below and send yourself.
+<a href="{site}/admin/email">Set up email</a>
 </div>
 <div class="idno-form-group">
-<button type="submit" class="idno-btn idno-btn-primary">Send invite</button>
+<label class="idno-label" for="invitation_emails">Email addresses</label>
+<textarea name="invitation_emails" id="invitation_emails" class="idno-textarea" rows="3" required
+                  placeholder="friend@example.com, colleague@example.com" aria-describedby="invitation_emails_help"></textarea>
+<p class="idno-form-help" id="invitation_emails_help">
+One or more addresses, separated by commas or new lines (50 at most). Each person gets an email with a link that works for 14 days and for their address only.
+</p>
+</div>
+<fieldset class="idno-form-group invite-role">
+<legend class="idno-label">Invite them as</legend>
+<div class="idno-checkbox-group">
+<input type="radio" name="invitation_role" id="invitation_role_member" value="member" checked>
+<label for="invitation_role_member">Members: they can post, comment and read the site</label>
+</div>
+<div class="idno-checkbox-group">
+<input type="radio" name="invitation_role" id="invitation_role_admin" value="admin">
+<label for="invitation_role_admin">Administrators: they can also change settings, manage members and invite others</label>
+</div>
+<div class="idno-checkbox-group invite-confirm-admin">
+<input type="checkbox" name="confirm_admin" id="confirm_admin" value="1">
+<label for="confirm_admin">I understand that administrators have full control of this site (needed to invite administrators)</label>
+</div>
+</fieldset>
+<div class="idno-form-actions">
+<button type="submit" class="idno-btn idno-btn-primary">Send invitations</button>
 <input type="hidden" name="action" value="invite_users">
 <span class="known-security-token" style="display: none;" id="tid{id}"></span>
 <input type="hidden" name="__bTs" value="{token-time}" />

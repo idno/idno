@@ -224,13 +224,33 @@ final class SettingsRecordStore implements RecordStore
         if (!self::serves($collection)) {
             return $this->inner->delete($collection, $id);
         }
+
+        return $this->deleteDocument($id) !== false;
+    }
+
+    public function claim(string $collection, string $id): bool
+    {
+        if (!self::serves($collection)) {
+            return $this->inner->claim($collection, $id);
+        }
+
+        return (int) $this->deleteDocument($id) > 0;
+    }
+
+    /**
+     * Removes the settings document when its `_id` is this id.
+     *
+     * @return int|false the number of `_id` rows it matched (0: another id, or no document), false when the database refuses it
+     */
+    private function deleteDocument(string $id): int|false
+    {
         $json = json_encode($id);
         $candidates = $json === false ? [] : [$json];
         if (preg_match('/^(0|-?[1-9][0-9]{0,17})$/', $id) === 1) {
             $candidates[] = $id; // a document whose _id is the integer
         }
         if ($candidates === []) {
-            return true;
+            return 0;
         }
         $table = $this->dialect->quoteIdentifier(self::TABLE);
 
@@ -262,7 +282,7 @@ final class SettingsRecordStore implements RecordStore
             return false;
         }
 
-        return true;
+        return $matched;
     }
 
     public function deleteAll(string $collection): bool

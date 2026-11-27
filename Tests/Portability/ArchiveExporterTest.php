@@ -204,6 +204,11 @@ final class ArchiveExporterTest extends PortabilityTestCase
                     throw new \LogicException();
                 }
 
+                public function claim(string $collection, string $id): bool
+                {
+                    throw new \LogicException();
+                }
+
                 public function deleteAll(string $collection): bool
                 {
                     throw new \LogicException();

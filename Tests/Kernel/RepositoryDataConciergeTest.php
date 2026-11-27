@@ -354,6 +354,52 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
     }
 
     /**
+     * An invitation spent and no account made: the work that claims a record and saves another keeps both or neither (undone when it returns false or
+     * throws, kept when it returns), and of two claims of one record only the first is told yes.
+     */
+    public function testAtomicallyKeepsEveryWriteOrNoneAndOnlyTheFirstClaimWins(): void
+    {
+        $db = Idno::site()->db();
+        $marker = 'adapter-test-' . bin2hex(random_bytes(6));
+        $claimed = $this->saveTestRecord(['testmarker' => $marker, 'testnote' => 'claimed']);
+
+        $made = null;
+        $this->assertFalse($db->atomically(function () use ($db, $claimed, $marker, &$made) {
+            $this->assertTrue($db->claimRecord($claimed), 'the claim inside the work');
+            $made = $db->saveRecord('entities', ['testmarker' => $marker, 'testnote' => 'made', 'access' => 'PUBLIC', 'created' => 1_700_000_000]);
+
+            return false;
+        }), 'work that returns false is undone');
+        $this->assertIsString($made);
+        $this->assertSame(1, $db->countRecords(['testmarker' => $marker]), 'the claim and the save were undone together: the claimed record is back and the made one is gone');
+        $this->assertSame('claimed', $db->getRecord($claimed)['testnote']);
+
+        try {
+            $db->atomically(function () use ($db, $claimed) {
+                $db->claimRecord($claimed);
+
+                throw new \RuntimeException('the account could not be saved');
+            });
+            $this->fail('the work\'s exception goes on');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('the account could not be saved', $e->getMessage());
+        }
+        $this->assertSame('claimed', $db->getRecord($claimed)['testnote'], 'work that throws is undone');
+
+        $kept = $db->atomically(function () use ($db, $claimed, $marker) {
+            $this->assertTrue($db->claimRecord($claimed));
+            $id = $db->saveRecord('entities', ['testmarker' => $marker, 'testnote' => 'made', 'access' => 'PUBLIC', 'created' => 1_700_000_000]);
+            $this->created[] = $db->getRecord($id)['uuid'];
+
+            return $id;
+        });
+        $this->assertIsString($kept);
+        $this->assertFalse($db->getRecord($claimed), 'work that returns is kept: the record is claimed');
+        $this->assertSame('made', $db->getRecord($kept)['testnote']);
+        $this->assertFalse($db->claimRecord($claimed), 'the second claim of a record is told no');
+    }
+
+    /**
      * The same, through Entity::save(): an existing entity re-saved with another record's uuid
      * returns false and fires no `updated` (nor `saved`) event, and both records are left as they
      * were; the old backend reported success and fired them for a record it had not stored.
@@ -1975,6 +2021,11 @@ final class FailingStore implements RecordStore
     }
 
     public function delete(string $collection, string $id): bool
+    {
+        throw $this->failure;
+    }
+
+    public function claim(string $collection, string $id): bool
     {
         throw $this->failure;
     }

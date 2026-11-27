@@ -1276,6 +1276,12 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
         $out['the password reset'] = $draw('account/password/reset', ['email' => 'ada@example.com', 'code' => '0123456789abcdef']);
         $out['the password reset, hostile values'] = $draw('account/password/reset', ['email' => $hostile, 'code' => $hostile]);
         $out['the registration'] = $draw('account/register', ['email' => 'new@example.com', 'code' => 'abc']) . $draw('account/register', ['email' => $hostile, 'code' => $hostile]);
+        $out['the registration, invited'] = $draw('account/register', ['invited' => true, 'email' => 'new@example.com', 'code' => 'abc', 'inviter' => 'Ada Admin']) . $draw('account/register', ['invited' => true, 'email' => 'new@example.com', 'code' => 'abc']);
+        $out['the registration, invited as an administrator'] = $draw('account/register', ['invited' => true, 'is_admin' => true, 'email' => 'boss@example.com', 'code' => 'abc', 'inviter' => $hostile]);
+        $out['the registration, a refused form'] = $draw('account/register', ['email' => $hostile, 'code' => $hostile, 'name' => $hostile, 'handle' => $hostile]);
+        foreach (['expired', 'closed', 'invalid'] as $problem) {
+            $out['the registration, refused as ' . $problem] = $draw('account/register/refused', ['problem' => $problem]);
+        }
 
         $site->session()->logUserOn($ada);
         foreach ([null, 'a-key'] as $key) {
@@ -1637,16 +1643,35 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
         $out['statistics, not a list'] = $draw('admin/statistics', ['statistics' => 'text']);
         $out['a report'] = $draw('admin/statistics/report', ['report' => $statistics['Basic']]) . $draw('admin/statistics/report', ['report' => null]) . $draw('admin/statistics/report', ['report' => $statistics['Basic'], 'level' => '3']);
 
+        // each with a fixed code and time: the link of an invitation holds its code, and its expiry is read against the time
         $invitation = new \Idno\Entities\Invitation();
         $invitation->email = 'friend@example.org';
+        $invitation->code = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
         $invitation->created = 1773000000;
+        $invitation->expires = 4102444800;
+        $invitation->_id = '00000000000040008000000000000201';
+        $invitation->inviter_name = 'Ada Admin';
+        $invitation->last_sent = 1773003600;
         $hostileInvitation = new \Idno\Entities\Invitation();
         $hostileInvitation->email = $hostile;
+        $hostileInvitation->code = 'a b&c"><x-canary a=\'1';
         $hostileInvitation->created = 1700000000;
+        $hostileInvitation->expires = 1700000000 + 1209600;
+        $hostileInvitation->_id = '00000000000040008000000000000202';
+        $hostileInvitation->inviter_name = $hostile;
+        $hostileInvitation->send_failed = true;
+        $adminInvitation = new \Idno\Entities\Invitation();
+        $adminInvitation->email = 'boss@example.org';
+        $adminInvitation->code = 'fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210';
+        $adminInvitation->created = 1773000000;
+        $adminInvitation->expires = 4102444800;
+        $adminInvitation->_id = '00000000000040008000000000000203';
+        $adminInvitation->setRole(\Idno\Entities\Invitation::ROLE_ADMIN);
         $was = $config->config;
         foreach ([
             'no invitations, no blocks' => [['count' => 1, 'invitations' => []], []],
-            'invitations' => [['count' => 2, 'invitations' => [$invitation, $hostileInvitation]], []],
+            'invitations' => [['count' => 3, 'invitations' => [$invitation, $hostileInvitation, $adminInvitation], 'mail_configured' => true], []],
+            'no mail service' => [['count' => 1, 'invitations' => [], 'mail_configured' => false], []],
             'blocked addresses' => [['count' => 0, 'invitations' => []], ['blocked_emails' => ['spam@example.org', $hostile]]],
             'everything' => [['count' => 12, 'invitations' => [$invitation]], ['blocked_emails' => ['spam@example.org']]],
         ] as $label => [$vars, $settings]) {
@@ -1670,6 +1695,8 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
         $this->assertStringContainsString('idno-plugin-always-on', (string) $out['plugins, two always on']);
         $this->assertStringContainsString('Active', (string) $out['themes, current Alpha']);
         $this->assertStringContainsString('friend@example.org', (string) $out['users, invitations']);
+        $this->assertStringContainsString('Administrator', (string) $out['users, invitations'], 'an administrator invitation says so');
+        $this->assertStringNotContainsString('<x-canary', (string) $out['users, invitations'], 'what an invitation holds is escaped');
     }
 
     /**

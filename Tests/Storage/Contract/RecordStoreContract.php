@@ -807,6 +807,32 @@ abstract class RecordStoreContract extends TestCase
         $this->assertTrue($this->store()->delete('entities', $this->newId()));
     }
 
+    /**
+     * One link, used twice: two registrations sent with the same invitation must make one account. delete() says true
+     * for a record that is not there, so only claim() can tell the second caller that the first got it.
+     */
+    public function testOfTwoClaimsOfOneRecordExactlyOneWins(): void
+    {
+        $record = $this->put($this->r(['slug' => 'claimed']));
+        $other = $this->put($this->r(['slug' => 'not-claimed']));
+
+        $this->assertTrue($this->store()->claim('entities', $record['_id']), 'the first claim removes the record');
+        $this->assertFalse($this->store()->claim('entities', $record['_id']), 'the second finds nothing to remove');
+        $this->assertNull($this->store()->findById('entities', $record['_id']));
+        $this->assertNull($this->store()->findByUuid('entities', $record['uuid']));
+        $this->assertSameRecord($other, $this->store()->findById('entities', $other['_id']));
+    }
+
+    public function testAClaimOfARecordThatWasNeverThereOrIsInAnotherCollectionWinsNothing(): void
+    {
+        $record = $this->put($this->r(['slug' => 'in-reader']), 'reader');
+
+        $this->assertFalse($this->store()->claim('entities', $this->newId()));
+        $this->assertFalse($this->store()->claim('entities', $record['_id']), 'a record of another collection is not this one');
+        $this->assertFalse($this->store()->claim('no_such_collection', $record['_id']));
+        $this->assertSameRecord($record, $this->store()->findById('reader', $record['_id']));
+    }
+
     public function testDeleteAllRemovesEveryRecordInTheCollection(): void
     {
         if (!$this->ownsPrivateDatabase()) {

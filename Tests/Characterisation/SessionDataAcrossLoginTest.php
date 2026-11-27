@@ -53,18 +53,11 @@ final class SessionDataAcrossLoginTest extends PrivateSiteTestCase
         ]);
         $cookie = self::sessionCookieOrNull($post) ?? $cookie;
 
-        $this->assertSame(302, $post->status);
-        $this->assertSame($this->baseUrl() . 'account/register', $post->header('Location'));
+        // the form is drawn again, with the reasons: nobody is signed in and the answer says why
+        $this->assertSame(400, $post->status);
         $this->assertSame(403, $this->site()->request('GET', 'account/settings/', ['Cookie' => $cookie])->status);
-        $page = $this->site()->request('GET', 'account/register', ['Cookie' => $cookie]);
-        if (!str_contains(Browser::text($page->body), "We couldn't register you.")) {
-            // The registration page draws the shell itself (not through drawPage()) and gives it no messages: the
-            // reasons are taken from the session and shown nowhere. Wanted: the registration page shows them.
-            $this->markTestIncomplete('The registration page does not show the session\'s messages: a failed registration never says why.');
-        }
-        $this->assertStringContainsString("We couldn't register you.", Browser::text($page->body));
-        $this->assertStringContainsString("That doesn't seem like it's a valid email address.", Browser::text($page->body));
-        $this->assertSame(403, $this->site()->request('GET', 'account/settings/', ['Cookie' => $cookie])->status);
+        $this->assertStringContainsString("We couldn't register you.", Browser::text($post->body));
+        $this->assertStringContainsString("That doesn't seem like it's a valid email address.", Browser::text($post->body));
     }
 
     public function testNobodyCanRegisterOnASiteThatHasNoAccountYet(): void

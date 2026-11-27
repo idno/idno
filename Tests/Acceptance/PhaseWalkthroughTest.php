@@ -149,7 +149,7 @@ final class PhaseWalkthroughTest extends AsyncSiteTestCase
         $this->assertSame(1, preg_match('~account/register/\?email=([^&\s]+)&code=([0-9a-f]+)~', (string) $mails[0]->part('text/plain'), $link), $this->step);
         $this->assertStringContainsString('account/register/?email=', (string) $mails[0]->part('text/html'));
         $registerPath = 'account/register/?email=' . $link[1] . '&code=' . $link[2];
-        $this->assertSame(302, $this->browser->get('account/register/?email=' . $link[1] . '&code=0000')->status, $this->step . ': a wrong code is refused');
+        $this->assertSame(403, $this->browser->get('account/register/?email=' . $link[1] . '&code=0000')->status, $this->step . ': a wrong code is refused');
         $registered = $this->browser->submit($registerPath, 'account/register', [
             'name' => 'Bob', 'handle' => 'bob', 'email' => 'bob@example.com', 'password' => self::PASSWORD, 'password2' => self::PASSWORD, 'code' => $link[2],
         ], null);

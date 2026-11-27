@@ -558,6 +558,65 @@ final class RepositoryDataConcierge extends \Idno\Core\DataConcierge implements 
     }
 
     /**
+     * Remove a record and say whether this call removed it: one conditional delete, so of any number of
+     * callers at once exactly one is told true.
+     *
+     * @param  string $id
+     * @param  string $collection
+     * @return bool
+     */
+    function claimRecord($id, $collection = 'entities')
+    {
+        if (!self::isKey($id)) {
+            return false;
+        }
+        try {
+            return $this->store()->claim((string)$collection, (string)$id);
+        } catch (DbalException | \PDOException $e) {
+            $this->logError($e);
+        }
+
+        return false;
+    }
+
+    /**
+     * Run $work in one database transaction on the shared connection: committed when it returns, undone when it
+     * throws (the exception goes on) or returns false. Inside another transaction it is a savepoint.
+     *
+     * @param  callable $work
+     * @return mixed What $work returned
+     */
+    function atomically(callable $work)
+    {
+        $this->connection->beginTransaction();
+        try {
+            $result = $work();
+        } catch (\Throwable $e) {
+            $this->rollBackQuietly();
+            throw $e;
+        }
+        if ($result === false) {
+            $this->rollBackQuietly();
+
+            return false;
+        }
+        $this->connection->commit();
+
+        return $result;
+    }
+
+    private function rollBackQuietly(): void
+    {
+        try {
+            if ($this->connection->isTransactionActive()) {
+                $this->connection->rollBack();
+            }
+        } catch (\Throwable) {
+            // The failure that made us roll back is the one to report
+        }
+    }
+
+    /**
      * Remove all entities from a collection from the database
      *
      * @param  string $collection

@@ -142,6 +142,11 @@ final class QueueWorkCommandTest extends TestCase
                     throw new \RuntimeException('the database refused: secret-detail');
                 }
 
+                public function claim(string $collection, string $id): bool
+                {
+                    return $this->inner->claim($collection, $id);
+                }
+
                 public function deleteAll(string $collection): bool
                 {
                     return $this->inner->deleteAll($collection);

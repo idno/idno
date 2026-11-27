@@ -1,0 +1,47 @@
+<div class="idno-gate idno-gate-wide">
+<div class="idno-editor">
+<h1 class="idno-editor-heading">
+Create your account
+</h1>
+<form action="{site}/account/register" method="post">
+<div class="idno-form-field">
+<label class="idno-label" for="register-email">Your email address</label>
+<input type="email" id="register-email" name="email" class="idno-input" required
+                       value="&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;&#039;" autocapitalize="off" autocomplete="email">
+</div>
+<div class="idno-form-field">
+<label class="idno-label" for="register-name">Your name</label>
+<input type="text" id="register-name" name="name" class="idno-input" autocomplete="name" value="&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;&#039;">
+</div>
+<div class="idno-form-field">
+<label class="idno-label" for="register-handle">Choose a handle</label>
+<input type="text" id="register-handle" name="handle" class="idno-input" required maxlength="32"
+                       pattern="[A-Za-z0-9_]+" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="username"
+                       aria-describedby="register-handle-help" value="&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;&#039;">
+<p class="idno-form-help" id="register-handle-help">Your handle identifies you on the site and is part of your profile&#039;s address. Letters, numbers and underscores: for example, janedoe.</p>
+</div>
+<div class="idno-form-field">
+<label class="idno-label" for="register-password">Create a password</label>
+<input type="password" id="register-password" name="password" class="idno-input" required minlength="7"
+                       autocomplete="new-password" aria-describedby="register-password-help">
+<p class="idno-form-help" id="register-password-help">At least 7 characters.</p>
+</div>
+<div class="idno-form-field">
+<label class="idno-label" for="register-password2">Your password again</label>
+<input type="password" id="register-password2" name="password2" class="idno-input" required minlength="7" autocomplete="new-password">
+</div>
+<!-- Captcha control -->
+<div class="idno-gate-actions">
+<button type="submit" class="idno-btn idno-btn-primary">Create account</button>
+</div>
+<input type="hidden" name="code" value="&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;&#039;">
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="/account/register" />
+</form>
+<p class="idno-gate-foot">
+<a href="{site}/session/login">Already have an account? Sign in</a>
+</p>
+</div>
+</div>

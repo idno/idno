@@ -6,7 +6,7 @@ View the users registered for your site, and invite new users to join.
 <h2 class="idno-admin-card-title">Manage site users</h2>
 <p>
 Your site has
-<strong>2</strong>
+<strong>3</strong>
 users.
 </p>
 <div id="user-search_2" class="users-search "
@@ -84,17 +84,34 @@ users.
     });
 </script>
 </div>
-<div class="idno-admin-card">
-<form action="{site}/admin/users" method="post">
-<h2 class="idno-admin-card-title">Invite new users</h2>
-<p>
-To invite new users to the site, enter one or more email addresses below.
+<div class="idno-admin-card" id="invite">
+<h2 class="idno-admin-card-title">Invite people</h2>
+<form action="{site}/admin/users" method="post" class="invite-form">
+<div class="idno-form-group">
+<label class="idno-label" for="invitation_emails">Email addresses</label>
+<textarea name="invitation_emails" id="invitation_emails" class="idno-textarea" rows="3" required
+                  placeholder="friend@example.com, colleague@example.com" aria-describedby="invitation_emails_help"></textarea>
+<p class="idno-form-help" id="invitation_emails_help">
+One or more addresses, separated by commas or new lines (50 at most). Each person gets an email with a link that works for 14 days and for their address only.
 </p>
-<div class="idno-form-group">
-<textarea name="invitation_emails" class="idno-input" placeholder="friend@email.com"></textarea>
 </div>
-<div class="idno-form-group">
-<button type="submit" class="idno-btn idno-btn-primary">Send invite</button>
+<fieldset class="idno-form-group invite-role">
+<legend class="idno-label">Invite them as</legend>
+<div class="idno-checkbox-group">
+<input type="radio" name="invitation_role" id="invitation_role_member" value="member" checked>
+<label for="invitation_role_member">Members: they can post, comment and read the site</label>
+</div>
+<div class="idno-checkbox-group">
+<input type="radio" name="invitation_role" id="invitation_role_admin" value="admin">
+<label for="invitation_role_admin">Administrators: they can also change settings, manage members and invite others</label>
+</div>
+<div class="idno-checkbox-group invite-confirm-admin">
+<input type="checkbox" name="confirm_admin" id="confirm_admin" value="1">
+<label for="confirm_admin">I understand that administrators have full control of this site (needed to invite administrators)</label>
+</div>
+</fieldset>
+<div class="idno-form-actions">
+<button type="submit" class="idno-btn idno-btn-primary">Send invitations</button>
 <input type="hidden" name="action" value="invite_users">
 <span class="known-security-token" style="display: none;" id="tid{id}"></span>
 <input type="hidden" name="__bTs" value="{token-time}" />
@@ -103,42 +120,107 @@ To invite new users to the site, enter one or more email addresses below.
 </div>
 </form>
 </div>
-<div class="idno-admin-card">
-<h2 class="idno-admin-card-title">Invitations</h2>
-<div class="idno-admin-list-item">
+<div class="idno-admin-card" id="invitations">
+<h2 class="idno-admin-card-title">Invitations waiting to be accepted</h2>
+<div class="invite-list">
+<div class="idno-invite-row">
 <div>
-<strong>friend@example.org</strong>
-<br>
-<small>
-<strong>Sent</strong>
-<time datetime="Sun, 08 Mar 2026 20:00:00 +0000"
-                              class="dt-published">Sun, 08 Mar 2026 20:00:00 +0000</time>
-</small>
+<div class="idno-invite-address">
+friend@example.org
+<span class="idno-badge">Member</span>
 </div>
+<div class="idno-invite-meta">
+Invited by Ada Admin &middot;                                             email sent 8 Mar 2026, 21:00
+                                        &middot;
+                                            expires 1 Jan 2100
+</div>
+</div>
+<div class="idno-invite-actions">
+<a data-form-id="{form-1}"  class="idno-btn idno-btn-sm"   href="{site}/admin/users" onclick="if (confirm('Send the invitation to friend@example.org again? Its link will work for another 14 days.')) { document.getElementById('{form-1}').submit(); return false; } else { return false; } ">Send again</a>
+<a data-form-id="{form-2}"  class="idno-btn idno-btn-sm idno-btn-danger"   href="{site}/admin/users" onclick="if (confirm('Withdraw the invitation for friend@example.org? Its link will stop working.')) { document.getElementById('{form-2}').submit(); return false; } else { return false; } ">Withdraw</a>
+</div>
+<div class="idno-invite-link">
+<input type="text" readonly class="idno-input invite-link-field"
+                           aria-label="Invitation link for friend@example.org"
+                           id="invite-link-00000000000040008000000000000201"
+                           value="{site}/account/register/?email=friend%40example.org&amp;code=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef">
+<button type="button" class="idno-btn idno-btn-sm invite-link-copy" hidden
+                            data-copied="Copied">Copy link</button>
+</div>
+</div>
+<div class="idno-invite-row">
 <div>
-<small>
-<a data-form-id="{form-1}"  class="idno-btn idno-btn-small"   href="{site}/admin/users" onclick="if (confirm('Are you sure? The user will receive a second email.')) { document.getElementById('{form-1}').submit(); return false; } else { return false; } ">Resend</a>
-<a data-form-id="{form-2}"  class="idno-btn idno-btn-small"   href="{site}/admin/users" onclick="if (confirm('Are you sure? The user won\'t be able to register.')) { document.getElementById('{form-2}').submit(); return false; } else { return false; } ">Remove</a>
-</small>
+<div class="idno-invite-address">
+&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;&#039;
+<span class="idno-badge">Member</span>
+<span class="idno-badge idno-badge-warning">Expired</span>
+</div>
+<div class="idno-invite-meta">
+Invited by &quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;&#039; &middot;
+<strong>email not sent</strong>
+&middot;
+                                            expired 28 Nov 2023
 </div>
 </div>
-<div class="idno-admin-list-item">
+<div class="idno-invite-actions">
+<a data-form-id="{form-3}"  class="idno-btn idno-btn-sm"   href="{site}/admin/users" onclick="if (confirm('Send the invitation to &quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;\' again? Its link will work for another 14 days.')) { document.getElementById('{form-3}').submit(); return false; } else { return false; } ">Send again</a>
+<a data-form-id="{form-4}"  class="idno-btn idno-btn-sm idno-btn-danger"   href="{site}/admin/users" onclick="if (confirm('Withdraw the invitation for &quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;\'? Its link will stop working.')) { document.getElementById('{form-4}').submit(); return false; } else { return false; } ">Withdraw</a>
+</div>
+</div>
+<div class="idno-invite-row">
 <div>
-<strong>&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;&#039;</strong>
-<br>
-<small>
-<strong>Sent</strong>
-<time datetime="Tue, 14 Nov 2023 22:13:20 +0000"
-                              class="dt-published">Tue, 14 Nov 2023 22:13:20 +0000</time>
-</small>
+<div class="idno-invite-address">
+boss@example.org
+<span class="idno-badge idno-badge-strong">Administrator</span>
 </div>
-<div>
-<small>
-<a data-form-id="{form-3}"  class="idno-btn idno-btn-small"   href="{site}/admin/users" onclick="if (confirm('Are you sure? The user will receive a second email.')) { document.getElementById('{form-3}').submit(); return false; } else { return false; } ">Resend</a>
-<a data-form-id="{form-4}"  class="idno-btn idno-btn-small"   href="{site}/admin/users" onclick="if (confirm('Are you sure? The user won\'t be able to register.')) { document.getElementById('{form-4}').submit(); return false; } else { return false; } ">Remove</a>
-</small>
+<div class="idno-invite-meta">
+made 8 Mar 2026
+                                        &middot;
+                                            expires 1 Jan 2100
 </div>
 </div>
+<div class="idno-invite-actions">
+<a data-form-id="{form-5}"  class="idno-btn idno-btn-sm"   href="{site}/admin/users" onclick="if (confirm('Send the invitation to boss@example.org again? Its link will work for another 14 days.')) { document.getElementById('{form-5}').submit(); return false; } else { return false; } ">Send again</a>
+<a data-form-id="{form-6}"  class="idno-btn idno-btn-sm idno-btn-danger"   href="{site}/admin/users" onclick="if (confirm('Withdraw the invitation for boss@example.org? Its link will stop working.')) { document.getElementById('{form-6}').submit(); return false; } else { return false; } ">Withdraw</a>
+</div>
+<div class="idno-invite-link">
+<input type="text" readonly class="idno-input invite-link-field"
+                           aria-label="Invitation link for boss@example.org"
+                           id="invite-link-00000000000040008000000000000203"
+                           value="{site}/account/register/?email=boss%40example.org&amp;code=fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210">
+<button type="button" class="idno-btn idno-btn-sm invite-link-copy" hidden
+                            data-copied="Copied">Copy link</button>
+</div>
+</div>
+</div>
+<script>
+    (function () {
+        var buttons = document.querySelectorAll('.invite-link-copy');
+        for (var i = 0; i < buttons.length; i++) {
+            if (!navigator.clipboard) {
+                continue;
+            }
+            buttons[i].hidden = false;
+            buttons[i].addEventListener('click', function () {
+                var button = this;
+                var field = button.parentNode.querySelector('.invite-link-field');
+                navigator.clipboard.writeText(field.value).then(function () {
+                    var label = button.textContent;
+                    button.textContent = button.getAttribute('data-copied');
+                    setTimeout(function () {
+                        button.textContent = label;
+                    }, 2000);
+                });
+            });
+        }
+        var fields = document.querySelectorAll('.invite-link-field');
+        for (var j = 0; j < fields.length; j++) {
+            fields[j].addEventListener('focus', function () {
+                this.select();
+            });
+        }
+    })();
+</script>
 </div>
 <div class="idno-admin-card">
 <form action="{site}/admin/users" method="post">

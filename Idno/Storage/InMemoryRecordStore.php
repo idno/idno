@@ -230,6 +230,16 @@ final class InMemoryRecordStore implements RecordStore
         return true;
     }
 
+    public function claim(string $collection, string $id): bool
+    {
+        $name = $this->resolve($collection);
+        if ($name === null || !isset($this->collections[$name][$id])) {
+            return false;
+        }
+
+        return $this->delete($collection, $id);
+    }
+
     public function deleteAll(string $collection): bool
     {
         $name = $this->resolve($collection);

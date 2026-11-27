@@ -1,0 +1,82 @@
+{#- The invitations that have not been used: who, as what, by whom, when, until when, with the link to copy, and the controls to send one again or withdraw it. The link carries the code, so this is for administrators only (the page is). Everything in an invitation was typed by somebody: all of it is escaped. -#}
+{% if invitations %}
+<div class="invite-list">
+    {% for invitation in invitations %}
+        {% set address = entity_value(invitation, 'email') %}
+        {% set expired = invitation.isExpired() %}
+        <div class="idno-invite-row">
+            <div>
+                <div class="idno-invite-address">
+                    {{ address }}
+                    {% if invitation.isForAdministrator() %}
+                        <span class="idno-badge idno-badge-strong">{{ t('Administrator') }}</span>
+                    {% else %}
+                        <span class="idno-badge">{{ t('Member') }}</span>
+                    {% endif %}
+                    {% if expired %}
+                        <span class="idno-badge idno-badge-warning">{{ t('Expired') }}</span>
+                    {% endif %}
+                </div>
+                <div class="idno-invite-meta">
+                    {% if invitation.getInviterName() %}{{ t('Invited by %s', [invitation.getInviterName()]) }} &middot; {% endif %}
+                    {% if entity_value(invitation, 'send_failed') %}
+                        <strong>{{ t('email not sent') }}</strong>
+                    {% elseif entity_value(invitation, 'last_sent') %}
+                        {{ t('email sent %s', [entity_value(invitation, 'last_sent')|date('j M Y, H:i')]) }}
+                    {% else %}
+                        {{ t('made %s', [entity_value(invitation, 'created')|date('j M Y')]) }}
+                    {% endif %}
+                    &middot;
+                    {% if expired %}
+                        {{ t('expired %s', [invitation.getExpiry()|date('j M Y')]) }}
+                    {% else %}
+                        {{ t('expires %s', [invitation.getExpiry()|date('j M Y')]) }}
+                    {% endif %}
+                </div>
+            </div>
+            <div class="idno-invite-actions">
+                {{ action_link(site_url() ~ 'admin/users', t('Send again'), {invitation_id: invitation.getID(), action: 'resend_invitation'}, {class: 'idno-btn idno-btn-sm', confirm: true, 'confirm-text': t('Send the invitation to %s again? Its link will work for another %d days.', [address, invitation_days|default(14)])}) }}
+                {{ action_link(site_url() ~ 'admin/users', t('Withdraw'), {invitation_id: invitation.getID(), action: 'remove_invitation'}, {class: 'idno-btn idno-btn-sm idno-btn-danger', confirm: true, 'confirm-text': t('Withdraw the invitation for %s? Its link will stop working.', [address])}) }}
+            </div>
+            {% if not expired %}
+                <div class="idno-invite-link">
+                    <input type="text" readonly class="idno-input invite-link-field"
+                           aria-label="{{ t('Invitation link for %s', [address]) }}"
+                           id="invite-link-{{ invitation.getID() }}"
+                           value="{{ invitation.getLink() }}">
+                    <button type="button" class="idno-btn idno-btn-sm invite-link-copy" hidden
+                            data-copied="{{ t('Copied') }}">{{ t('Copy link') }}</button>
+                </div>
+            {% endif %}
+        </div>
+    {% endfor %}
+</div>
+<script>
+    (function () {
+        var buttons = document.querySelectorAll('.invite-link-copy');
+        for (var i = 0; i < buttons.length; i++) {
+            if (!navigator.clipboard) {
+                continue;
+            }
+            buttons[i].hidden = false;
+            buttons[i].addEventListener('click', function () {
+                var button = this;
+                var field = button.parentNode.querySelector('.invite-link-field');
+                navigator.clipboard.writeText(field.value).then(function () {
+                    var label = button.textContent;
+                    button.textContent = button.getAttribute('data-copied');
+                    setTimeout(function () {
+                        button.textContent = label;
+                    }, 2000);
+                });
+            });
+        }
+        var fields = document.querySelectorAll('.invite-link-field');
+        for (var j = 0; j < fields.length; j++) {
+            fields[j].addEventListener('focus', function () {
+                this.select();
+            });
+        }
+    })();
+</script>
+{% endif %}

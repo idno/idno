@@ -1,0 +1,41 @@
+{#- The invite form of the admin Users page: one or more addresses and the role they are invited with. `mail_configured`, `invitation_days`, `invitation_batch`. -#}
+<form action="{{ site_url() }}admin/users" method="post" class="invite-form">
+    {% if not mail_configured|default(false) %}
+        <div class="idno-notice idno-notice-warning" role="status">
+            <strong>{{ t('No mail service is set up, so invitation emails will probably not arrive.') }}</strong>
+            {{ t('You can still invite people: each invitation gets a link that you can copy from the list below and send yourself.') }}
+            <a href="{{ site_url() }}admin/email">{{ t('Set up email') }}</a>
+        </div>
+    {% endif %}
+
+    <div class="idno-form-group">
+        <label class="idno-label" for="invitation_emails">{{ t('Email addresses') }}</label>
+        <textarea name="invitation_emails" id="invitation_emails" class="idno-textarea" rows="3" required
+                  placeholder="friend@example.com, colleague@example.com" aria-describedby="invitation_emails_help"></textarea>
+        <p class="idno-form-help" id="invitation_emails_help">
+            {{ t('One or more addresses, separated by commas or new lines (%d at most). Each person gets an email with a link that works for %d days and for their address only.', [invitation_batch|default(50), invitation_days|default(14)]) }}
+        </p>
+    </div>
+
+    <fieldset class="idno-form-group invite-role">
+        <legend class="idno-label">{{ t('Invite them as') }}</legend>
+        <div class="idno-checkbox-group">
+            <input type="radio" name="invitation_role" id="invitation_role_member" value="member" checked>
+            <label for="invitation_role_member">{{ t('Members: they can post, comment and read the site') }}</label>
+        </div>
+        <div class="idno-checkbox-group">
+            <input type="radio" name="invitation_role" id="invitation_role_admin" value="admin">
+            <label for="invitation_role_admin">{{ t('Administrators: they can also change settings, manage members and invite others') }}</label>
+        </div>
+        <div class="idno-checkbox-group invite-confirm-admin">
+            <input type="checkbox" name="confirm_admin" id="confirm_admin" value="1">
+            <label for="confirm_admin">{{ t('I understand that administrators have full control of this site (needed to invite administrators)') }}</label>
+        </div>
+    </fieldset>
+
+    <div class="idno-form-actions">
+        <button type="submit" class="idno-btn idno-btn-primary">{{ t('Send invitations') }}</button>
+        <input type="hidden" name="action" value="invite_users">
+        {{ form_token('/admin/users') }}
+    </div>
+</form>

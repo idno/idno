@@ -229,6 +229,24 @@ final class JsonRecordStore implements RecordStore
         return $this->write($collection, ' where ' . $this->dialect->quoteIdentifier('id') . ' = ?', [$id]);
     }
 
+    public function claim(string $collection, string $id): bool
+    {
+        $table = $this->table($collection);
+        if ($table === null) {
+            return false;
+        }
+        try {
+            // One statement: the rows it removed are the claim, whatever else is deleting the record now
+            return (int) $this->connection->executeStatement('delete from ' . $this->dialect->quoteIdentifier($table) . ' where ' . $this->dialect->quoteIdentifier('id') . ' = ?', [$id]) > 0;
+        } catch (DriverException $e) {
+            if (!$this->dialect->isRefusedData($e)) {
+                throw $e;
+            }
+
+            return false;
+        }
+    }
+
     public function deleteAll(string $collection): bool
     {
         return $this->write($collection, '', []);

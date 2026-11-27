@@ -527,6 +527,26 @@ abstract class SettingsRecordStoreContract extends TestCase
         $this->assertSame(0, $this->store->count('config', Criteria::all()));
     }
 
+    /**
+     * claim() on the settings document: only the call that removes the document is told yes, a claim of another id or of an empty collection is told no and
+     * removes nothing, and a claim of another collection goes to the store beneath (the rows of the settings are not touched).
+     */
+    public function testOfTwoClaimsOfTheSettingsDocumentExactlyOneWins(): void
+    {
+        $this->assertFalse($this->store->claim('config', 'settings-1'), 'nothing to claim in an empty collection');
+
+        $this->store->save('config', self::document());
+        $rows = $this->rows();
+        $this->assertFalse($this->store->claim('config', 'another-id'), 'another id is not this document');
+        $this->assertSame($rows, $this->rows(), 'and removes nothing');
+        $this->assertFalse($this->store->claim('entities', 'settings-1'), 'the settings are not another collection\'s record');
+        $this->assertSame($rows, $this->rows());
+
+        $this->assertTrue($this->store->claim('config', 'settings-1'), 'the first claim removes the document');
+        $this->assertSame([], $this->rows());
+        $this->assertFalse($this->store->claim('config', 'settings-1'), 'the second is told no');
+    }
+
     // ----------------------------------------------------------------------------- refusals
 
     public function testAnUnencodableValueOrOverlongKeyIsRefusedAndTheOldDocumentKept(): void

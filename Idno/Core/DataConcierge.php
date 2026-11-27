@@ -309,6 +309,39 @@ namespace Idno\Core {
         abstract function deleteAllRecords($collection);
 
         /**
+         * Remove a record from the database and say whether THIS call removed it. Of any number of callers at
+         * once, exactly one is told true. A backend that cannot make the check and the removal one step (a class a
+         * plugin supplies) falls back to reading the record and then removing it, which can tell two callers at
+         * once yes.
+         *
+         * @param  string $id
+         * @param  string $collection
+         * @return bool
+         */
+        function claimRecord($id, $collection = 'entities')
+        {
+            if (!$this->getRecord($id, $collection)) {
+                return false;
+            }
+
+            return (bool) $this->deleteRecord($id, $collection);
+        }
+
+        /**
+         * Run $work so that every write it makes to the database is kept or none is: when $work throws or returns
+         * false they are all undone (the exception goes on). A backend that cannot (a class a plugin supplies)
+         * runs $work with nothing undone.
+         *
+         * @param  callable $work
+         * @return mixed What $work returned
+         */
+        function atomically(callable $work)
+        {
+            return $work();
+        }
+
+
+        /**
          * Retrieve the filesystem associated with the current db, suitable for saving
          * and retrieving files
          *

@@ -271,6 +271,14 @@ A request can send an array where a page expects text (`email[]=x`, `email[$gt]=
 
 `Idno\Entities\Invitation` is readable by administrators only now. Read or change one inside `Invitation::unrestricted(function () { ... })` when a visitor's request needs it (the registration page does), and compare a code with `Invitation::validate($email, $code)`, which checks every invitation for the address with `hash_equals()`.
 
+A page reads a field it means as one text with `$this->getTextInput('name', $default = '')` (`\Idno\Core\Input::text()`): the string or number the request sent, else the default, so an array is an empty field and a validation message and not a server error.
+
+## Invitations that carry a role
+
+`Idno\Entities\Invitation` has a role (`getRole()`, `setRole()`, `isForAdministrator()`), an expiry (`getExpiry()`, `isExpired()`, `renew()`), a link (`getLink()`) and `send()`, and `Invitation::check($email, $code)` answers `['invitation' => ..., 'problem' => '' | 'expired' | 'invalid']`. `validate()` and `getByEmailAndCode()` return only an invitation that can be used. An invitation is used with `consume()`, which claims it: of two callers at once only one is told true. A plugin must never make an administrator from anything a request says; the only registration that does is one on an invitation an administrator stored as an administrator's.
+
+`Idno\Storage\RecordStore` has a new method, `claim(string $collection, string $id): bool`, which deletes a record and says whether this call removed it (`delete()` is true for an id that is not there). A class of yours that implements `RecordStore` adds it; `DataConcierge` has `claimRecord()` and `atomically(callable $work)` with fallbacks for a backend a plugin supplies (read then delete, and just running the work), so a backend class need not change.
+
 ## A member's email address
 
 `User::jsonLDSerialise()` (the schema.org data in the head of every profile and post page) no longer has an `email` key: a member's account email is private. A plugin that read `email` from it, or from a page's JSON-LD, must read the address from the user's own settings, or from the `mailto:` links the member lists in their profile (`profile.url`).

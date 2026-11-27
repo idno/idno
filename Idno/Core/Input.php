@@ -47,6 +47,27 @@ namespace Idno\Core {
         }
 
         /**
+         * A value from a request as one text: the value when it is a text or a number, and the
+         * default for anything else (an array, which is what name[]=x and name[$gt]=x arrive
+         * as, an object of a JSON body, true, false, nothing).
+         *
+         * @param  mixed  $value
+         * @param  string $default
+         * @return string
+         */
+        public static function text($value, $default = '')
+        {
+            if (is_string($value)) {
+                return $value;
+            }
+            if (is_int($value) || is_float($value)) {
+                return (string) $value;
+            }
+
+            return (string) $default;
+        }
+
+        /**
          * Retrieve files from input.
          * Retrieve a formatted files array from input, if multiple files are found, this will be turned into
          * a sensible structure.

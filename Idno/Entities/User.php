@@ -557,6 +557,46 @@ namespace Idno\Entities {
         }
 
         /**
+         * May a given administrator take this member's administration rights away, or delete this member's account? Never
+         * their own, and never those of the last administrator: a site always keeps somebody who can administer it.
+         *
+         * Only the Users page asks (the one place an administrator does either to somebody). It is a check and then an
+         * act, so two administrators who demote each other at the same moment can still leave none.
+         *
+         * @param  string $by_uuid The UUID of the administrator who asks
+         * @return bool
+         */
+        function canBeDemotedOrDeletedBy($by_uuid)
+        {
+            if ((string) $by_uuid === (string) $this->getUUID()) {
+                return false;
+            }
+            if (!empty($this->admin) && static::countAdministrators() <= 1) {
+                return false;
+            }
+
+            return true;
+        }
+
+        /**
+         * How many administrators the site has. The one place the count is made: administrators who cannot sign in
+         * (a user who is suspended or banned) are subtracted here when the site has a way to suspend one.
+         *
+         * @return int
+         */
+        static function countAdministrators()
+        {
+            $count = 0;
+            foreach (static::get(['admin' => true], [], 10000) ?: [] as $user) {
+                if (!empty($user->admin)) {
+                    $count++;
+                }
+            }
+
+            return $count;
+        }
+
+        /**
          * Can a specified user (either an explicitly specified user ID
          * or the currently logged-in user if this is left blank) edit
          * this user?

@@ -34,7 +34,6 @@ final class ArrayInputTest extends SignInSiteCase
      */
     private const ERRORS = [
         'POST /session/login' => ['email', 'password'],
-        'POST /account/register' => ['email', 'handle', 'password', 'password2'],
         'POST /account/password/reset' => ['code', 'password', 'password2'],
         'GET /account/password/reset' => ['code'],
     ];
@@ -189,10 +188,10 @@ final class ArrayInputTest extends SignInSiteCase
         // the name is not looked anything up by: an array for it, with an invitation that is right, makes the account (the page stores it as the title)
         $this->sweep('POST', '/account/register', $dana, ['handle', 'email', 'password', 'password2', 'code'], ['form', 'json', 'field']);
 
-        // the form: an array for the address or the code is answered as an invitation that does not exist is
+        // the form: an array for the address or the code is an empty one, and an empty one is no invitation: refused as one that does not exist is
         [$cookie, $token] = $this->visitorSession();
         $none = $this->site()->request('GET', '/account/register?email=nobody%40example.test&code=ffffffffffffffffffffffffffffffff', ['Cookie' => $cookie]);
-        $this->assertSame(302, $none->status);
+        $this->assertSame(403, $none->status, 'an invitation that does not exist is refused');
         foreach (['email[$gt]=a&email[$lt]=z&code[$lt]=g', 'email=' . rawurlencode(self::INVITED) . '&code[]=x', 'email[]=' . rawurlencode(self::INVITED) . '&code[]=' . self::CODE, 'email=' . rawurlencode(self::INVITED) . '&code[$not]=zzz', 'email=' . rawurlencode(self::INVITED) . '&code[$gt]=0'] as $query) {
             $answer = $this->site()->request('GET', '/account/register?' . $query, ['Cookie' => $cookie]);
             $this->assertSame($none->status, $answer->status, $query);
@@ -207,8 +206,7 @@ final class ArrayInputTest extends SignInSiteCase
         $dana = ['name' => 'Dana Newcomer', 'handle' => 'dana', 'email' => self::INVITED, 'password' => self::NEW_PASSWORD, 'password2' => self::NEW_PASSWORD];
         [$cookie, $token] = $this->visitorSession();
         $answer = $this->send('POST', '/account/register', ['code' => ['$lt' => 'g']] + $dana, 'form', $cookie, $token);
-        $this->assertSame(302, $answer->status);
-        $this->assertSame($this->baseUrl(), $answer->header('Location'));
+        $this->assertSame(403, $answer->status, 'an array for the code is no invitation: the page refuses');
         $this->assertContains(self::INVITED . '/' . self::CODE, $this->state()['invitations']);
         $this->assertNotContains('dana', $this->state()['accounts']);
         // and the right code makes the account

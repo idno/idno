@@ -14,46 +14,16 @@
     </div>
 
     {% if can_add_users() %}
-    <div class="idno-admin-card">
-        <form action="{{ site_url() }}admin/users" method="post">
-            <h2 class="idno-admin-card-title">{{ t('Invite new users') }}</h2>
-            <p>
-                {{ t('To invite new users to the site, enter one or more email addresses below.') }}
-            </p>
-            <div class="idno-form-group">
-                <textarea name="invitation_emails" class="idno-input" placeholder="friend@email.com"></textarea>
-            </div>
-            <div class="idno-form-group">
-                <button type="submit" class="idno-btn idno-btn-primary">{{ t('Send invite') }}</button>
-                <input type="hidden" name="action" value="invite_users">
-                {{ form_token('/admin/users') }}
-            </div>
-        </form>
+    <div class="idno-admin-card" id="invite">
+        <h2 class="idno-admin-card-title">{{ t('Invite people') }}</h2>
+        {{ idno_include('admin/users/invite', {mail_configured: mail_configured|default(false), invitation_days: invitation_days|default(14), invitation_batch: invitation_batch|default(50)}) }}
     </div>
     {% endif %}
 
     {% if invitations %}
-    <div class="idno-admin-card">
-        <h2 class="idno-admin-card-title">{{ t('Invitations') }}</h2>
-        {% for invitation in invitations %}
-            <div class="idno-admin-list-item">
-                <div>
-                    <strong>{{ entity_value(invitation, 'email') }}</strong>
-                    <br>
-                    <small>
-                        <strong>{{ t('Sent') }}</strong>
-                        <time datetime="{{ entity_value(invitation, 'created')|date('r') }}"
-                              class="dt-published">{{ entity_value(invitation, 'created')|date('r') }}</time>
-                    </small>
-                </div>
-                <div>
-                    <small>
-                        {{ action_link(site_url() ~ 'admin/users', t('Resend'), {invitation_id: invitation.getID(), action: 'resend_invitation'}, {class: 'idno-btn idno-btn-small', confirm: true, 'confirm-text': 'Are you sure? The user will receive a second email.'}) }}
-                        {{ action_link(site_url() ~ 'admin/users', t('Remove'), {invitation_id: invitation.getID(), action: 'remove_invitation'}, {class: 'idno-btn idno-btn-small', confirm: true, 'confirm-text': "Are you sure? The user won't be able to register."}) }}
-                    </small>
-                </div>
-            </div>
-        {% endfor %}
+    <div class="idno-admin-card" id="invitations">
+        <h2 class="idno-admin-card-title">{{ t('Invitations waiting to be accepted') }}</h2>
+        {{ idno_include('admin/users/invitations', {invitations: invitations, invitation_days: invitation_days|default(14)}) }}
     </div>
     {% endif %}
 

@@ -13,13 +13,16 @@ namespace Idno\Pages\Admin {
     {
 
         /**
-         * The invitation with an id, and only an invitation: an id of anything else (a post) is none.
+         * The invitation the form names (`invitation_id`), and only an invitation: an id of anything else (a post) is none.
          *
-         * @param  mixed $id
          * @return Invitation|null
          */
-        private static function invitation($id)
+        protected function invitationFromInput()
         {
+            $id = $this->getTextInput('invitation_id');
+            if (!preg_match('/^[A-Za-z0-9-]+$/', $id)) {
+                return null;
+            }
             $found = Invitation::unrestricted(static fn () => Invitation::getByID($id));
 
             return $found instanceof Invitation ? $found : null;
@@ -29,8 +32,9 @@ namespace Idno\Pages\Admin {
         {
             $this->adminGatekeeper(); // Admins only
 
-            $offset = $this->getInput('offset', 0);
-            $limit = $this->getInput('limit', 100);
+            $offset = max(0, (int) $this->getTextInput('offset', 0));
+            $limit  = (int) $this->getTextInput('limit', 100);
+            $limit  = $limit > 0 ? $limit : 100;
 
             $users = User::getFromX(["Idno\\Entities\\User", "Idno\\Entities\\RemoteUser"], [], [], $limit, $offset);
             $count = User::countFromX(["Idno\\Entities\\User", "Idno\\Entities\\RemoteUser"]);
@@ -38,7 +42,7 @@ namespace Idno\Pages\Admin {
             $invitations = Invitation::all();
 
             $t        = \Idno\Core\Idno::site()->template();
-            $t->body  = $t->__(array('items' => $users, 'invitations' => $invitations, 'count' => $count, 'items_per_page' => $limit))->draw('admin/users');
+            $t->body  = $t->__(array('items' => $users, 'invitations' => $invitations, 'mail_configured' => \Idno\Core\Email::isConfigured(), 'invitation_days' => Invitation::lifetimeDays(), 'invitation_batch' => Invitation::MAX_PER_BATCH, 'count' => $count, 'items_per_page' => $limit))->draw('admin/users');
             $t->title = \Idno\Core\Idno::site()->language()->_('User Management');
             $t->drawPage();
 
@@ -49,11 +53,11 @@ namespace Idno\Pages\Admin {
 
             $this->adminGatekeeper(); // Admins only
 
-            $action = $this->getInput('action');
+            $action = $this->getTextInput('action');
 
             switch ($action) {
                 case 'add_rights':
-                    $uuid = $this->getInput('user');
+                    $uuid = $this->getTextInput('user');
                     if ($user = User::getByUUID($uuid)) {
                         $user->setAdmin(true);
                         $user->save();
@@ -61,74 +65,34 @@ namespace Idno\Pages\Admin {
                     }
                     break;
                 case 'remove_rights':
-                    $uuid = $this->getInput('user');
-                    if ($user = User::getByUUID($uuid)) {
+                    $uuid = $this->getTextInput('user');
+                    if (($user = User::getByUUID($uuid)) && $this->mayDemoteOrDelete($user)) {
                         $user->setAdmin(false);
                         $user->save();
                         \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->esc_("%s was stripped of their administration rights.", [$user->getTitle()]));
                     }
                     break;
                 case 'delete':
-                    $uuid = $this->getInput('user');
-                    if ($user = User::getByUUID($uuid)) {
+                    $uuid = $this->getTextInput('user');
+                    if (($user = User::getByUUID($uuid)) && $this->mayDemoteOrDelete($user)) {
                         if ($user->delete()) {
                             \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->esc_("%s was removed from your site.", [$user->getTitle()]));
                         }
                     }
                     break;
                 case 'invite_users':
-                    $emails = $this->getInput('invitation_emails');
-
-                    preg_match_all('/[a-z\d._%\+\-]+@[a-z\d.-]+\.[a-z]{2,4}\b/i', $emails, $matches);
-
-                    $invitation_count = 0;
-                    $invitations_sent = 0;
-                    if (!empty($matches[0])) {
-                        if (is_array($matches[0])) {
-                            foreach ($matches[0] as $email) {
-                                if (!($user = User::getByEmail($email))) {
-                                    $invitation = new Invitation();
-                                    if ($invitation->sendToEmail($email, \Idno\Core\Idno::site()->session()->currentUser()->email) !== 0) {
-                                        $invitations_sent++;
-                                    }
-                                    $invitation_count++;
-                                }
-                            }
-                        }
-                    }
-
-                    if ($invitation_count > 1) {
-                        \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->esc_("%d invitations were sent.", [$invitation_count]));
-                    } else if ($invitation_count == 1) {
-                        \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->_("Your invitation was sent."));
-                    } else if ($invitations_sent == 0 && $invitation_count > 0) {
-                        \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->_("Something went wrong and we couldn't send emails to your recipients."));
-                    } else {
-                        \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->_("No email addresses were found or all the people you invited are already members of this site."));
-                    }
+                    $this->inviteUsers();
                     break;
                 case 'remove_invitation':
-                    $invitation_id = $this->getInput('invitation_id');
-
-                    if ($invitation = self::invitation($invitation_id)) {
-                        if ($invitation->delete()) {
-                            \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->_("The invitation was removed."));
-                        }
+                    $invitation = $this->invitationFromInput();
+                    if ($invitation && $invitation->delete()) {
+                        \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->esc_("The invitation for %s was withdrawn. Its link no longer works.", [$invitation->email]));
                     }
 
                     break;
                 case 'resend_invitation':
-
-                    $invitation_id = $this->getInput('invitation_id');
-
-                    if ($invitation = self::invitation($invitation_id)) {
-                        $email = $invitation->email;
-                        if ($invitation->delete()) {
-                            $new_invitation = new Invitation();
-                            if ($new_invitation->sendToEmail($email)) {
-                                \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->_("The invitation was resent."));
-                            }
-                        }
+                    if ($invitation = $this->invitationFromInput()) {
+                        $this->resendInvitation($invitation);
                     }
 
                     break;
@@ -139,11 +103,11 @@ namespace Idno\Pages\Admin {
                         break;
                     }
 
-                    $name      = $this->getInput('name');
-                    $handle    = trim($this->getInput('handle'));
-                    $email     = trim($this->getInput('email'));
-                    $password  = trim($this->getInput('password1'));
-                    $password2 = trim($this->getInput('password2'));
+                    $name      = $this->getTextInput('name');
+                    $handle    = trim($this->getTextInput('handle'));
+                    $email     = trim($this->getTextInput('email'));
+                    $password  = trim($this->getTextInput('password1'));
+                    $password2 = trim($this->getTextInput('password2'));
 
                     $user = new \Idno\Entities\User();
 
@@ -194,7 +158,7 @@ namespace Idno\Pages\Admin {
                     }
                     break;
                 case 'block_emails':
-                    $emails = $this->getInput('blocked_emails');
+                    $emails = $this->getTextInput('blocked_emails');
                     preg_match_all('/[a-z\d._%+-]+@[a-z\d.-]+\.[a-z]{2,4}\b/i', $emails, $matches);
 
                     $block_count = 0;
@@ -219,7 +183,7 @@ namespace Idno\Pages\Admin {
                     }
                     break;
                 case 'unblock_emails':
-                    $emails = $this->getInput('blocked_emails');
+                    $emails = $this->getTextInput('blocked_emails');
                     preg_match_all('/[a-z\d._%+-]+@[a-z\d.-]+\.[a-z]{2,4}\b/i', $emails, $matches);
 
                     $block_count = 0;
@@ -247,6 +211,155 @@ namespace Idno\Pages\Admin {
 
             $this->forward(\Idno\Core\Idno::site()->config()->getURL() . 'admin/users');
 
+        }
+
+        /**
+         * Whether the administrator who asks may take this member's rights away or delete the account: not their own, and
+         * not those of the last administrator. The page does not offer either for oneself, but a request can still ask.
+         * Says why when the answer is no.
+         *
+         * @param  User $user
+         * @return bool
+         */
+        protected function mayDemoteOrDelete(User $user)
+        {
+            $session  = \Idno\Core\Idno::site()->session();
+            $language = \Idno\Core\Idno::site()->language();
+            if ($user->canBeDemotedOrDeletedBy($session->currentUserUUID())) {
+                return true;
+            }
+            if ((string) $user->getUUID() === (string) $session->currentUserUUID()) {
+                $session->addErrorMessage($language->_("You can't take away your own administration rights or delete your own account here. Another administrator can."));
+            } else {
+                $session->addErrorMessage($language->esc_("%s is the only administrator, so nothing was changed.", [$user->getTitle()]));
+            }
+
+            return false;
+        }
+
+        /**
+         * Send an invitation again: the same invitation, with its role, its time starting again (and a new code if the
+         * old one had expired). The address is checked as the invite form checks it: an address that has been blocked
+         * since, or that has an account now, gets nothing.
+         *
+         * @param Invitation $invitation
+         */
+        protected function resendInvitation(Invitation $invitation)
+        {
+            $site  = \Idno\Core\Idno::site();
+            $lang  = $site->language();
+            $email = (string) $invitation->email;
+            if ($site->config()->emailIsBlocked($email)) {
+                $site->session()->addErrorMessage($lang->esc_("%s is blocked from this site, so the invitation was not sent.", [$email]));
+
+                return;
+            }
+            if (User::getByEmail($email)) {
+                $site->session()->addErrorMessage($lang->esc_("%s is already a member, so the invitation was not sent.", [$email]));
+
+                return;
+            }
+            $invitation->renew();
+            $invitation->save();
+            if ($invitation->send()) {
+                $site->session()->addMessage($lang->esc_("The invitation was sent to %s again.", [$email]));
+            } else {
+                $site->session()->addErrorMessage($lang->esc_("The invitation for %s is still good, but the email was not sent. %s You can copy its link from the list below and send it yourself.", [$email, $invitation->sendError]));
+            }
+        }
+
+        /**
+         * Invite the addresses typed into the invite form, as members or as administrators. An invitation is made and
+         * kept even when its email cannot be sent: the administrator is told why, and can copy the link from the list.
+         * Whether it makes an administrator is the stored role, which only this form sets, and asking for it needs the
+         * box that says what administrators can do ticked.
+         */
+        protected function inviteUsers()
+        {
+            $site    = \Idno\Core\Idno::site();
+            $lang    = $site->language();
+            $session = $site->session();
+            $inviter = $session->currentUser();
+
+            $role = $this->getTextInput('invitation_role') === Invitation::ROLE_ADMIN ? Invitation::ROLE_ADMIN : Invitation::ROLE_MEMBER;
+            if ($role === Invitation::ROLE_ADMIN && !$this->getTextInput('confirm_admin')) {
+                $session->addErrorMessage($lang->_("Nobody was invited. To invite someone as an administrator, tick the box that says you understand what administrators can do."));
+
+                return;
+            }
+
+            list($addresses, $invalid) = Invitation::parseAddresses($this->getTextInput('invitation_emails'));
+            if ($invalid) {
+                $session->addErrorMessage($lang->esc_("These don't look like email addresses and were skipped: %s", [implode(', ', $invalid)]));
+            }
+            if (!$addresses) {
+                $session->addErrorMessage($lang->_("No email addresses were found. Enter one or more addresses, separated by commas or new lines."));
+
+                return;
+            }
+            if (count($addresses) > Invitation::MAX_PER_BATCH) {
+                $session->addErrorMessage($lang->esc_("Nobody was invited: that is %d addresses, and at most %d can be invited at once.", [count($addresses), Invitation::MAX_PER_BATCH]));
+
+                return;
+            }
+            if (!$site->config()->canAddUsers()) {
+                $session->addErrorMessage($lang->_("You can't add any more users to your site."));
+
+                return;
+            }
+
+            $sent    = [];
+            $unsent  = [];
+            $members = [];
+            $blocked = [];
+            $reason  = '';
+            foreach ($addresses as $email) {
+                if ($site->config()->emailIsBlocked($email)) {
+                    $blocked[] = $email;
+                    continue;
+                }
+                if (User::getByEmail($email)) {
+                    $members[] = $email;
+                    continue;
+                }
+                // One invitation per address: inviting again renews the one there is, with the role asked for now
+                $invitation = Invitation::getByEmail($email);
+                if (!$invitation) {
+                    $invitation = new Invitation();
+                    if (!$invitation->associateWithEmail($email)) {
+                        continue;
+                    }
+                }
+                $invitation->renew();
+                $invitation->setRole($role);
+                $invitation->inviter_name  = $inviter->getTitle();
+                $invitation->invited_by    = $inviter->getUUID();
+                $invitation->inviter_email = (string) $inviter->email;
+                $invitation->save();
+                if ($invitation->send()) {
+                    $sent[] = $email;
+                } else {
+                    $unsent[] = $email;
+                    $reason   = $invitation->sendError;
+                }
+            }
+
+            if ($sent) {
+                if ($role === Invitation::ROLE_ADMIN) {
+                    $session->addMessage($lang->esc_("Invited as administrators: %s", [implode(', ', $sent)]));
+                } else {
+                    $session->addMessage($lang->esc_("Invited: %s", [implode(', ', $sent)]));
+                }
+            }
+            if ($unsent) {
+                $session->addErrorMessage($lang->esc_("Invitations were made for %s, but the email was not sent. %s You can copy each invitation's link from the list below and send it yourself.", [implode(', ', $unsent), $reason]));
+            }
+            if ($members) {
+                $session->addMessage($lang->esc_("Already members, so not invited: %s", [implode(', ', $members)]));
+            }
+            if ($blocked) {
+                $session->addErrorMessage($lang->esc_("These addresses are blocked from this site, so they were not invited: %s", [implode(', ', $blocked)]));
+            }
         }
 
     }

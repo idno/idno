@@ -18,7 +18,7 @@ namespace Idno\Storage;
  *    unparseable search term, a condition that can never hold) matches nothing: find() returns
  *    [], count() 0;
  *  - a write whose data the database refuses (a constraint, an invalid or too long value, a
- *    deadlock or lock wait) returns false (save(), delete(), deleteAll()); a record that cannot be
+ *    deadlock or lock wait) returns false (save(), delete(), claim(), deleteAll()); a record that cannot be
  *    encoded as JSON is refused the same way;
  *  - a record whose `created` is not a timestamp makes save() throw \InvalidArgumentException
  *    (RecordIndex cannot index it);
@@ -96,6 +96,17 @@ interface RecordStore
      * @throws \Throwable when the database fails otherwise
      */
     public function delete(string $collection, string $id): bool;
+
+    /**
+     * Deletes the record by id and says whether THIS call removed it: true for the one caller that did, false for every
+     * other (the record was never there, was in another collection, or another caller removed it first). One conditional
+     * write decides it, so of any number of callers at once exactly one is told true. Use it where a record may be used
+     * once (an invitation's link); delete() says true for an id that is not there and cannot tell the callers apart.
+     * False also when the database refuses the deletion, and for a name that is no collection.
+     *
+     * @throws \Throwable when the database fails otherwise
+     */
+    public function claim(string $collection, string $id): bool;
 
     /**
      * Deletes every record in the collection: true, or false when the database refuses it.

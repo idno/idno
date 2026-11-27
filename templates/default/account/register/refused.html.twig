@@ -1,0 +1,20 @@
+{#- What a visitor who may not register is told: the site is closed to new members (`closed`), the invitation in their link is too old (`expired`), or it cannot be used (anything else: incomplete, used, withdrawn). Nothing of the invitation is shown. -#}
+{% set problem = problem|default('invalid') %}
+<div class="idno-gate idno-gate-wide register-refused">
+    <div class="idno-editor">
+        {% if problem == 'expired' %}
+            <h1 class="idno-editor-heading">{{ t('This invitation has expired') }}</h1>
+            <p class="idno-gate-lead">{{ t('Invitations to %s work for a limited time, and this one is too old. Ask the person who invited you to send it again.', [site_title()]) }}</p>
+        {% elseif problem == 'closed' %}
+            <h1 class="idno-editor-heading">{{ t('You need an invitation to join') }}</h1>
+            <p class="idno-gate-lead">{{ t('%s is open to people who have been invited. If you were invited, use the link in your invitation email.', [site_title()]) }}</p>
+        {% else %}
+            <h1 class="idno-editor-heading">{{ t("This invitation can't be used") }}</h1>
+            <p class="idno-gate-lead">{{ t('The link may be incomplete, or the invitation may have been used already or withdrawn. Try the link in your invitation email again, or ask the person who invited you for a new one.') }}</p>
+        {% endif %}
+        <div class="idno-gate-actions">
+            <a class="idno-btn idno-btn-primary" href="{{ site_url() }}session/login">{{ t('Sign in') }}</a>
+        </div>
+        <p class="idno-gate-foot">{{ t('Already have an account? Sign in with it instead.') }}</p>
+    </div>
+</div>

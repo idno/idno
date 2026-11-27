@@ -61,6 +61,11 @@ final class HookedRecordStore implements RecordStore
         return $this->inner->delete($collection, $id);
     }
 
+    public function claim(string $collection, string $id): bool
+    {
+        return $this->inner->claim($collection, $id);
+    }
+
     public function deleteAll(string $collection): bool
     {
         return $this->inner->deleteAll($collection);

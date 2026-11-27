@@ -935,7 +935,11 @@ final class TemplateEscapingTest extends RenderedSiteTestCase
         $config = $site->config();
         $invitation = new \Idno\Entities\Invitation();
         $invitation->email = $hostile;
+        // the inviter's name and the code (it is in the link's field) are typed by somebody too
+        $invitation->inviter_name = $hostile;
+        $invitation->code = $hostile;
         $invitation->created = 1773000000;
+        $invitation->expires = 4102444800;
         $config->config['blocked_emails'] = [$hostile];
         $config->config['title'] = $hostile;
         $config->config['smtp_host'] = $hostile;

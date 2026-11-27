@@ -7,26 +7,27 @@ namespace Tests\Characterisation;
 use Tests\Support\RecordedAnswers;
 
 /**
- * What the registration page (`/account/register`) answers, recorded from the legacy page over HTTP on sites of the test's own (a POST makes an
- * account, so the site is not shared): the form to a visitor of a site open to registration and of one that asks for an invitation (a valid code, a
- * wrong one, one for another address, one already used), in each template type and for each way of asking; the form to a member, to a signed request
- * and on a site with no account; the POST for each field the page validates, with the page the same browser loads next, who is signed in and whether an
- * account now exists; and the POSTs that are no form. The answers are `Tests/Characterisation/fixtures/answers/registration/`.
+ * What the registration page (`/account/register`) answers, recorded over HTTP on sites of the test's own (a POST makes an account, so the site is not
+ * shared): the form to a visitor of a site open to registration and of one that asks for an invitation (a valid code, an administrator's, a wrong one,
+ * one for another address, one already used, one that has expired, one that was withdrawn, one that was sent again), in each template type and for
+ * each way of asking; the form to a member, to a signed request and on a site with no account; the POST for each field the page validates, with the
+ * page the same browser loads next, who is signed in and whether an account now exists; and the POSTs that are no form. The answers are
+ * `Tests/Characterisation/fixtures/answers/registration/`. They were first captured from the page as it was before invitations had roles and expired
+ * (a refusal was a redirect home, a failed form a redirect to the Referer); they are captured again where the page now answers otherwise.
  *
- * The site is `SignInSiteCase`'s (Ada the administrator, Bob a member, Carol), with no posts of Bob's, an invitation for `dana@example.test` and one for
- * `erin@example.test` (each with a fixed id, code and time) and the address `blocked@example.test` on the blocklist. A site is open to registration
+ * The site is `SignInSiteCase`'s (Ada the administrator, Bob a member, Carol), with no posts of Bob's, invitations for `dana@example.test` and
+ * `erin@example.test` (each with a fixed id, code and time, good for ever), one for `fran@example.test` that expired in March 2026, one for
+ * `gus@example.test` that makes an administrator (sent by Ada), and the address `blocked@example.test` on the blocklist. A site is open to registration
  * (the setting's default) unless the scenario closes it, and a scenario that makes an account puts the accounts, the invitations and the settings back
  * as they were before it runs again (it runs twice when a capture is verified). A form token and a session id are secrets of a session: no recording
  * holds one; the address a redirect carries as base64 is recorded decoded.
  *
- * More: where a refusal sends the browser back to (no Referer, a foreign one, one with a query, one of another path; an invitee's, whose Referer carries
- * the email and code); what a registered account can do (the session id and form token are new, it signs in with the password typed and no other, a
- * password over 72 bytes, a name holding markup shown escaped); the events a registration and each refusal trigger (`Tests\Fixtures\RegistrationEventHook`:
- * its mode makes a listener refuse the password, veto the registration or say the site is full); the user limit (`users/add/check`), which the form asks and
- * the POST does not; a private site (`walled_garden`); and the setting pinned closed by the boot configuration (`IDNO_OPEN_REGISTRATION`) over a stored open one.
- * The GET with an array for `email` or `code` on an open site is a 500 page only because the rig's and CI's sites run `pedantic_mode` (a notice for an array
- * to string conversion is an exception); the array handle, email, password and name POSTs fail on `trim()` whatever the mode. A code that is an array on a
- * site that asks for an invitation is refused as a wrong one is (`CHANGED`).
+ * More: what a registered account can do (the session id and form token are new, it signs in with the password typed and no other, a password over 72
+ * bytes, a name holding markup shown escaped); the events a registration and each refusal trigger (`Tests\Fixtures\RegistrationEventHook`: its mode makes a
+ * listener refuse the password, veto the registration or say the site is full); the user limit (`users/add/check`), which the form and the POST both
+ * ask; a private site (`walled_garden`); and the setting pinned closed by the boot configuration (`IDNO_OPEN_REGISTRATION`) over a stored open one. A
+ * field sent as an array is an empty one. That an invitation is used once, makes the role it was stored with and nothing a request says, and takes
+ * the address it was made for is `InvitationRegistrationTest`'s.
  *
  * A site closed to new users with no invitation to give (`users/add/check` answering false: nothing in core listens to it) is not recorded: nothing
  * of core or the bundled plugins can make a site say so.
@@ -37,25 +38,19 @@ final class RegistrationAnswersTest extends SignInSiteCase
 
     protected const GROUP = 'registration';
 
-    /**
-     * Cases the page now answers differently on purpose: a code that is an array found an invitation on the email alone (the lookup
-     * read it as a list of values to match), so a site that asks for an invitation made an account for a visitor who had none. The
-     * recordings stay as the legacy page made them, and the tests assert the new answer: that of an invitation that does not exist.
-     */
-    private const CHANGED = [
-        'form-closed-array-code' => 'a code that is not text is no invitation: the form is refused as it is for a wrong code (it answered a 500 page, the notice for an array to string conversion)',
-        'register-post-closed-array-code' => 'a code that is not text is no invitation: no account is made and the browser is sent home with the message a wrong code gets',
-        'register-post-closed-array-code-then' => 'the page after the refusal, as for a wrong code',
-        'register-post-closed-array-code-after' => 'the home page after the refusal, as for a wrong code',
-        'register-post-closed-array-code-user' => 'nobody is signed in',
-        'register-post-closed-array-code-admin' => 'nobody is signed in',
-    ];
+    private const CHANGED = [];
 
     private const NEW_PASSWORD = 'a-new-passphrase-77';
 
     private const CODE_DANA = '0123456789abcdef0123456789abcd01';
 
     private const CODE_ERIN = '0123456789abcdef0123456789abcd02';
+
+    private const CODE_FRAN = '0123456789abcdef0123456789abcd03';
+
+    private const CODE_FRAN_RESENT = '0123456789abcdef0123456789abcd04';
+
+    private const CODE_GUS = '0123456789abcdef0123456789abcd05';
 
     public static function tearDownAfterClass(): void
     {
@@ -164,8 +159,8 @@ final class RegistrationAnswersTest extends SignInSiteCase
     private function putBack(bool $open): void
     {
         $code = str_replace(
-            ['%OPEN%', '%DANA%', '%ERIN%'],
-            [$open ? 'true' : 'false', $this->literal(self::CODE_DANA), $this->literal(self::CODE_ERIN)],
+            ['%OPEN%', '%DANA%', '%ERIN%', '%FRAN%', '%GUS%'],
+            [$open ? 'true' : 'false', $this->literal(self::CODE_DANA), $this->literal(self::CODE_ERIN), $this->literal(self::CODE_FRAN), $this->literal(self::CODE_GUS)],
             <<<'PHP'
             $site = \Idno\Core\Idno::site();
             $site->db()->setIgnoreAccess(true);
@@ -177,18 +172,25 @@ final class RegistrationAnswersTest extends SignInSiteCase
             foreach (\Idno\Entities\Invitation::get([], [], 100) ?: [] as $invitation) {
                 $invitation->delete();
             }
-            $make = static function (string $id, string $email, string $code): void {
+            $ada = \Idno\Entities\User::getByHandle('ada');
+            $make = static function (string $id, string $email, string $code, string $expires, string $role) use ($ada): void {
                 $invitation = new \Idno\Entities\Invitation();
                 $invitation->_id = $id;
                 $invitation->email = $email;
                 $invitation->code = $code;
                 $invitation->created = (int) strtotime('2026-03-01 12:00:00 UTC');
+                $invitation->expires = (int) strtotime($expires);
+                $invitation->setRole($role);
+                $invitation->inviter_name = 'Ada Admin';
+                $invitation->invited_by = $ada->getUUID();
                 if (!$invitation->save(true)) {
                     throw new \RuntimeException('invitation not saved');
                 }
             };
-            $make('00000000000040008000000000000101', 'dana@example.test', %DANA%);
-            $make('00000000000040008000000000000102', 'erin@example.test', %ERIN%);
+            $make('00000000000040008000000000000101', 'dana@example.test', %DANA%, '2100-01-01 00:00:00 UTC', 'member');
+            $make('00000000000040008000000000000102', 'erin@example.test', %ERIN%, '2100-01-01 00:00:00 UTC', 'member');
+            $make('00000000000040008000000000000104', 'fran@example.test', %FRAN%, '2026-03-15 12:00:00 UTC', 'member');
+            $make('00000000000040008000000000000105', 'gus@example.test', %GUS%, '2100-01-01 00:00:00 UTC', 'admin');
             $site->config()->open_registration = %OPEN%;
             $site->config()->blocked_emails = ['blocked@example.test'];
             $site->config()->save();
@@ -197,6 +199,21 @@ final class RegistrationAnswersTest extends SignInSiteCase
             PHP
         );
         $this->assertTrue($this->runInSite($code));
+    }
+
+    /**
+     * Fran's expired invitation as an administrator's "Send again" leaves it: its time starts again and it has a new code (renew() makes a random one,
+     * so the new code is a constant here, as every recorded code is).
+     */
+    private function resendFrans(): void
+    {
+        $this->assertTrue($this->runInSite('\Idno\Core\Idno::site()->db()->setIgnoreAccess(true); $i = \Idno\Entities\Invitation::getByEmail("fran@example.test"); $i->renew(); $i->code = ' . $this->literal(self::CODE_FRAN_RESENT) . '; return (bool) $i->save(true);'));
+    }
+
+    /** Whether Dana's invitation is withdrawn, as the Users page does it. */
+    private function withdrawDanas(): void
+    {
+        $this->assertTrue($this->runInSite('\Idno\Core\Idno::site()->db()->setIgnoreAccess(true); return (bool) \Idno\Entities\Invitation::getByEmail("dana@example.test")->delete();'));
     }
 
     /** The handles of the accounts the site has, sorted. @return list<string> */
@@ -346,9 +363,9 @@ final class RegistrationAnswersTest extends SignInSiteCase
             $this->answer('form-open-options', $this->site()->request('OPTIONS', '/account/register'), $s);
             $this->answer('form-open-xhr', $this->site()->request('GET', '/account/register', ['X-Requested-With' => 'XMLHttpRequest']), static fn (SiteResponse $r): SiteResponse => self::withoutLastModified($s($r)));
             $this->answer('form-open-malformed-host', $this->site()->request('GET', '/account/register', ['Host' => 'bad host!']), $s);
-            // a member is sent away (the reverse gatekeeper), whatever the form's type
-            $this->visit(['answer' => 'form-open-bob-html'], '/account/register', [], 'bob');
-            $this->visit(['answer' => 'form-open-bob-json'], '/account/register?_t=json', [], 'bob');
+            // a member is sent home with a message, whatever the form's type
+            $this->visit(['answer' => 'form-open-bob-html', 'then' => 'form-open-bob-html-then'], '/account/register', [], 'bob');
+            $this->visit(['answer' => 'form-open-bob-json', 'then' => 'form-open-bob-json-then'], '/account/register?_t=json', [], 'bob');
             // a signed request is refused: it is an account page
             $this->answer('form-open-signed-html', $this->site()->request('GET', '/account/register', self::signedHeadersFor('bob', self::KEY_BOB, '/account/register')), $s);
             $this->answer('form-open-signed-json', $this->site()->request('GET', '/account/register?_t=json', self::signedHeadersFor('bob', self::KEY_BOB, '/account/register?_t=json')), $s);
@@ -359,22 +376,33 @@ final class RegistrationAnswersTest extends SignInSiteCase
     {
         $this->seedRegistration(false);
         $this->twice(function (): void {
-            $this->visit(['answer' => 'form-closed-no-code', 'then' => 'form-closed-no-code-then'], '/account/register');
-            $this->visit(['answer' => 'form-closed-no-code-json', 'then' => 'form-closed-no-code-json-then'], '/account/register?_t=json');
-            $this->visit(['answer' => 'form-closed-wrong-code', 'then' => 'form-closed-wrong-code-then'], '/account/register?email=dana%40example.test&code=ffffffffffffffffffffffffffffffff');
-            $this->visit(['answer' => 'form-closed-code-no-email', 'then' => 'form-closed-code-no-email-then'], '/account/register?code=' . self::CODE_DANA);
-            $this->visit(['answer' => 'form-closed-email-no-code', 'then' => 'form-closed-email-no-code-then'], '/account/register?email=dana%40example.test');
-            $this->visit(['answer' => 'form-closed-code-of-another-address', 'then' => 'form-closed-code-of-another-address-then'], '/account/register?email=dana%40example.test&code=' . self::CODE_ERIN);
+            $this->visit(['answer' => 'form-closed-no-code'], '/account/register');
+            $this->visit(['answer' => 'form-closed-no-code-json'], '/account/register?_t=json');
+            $this->visit(['answer' => 'form-closed-wrong-code'], '/account/register?email=dana%40example.test&code=ffffffffffffffffffffffffffffffff');
+            $this->visit(['answer' => 'form-closed-code-no-email'], '/account/register?code=' . self::CODE_DANA);
+            $this->visit(['answer' => 'form-closed-email-no-code'], '/account/register?email=dana%40example.test');
+            $this->visit(['answer' => 'form-closed-code-of-another-address'], '/account/register?email=dana%40example.test&code=' . self::CODE_ERIN);
             $this->visit(['answer' => 'form-closed-valid-code'], '/account/register?email=dana%40example.test&code=' . self::CODE_DANA);
             $this->visit(['answer' => 'form-closed-valid-code-upper-case-email'], '/account/register?email=DANA%40example.test&code=' . self::CODE_DANA);
             $this->visit(['answer' => 'form-closed-valid-code-json'], '/account/register?_t=json&email=dana%40example.test&code=' . self::CODE_DANA);
             $this->visit(['answer' => 'form-closed-valid-code-markdown'], '/account/register?_t=markdown&email=dana%40example.test&code=' . self::CODE_DANA);
             $this->visit(['answer' => 'form-closed-valid-code-slash'], '/account/register/?email=dana%40example.test&code=' . self::CODE_DANA);
             $this->visit(['answer' => 'form-closed-array-code'], '/account/register?email=dana%40example.test&code[]=x');
-            $wrong = $this->refusalOf('/account/register?email=dana%40example.test&code=ffffffffffffffffffffffffffffffff');
+            // an invitation that expired, one that makes an administrator, one withdrawn, one sent again (its old link stays refused)
+            $this->visit(['answer' => 'form-closed-expired-code'], '/account/register?email=fran%40example.test&code=' . self::CODE_FRAN);
+            $this->visit(['answer' => 'form-closed-expired-code-json'], '/account/register?_t=json&email=fran%40example.test&code=' . self::CODE_FRAN);
+            $this->visit(['answer' => 'form-closed-admin-code'], '/account/register?email=gus%40example.test&code=' . self::CODE_GUS);
+            $this->resendFrans();
+            $this->visit(['answer' => 'form-closed-resent-old-code'], '/account/register?email=fran%40example.test&code=' . self::CODE_FRAN);
+            $this->visit(['answer' => 'form-closed-resent-new-code'], '/account/register?email=fran%40example.test&code=' . self::CODE_FRAN_RESENT);
+            $this->withdrawDanas();
+            $this->visit(['answer' => 'form-closed-withdrawn-code'], '/account/register?email=dana%40example.test&code=' . self::CODE_DANA);
+            $this->putBack(false);
+            // a field sent as an array is an empty one: the form is refused as it is for no code
+            $none = $this->refusalOf('/account/register?email=dana%40example.test');
             foreach (['code[]=x', 'code[$lt]=g', 'code[$gt]=0', 'code[$not]=zzz', 'email[$gt]=a&email[$lt]=z&code[$lt]=g', 'email[]=dana%40example.test&code[]=x'] as $query) {
                 $query = str_starts_with($query, 'email') ? $query : 'email=dana%40example.test&' . $query;
-                $this->assertSame($wrong, $this->refusalOf('/account/register?' . $query), $query . ' is refused as an invitation that does not exist is');
+                $this->assertSame($none[0], $this->refusalOf('/account/register?' . $query)[0], $query . ' is refused');
             }
             $this->visit(['answer' => 'form-closed-bob-valid-code'], '/account/register?email=dana%40example.test&code=' . self::CODE_DANA, [], 'bob');
             $this->answer('form-closed-signed-valid-code', $this->site()->request('GET', '/account/register?email=dana%40example.test&code=' . self::CODE_DANA, self::signedHeadersFor('bob', self::KEY_BOB, '/account/register?email=dana%40example.test&code=' . self::CODE_DANA)), $this->scrubViewers());
@@ -445,9 +473,14 @@ final class RegistrationAnswersTest extends SignInSiteCase
             $this->submit(['answer' => 'register-post-open-handle-case-and-spaces', 'then' => 'register-post-open-handle-case-and-spaces-then', 'after' => 'register-post-open-handle-case-and-spaces-after', 'user' => 'register-post-open-handle-case-and-spaces-user', 'admin' => 'register-post-open-handle-case-and-spaces-admin'], ['handle' => ' DaNa ', 'name' => '', 'email' => ' dana@example.test ', 'password' => ' ' . self::NEW_PASSWORD . ' ', 'password2' => self::NEW_PASSWORD]);
             $this->assertSame(['handle' => 'dana', 'email' => 'dana@example.test', 'title' => 'dana', 'admin' => false], $this->accountOf('dana'), 'the handle is lower case and trimmed, an empty name is the handle');
 
+            // a code is checked on an open site too, because it may make an administrator: one that is no invitation is refused, not ignored
             $this->putBack(true);
-            $this->submit(['answer' => 'register-post-open-with-a-code', 'then' => 'register-post-open-with-a-code-then', 'after' => 'register-post-open-with-a-code-after', 'user' => 'register-post-open-with-a-code-user', 'admin' => 'register-post-open-with-a-code-admin'], self::dana() + ['code' => 'ignored on an open site']);
-            $this->assertNotSame([], $this->accountOf('dana'));
+            $this->submit(['answer' => 'register-post-open-with-a-code', 'user' => 'register-post-open-with-a-code-user'], self::dana() + ['code' => 'not an invitation']);
+            $this->assertSame([], $this->accountOf('dana'), 'a code that is no invitation registers nobody on an open site');
+            $this->putBack(true);
+            $this->submit(['answer' => 'register-post-open-with-an-invitation', 'then' => 'register-post-open-with-an-invitation-then', 'user' => 'register-post-open-with-an-invitation-user'], self::dana() + ['code' => self::CODE_DANA]);
+            $this->assertNotSame([], $this->accountOf('dana'), 'an invitation that is right registers on an open site and is used up');
+            $this->assertFalse($this->invitationFor('dana@example.test'));
 
             $this->putBack(true);
             $this->submit(['answer' => 'register-post-open-json', 'then' => 'register-post-open-json-then', 'after' => 'register-post-open-json-after', 'user' => 'register-post-open-json-user', 'admin' => 'register-post-open-json-admin'], self::dana(), ['path' => '/account/register?_t=json']);
@@ -466,37 +499,33 @@ final class RegistrationAnswersTest extends SignInSiteCase
     {
         $this->seedRegistration();
         $this->twice(function (): void {
-            $this->refused(['answer' => 'register-post-mismatched-passwords', 'then' => 'register-post-mismatched-passwords-then', 'after' => 'register-post-mismatched-passwords-after'], ['password2' => 'another-passphrase-1'], false);
-            $this->refused(['answer' => 'register-post-taken-handle', 'then' => 'register-post-taken-handle-then', 'after' => 'register-post-taken-handle-after', 'user' => 'register-post-taken-handle-user'], ['handle' => 'bob'], false);
-            $this->refused(['answer' => 'register-post-taken-handle-other-case', 'then' => 'register-post-taken-handle-other-case-then', 'after' => 'register-post-taken-handle-other-case-after'], ['handle' => 'BOB'], false);
-            $this->refused(['answer' => 'register-post-taken-handle-padded', 'then' => 'register-post-taken-handle-padded-then', 'after' => 'register-post-taken-handle-padded-after'], ['handle' => ' bob '], false);
-            $this->refused(['answer' => 'register-post-taken-email', 'then' => 'register-post-taken-email-then', 'after' => 'register-post-taken-email-after'], ['email' => 'bob@example.com'], false);
-            $this->refused(['answer' => 'register-post-taken-email-other-case', 'then' => 'register-post-taken-email-other-case-then', 'after' => 'register-post-taken-email-other-case-after'], ['email' => 'BOB@Example.com'], false);
-            $this->refused(['answer' => 'register-post-taken-handle-and-email', 'then' => 'register-post-taken-handle-and-email-then', 'after' => 'register-post-taken-handle-and-email-after'], ['handle' => 'bob', 'email' => 'bob@example.com'], false);
-            $this->refused(['answer' => 'register-post-blocked-email', 'then' => 'register-post-blocked-email-then', 'after' => 'register-post-blocked-email-after'], ['email' => 'blocked@example.test'], false);
-            $this->refused(['answer' => 'register-post-blocked-email-other-case', 'then' => 'register-post-blocked-email-other-case-then', 'after' => 'register-post-blocked-email-other-case-after'], ['email' => 'Blocked@Example.test'], false);
-            $this->refused(['answer' => 'register-post-invalid-handle', 'then' => 'register-post-invalid-handle-then', 'after' => 'register-post-invalid-handle-after'], ['handle' => 'not valid!'], false);
-            $this->refused(['answer' => 'register-post-handle-with-a-slash', 'then' => 'register-post-handle-with-a-slash-then', 'after' => 'register-post-handle-with-a-slash-after'], ['handle' => 'da/na'], false);
-            $this->refused(['answer' => 'register-post-handle-with-a-dot', 'then' => 'register-post-handle-with-a-dot-then', 'after' => 'register-post-handle-with-a-dot-after'], ['handle' => 'da.na'], false);
-            $this->refused(['answer' => 'register-post-handle-too-long', 'then' => 'register-post-handle-too-long-then', 'after' => 'register-post-handle-too-long-after'], ['handle' => str_repeat('d', 33)], false);
+            $this->refused(['answer' => 'register-post-mismatched-passwords'], ['password2' => 'another-passphrase-1'], false);
+            $this->refused(['answer' => 'register-post-mismatched-passwords-json'], ['password2' => 'another-passphrase-1'], false, ['path' => '/account/register?_t=json']);
+            $this->refused(['answer' => 'register-post-taken-handle', 'user' => 'register-post-taken-handle-user'], ['handle' => 'bob'], false);
+            $this->refused(['answer' => 'register-post-taken-handle-other-case'], ['handle' => 'BOB'], false);
+            $this->refused(['answer' => 'register-post-taken-handle-padded'], ['handle' => ' bob '], false);
+            $this->refused(['answer' => 'register-post-taken-email'], ['email' => 'bob@example.com'], false);
+            $this->refused(['answer' => 'register-post-taken-email-other-case'], ['email' => 'BOB@Example.com'], false);
+            $this->refused(['answer' => 'register-post-taken-handle-and-email'], ['handle' => 'bob', 'email' => 'bob@example.com'], false);
+            $this->refused(['answer' => 'register-post-blocked-email'], ['email' => 'blocked@example.test'], false);
+            $this->refused(['answer' => 'register-post-blocked-email-other-case'], ['email' => 'Blocked@Example.test'], false);
+            $this->refused(['answer' => 'register-post-invalid-handle'], ['handle' => 'not valid!'], false);
+            $this->refused(['answer' => 'register-post-handle-with-a-slash'], ['handle' => 'da/na'], false);
+            $this->refused(['answer' => 'register-post-handle-with-a-dot'], ['handle' => 'da.na'], false);
+            $this->refused(['answer' => 'register-post-handle-too-long'], ['handle' => str_repeat('d', 33)], false);
             $this->refused(['answer' => 'register-post-handle-of-32', 'then' => 'register-post-handle-of-32-then', 'after' => 'register-post-handle-of-32-after', 'user' => 'register-post-handle-of-32-user', 'admin' => 'register-post-handle-of-32-admin'], ['handle' => str_repeat('d', 32)], true);
-            $this->refused(['answer' => 'register-post-empty-handle', 'then' => 'register-post-empty-handle-then', 'after' => 'register-post-empty-handle-after'], ['handle' => ''], false);
-            $this->refused(['answer' => 'register-post-spaces-for-a-handle', 'then' => 'register-post-spaces-for-a-handle-then', 'after' => 'register-post-spaces-for-a-handle-after'], ['handle' => '   '], false);
-            $this->refused(['answer' => 'register-post-invalid-email', 'then' => 'register-post-invalid-email-then', 'after' => 'register-post-invalid-email-after', 'user' => 'register-post-invalid-email-user'], ['email' => 'not-an-address'], false);
-            $this->refused(['answer' => 'register-post-empty-email', 'then' => 'register-post-empty-email-then', 'after' => 'register-post-empty-email-after'], ['email' => ''], false);
-            $this->refused(['answer' => 'register-post-no-handle-and-no-email', 'then' => 'register-post-no-handle-and-no-email-then', 'after' => 'register-post-no-handle-and-no-email-after'], ['handle' => '', 'email' => ''], false);
-            $this->refused(['answer' => 'register-post-short-password', 'then' => 'register-post-short-password-then', 'after' => 'register-post-short-password-after'], ['password' => 'six-pw', 'password2' => 'six-pw'], false);
+            $this->refused(['answer' => 'register-post-empty-handle'], ['handle' => ''], false);
+            $this->refused(['answer' => 'register-post-spaces-for-a-handle'], ['handle' => '   '], false);
+            $this->refused(['answer' => 'register-post-invalid-email', 'user' => 'register-post-invalid-email-user'], ['email' => 'not-an-address'], false);
+            $this->refused(['answer' => 'register-post-empty-email'], ['email' => ''], false);
+            $this->refused(['answer' => 'register-post-no-handle-and-no-email'], ['handle' => '', 'email' => ''], false);
+            $this->refused(['answer' => 'register-post-short-password'], ['password' => 'six-pw', 'password2' => 'six-pw'], false);
             $this->refused(['answer' => 'register-post-seven-character-password', 'then' => 'register-post-seven-character-password-then', 'after' => 'register-post-seven-character-password-after', 'user' => 'register-post-seven-character-password-user', 'admin' => 'register-post-seven-character-password-admin'], ['password' => 'sevenpw', 'password2' => 'sevenpw'], true);
-            $this->refused(['answer' => 'register-post-empty-passwords', 'then' => 'register-post-empty-passwords-then', 'after' => 'register-post-empty-passwords-after'], ['password' => '', 'password2' => ''], false);
-            $this->refused(['answer' => 'register-post-blank-passwords', 'then' => 'register-post-blank-passwords-then', 'after' => 'register-post-blank-passwords-after'], ['password' => '       ', 'password2' => '       '], false);
-            $this->refused(['answer' => 'register-post-no-second-password', 'then' => 'register-post-no-second-password-then', 'after' => 'register-post-no-second-password-after'], ['password2' => ''], false);
+            $this->refused(['answer' => 'register-post-empty-passwords'], ['password' => '', 'password2' => ''], false);
+            $this->refused(['answer' => 'register-post-blank-passwords'], ['password' => '       ', 'password2' => '       '], false);
+            $this->refused(['answer' => 'register-post-no-second-password'], ['password2' => ''], false);
             $this->refused(['answer' => 'register-post-no-name', 'then' => 'register-post-no-name-then', 'after' => 'register-post-no-name-after', 'user' => 'register-post-no-name-user', 'admin' => 'register-post-no-name-admin'], ['name' => ''], true);
-            $this->refused(['answer' => 'register-post-every-fault-at-once', 'then' => 'register-post-every-fault-at-once-then', 'after' => 'register-post-every-fault-at-once-after'], ['handle' => 'bob/!', 'email' => 'bob@example.com', 'password' => 'x', 'password2' => 'y'], false);
-            // where a refusal sends the browser back to: the Referer, through the same-origin rule
-            $this->refused(['answer' => 'register-post-refused-no-referer', 'then' => 'register-post-refused-no-referer-then', 'after' => 'register-post-refused-no-referer-after'], ['password2' => 'another-passphrase-1'], false, ['referer' => false]);
-            $this->refused(['answer' => 'register-post-refused-foreign-referer', 'then' => 'register-post-refused-foreign-referer-then', 'after' => 'register-post-refused-foreign-referer-after'], ['password2' => 'another-passphrase-1'], false, ['referer' => 'https://evil.example/steal']);
-            $this->refused(['answer' => 'register-post-refused-query-referer', 'then' => 'register-post-refused-query-referer-then', 'after' => 'register-post-refused-query-referer-after'], ['password2' => 'another-passphrase-1'], false, ['referer' => '/account/register?email=ada%40example.test&x=1']);
-            $this->refused(['answer' => 'register-post-refused-other-path-referer', 'then' => 'register-post-refused-other-path-referer-then', 'after' => 'register-post-refused-other-path-referer-after'], ['password2' => 'another-passphrase-1'], false, ['referer' => '/account/settings/']);
+            $this->refused(['answer' => 'register-post-every-fault-at-once'], ['handle' => 'bob/!', 'email' => 'bob@example.com', 'password' => 'x', 'password2' => 'y'], false);
             $this->putBack(true);
         });
     }
@@ -527,8 +556,8 @@ final class RegistrationAnswersTest extends SignInSiteCase
             $try(['answer' => 'register-post-xhr-refused'], ['email' => 'not-an-address'] + self::dana(), ['headers' => ['X-Requested-With' => 'XMLHttpRequest']]);
             $try(['answer' => 'register-post-xhr-no-token'], self::dana(), ['headers' => ['X-Requested-With' => 'XMLHttpRequest'], 'token' => false]);
             $try(['answer' => 'register-post-xhr-valid', 'user' => 'register-post-xhr-valid-user', 'admin' => 'register-post-xhr-valid-admin'], self::dana(), ['headers' => ['X-Requested-With' => 'XMLHttpRequest']]);
-            // today's behaviour: an array is a name (the title is whatever it holds) and a code (an open site asks for none), and a POST a script sends is
-            // registered as any other
+            // a field sent as an array is an empty one: an empty name is the handle, an empty code is none (an open site asks for none), and a POST a script
+            // sends is registered as any other
             $this->assertSame(['register-post-array-name', 'register-post-array-code', 'register-post-xhr-valid'], array_keys(array_filter($made)), 'the POSTs that make an account');
             // a signed request is an account page's: refused
             $seen = static fn (array $before, array $after): bool => array_diff($after, $before) !== [];
@@ -568,13 +597,15 @@ final class RegistrationAnswersTest extends SignInSiteCase
             $try = function (array $names, array $fields, array $options = []) use (&$made): void {
                 $made[$names['answer']] = $this->attempt($names, $fields, $options, false);
             };
-            $try(['answer' => 'register-post-closed-no-code', 'then' => 'register-post-closed-no-code-then', 'after' => 'register-post-closed-no-code-after'], self::dana());
-            $try(['answer' => 'register-post-closed-wrong-code', 'then' => 'register-post-closed-wrong-code-then', 'after' => 'register-post-closed-wrong-code-after'], self::dana() + ['code' => 'ffffffffffffffffffffffffffffffff']);
-            $try(['answer' => 'register-post-closed-code-of-another-address', 'then' => 'register-post-closed-code-of-another-address-then', 'after' => 'register-post-closed-code-of-another-address-after'], self::dana() + ['code' => self::CODE_ERIN]);
-            $try(['answer' => 'register-post-closed-code-no-email', 'then' => 'register-post-closed-code-no-email-then', 'after' => 'register-post-closed-code-no-email-after'], ['email' => ''] + self::dana() + ['code' => self::CODE_DANA]);
-            $try(['answer' => 'register-post-closed-no-code-json', 'then' => 'register-post-closed-no-code-json-then', 'after' => 'register-post-closed-no-code-json-after'], self::dana(), ['path' => '/account/register?_t=json']);
-            $try(['answer' => 'register-post-closed-array-code', 'then' => 'register-post-closed-array-code-then', 'after' => 'register-post-closed-array-code-after', 'user' => 'register-post-closed-array-code-user', 'admin' => 'register-post-closed-array-code-admin'], self::dana() + ['code' => ['x']]);
+            $try(['answer' => 'register-post-closed-no-code'], self::dana());
+            $try(['answer' => 'register-post-closed-wrong-code'], self::dana() + ['code' => 'ffffffffffffffffffffffffffffffff']);
+            $try(['answer' => 'register-post-closed-code-of-another-address'], self::dana() + ['code' => self::CODE_ERIN]);
+            $try(['answer' => 'register-post-closed-code-no-email'], ['email' => ''] + self::dana() + ['code' => self::CODE_DANA]);
+            $try(['answer' => 'register-post-closed-no-code-json'], self::dana(), ['path' => '/account/register?_t=json']);
+            $try(['answer' => 'register-post-closed-array-code', 'user' => 'register-post-closed-array-code-user', 'admin' => 'register-post-closed-array-code-admin'], self::dana() + ['code' => ['x']]);
             $try(['answer' => 'register-post-closed-no-token', 'then' => 'register-post-closed-no-token-then', 'after' => 'register-post-closed-no-token-after'], self::dana() + ['code' => self::CODE_DANA], ['token' => false]);
+            // an invitation that has expired
+            $try(['answer' => 'register-post-closed-expired-code'], ['email' => 'fran@example.test', 'handle' => 'fran'] + self::dana() + ['code' => self::CODE_FRAN]);
             // an array in place of the code is no invitation: the answer is a wrong code's
             $this->assertSame([], array_keys(array_filter($made)), 'the POSTs that make an account');
             $wrongCode = $this->register(self::dana() + ['code' => 'ffffffffffffffffffffffffffffffff']);
@@ -587,10 +618,23 @@ final class RegistrationAnswersTest extends SignInSiteCase
             $this->assertTrue($this->invitationFor('dana@example.test'), 'a refusal leaves the invitation');
 
             // the invitation is right, the details are not: the invitation stays
-            $this->submit(['answer' => 'register-post-closed-valid-code-taken-handle', 'then' => 'register-post-closed-valid-code-taken-handle-then', 'after' => 'register-post-closed-valid-code-taken-handle-after'], ['handle' => 'bob'] + self::dana() + ['code' => self::CODE_DANA], ['referer' => '/account/register?email=dana%40example.test&code=' . self::CODE_DANA]);
-            $this->submit(['answer' => 'register-post-closed-valid-code-mismatched-passwords', 'then' => 'register-post-closed-valid-code-mismatched-passwords-then', 'after' => 'register-post-closed-valid-code-mismatched-passwords-after'], ['password2' => 'another-passphrase-1'] + self::dana() + ['code' => self::CODE_DANA], ['referer' => '/account/register?email=dana%40example.test&code=' . self::CODE_DANA]);
+            $this->submit(['answer' => 'register-post-closed-valid-code-taken-handle'], ['handle' => 'bob'] + self::dana() + ['code' => self::CODE_DANA], ['referer' => '/account/register?email=dana%40example.test&code=' . self::CODE_DANA]);
+            $this->submit(['answer' => 'register-post-closed-valid-code-mismatched-passwords'], ['password2' => 'another-passphrase-1'] + self::dana() + ['code' => self::CODE_DANA], ['referer' => '/account/register?email=dana%40example.test&code=' . self::CODE_DANA]);
             $this->assertSame($before, $this->handles());
             $this->assertTrue($this->invitationFor('dana@example.test'), 'a failed registration leaves the invitation');
+
+            // an invitation that was sent again: its old code is refused and its new one registers
+            $this->resendFrans();
+            $this->submit(['answer' => 'register-post-closed-resent-old-code'], ['email' => 'fran@example.test', 'handle' => 'fran'] + self::dana() + ['code' => self::CODE_FRAN]);
+            $this->assertSame([], $this->accountOf('fran'), 'the old code of a resent invitation registers nobody');
+            $this->submit(['answer' => 'register-post-closed-resent-new-code', 'then' => 'register-post-closed-resent-new-code-then'], ['email' => 'fran@example.test', 'handle' => 'fran'] + self::dana() + ['code' => self::CODE_FRAN_RESENT]);
+            $this->assertSame(['handle' => 'fran', 'email' => 'fran@example.test', 'title' => 'Dana Newcomer', 'admin' => false], $this->accountOf('fran'));
+            $this->putBack(false);
+            // an invitation that makes an administrator: only because it was stored so
+            $this->submit(['answer' => 'register-post-closed-admin-code', 'then' => 'register-post-closed-admin-code-then', 'user' => 'register-post-closed-admin-code-user'], ['email' => 'gus@example.test', 'handle' => 'gus'] + self::dana() + ['code' => self::CODE_GUS]);
+            $this->assertSame(['handle' => 'gus', 'email' => 'gus@example.test', 'title' => 'Dana Newcomer', 'admin' => true], $this->accountOf('gus'));
+            $this->putBack(false);
+            $before = $this->handles();
 
             // the invitation is right: the account is made and the invitation is gone
             $this->submit(['answer' => 'register-post-closed-valid-code', 'then' => 'register-post-closed-valid-code-then', 'after' => 'register-post-closed-valid-code-after', 'user' => 'register-post-closed-valid-code-user', 'admin' => 'register-post-closed-valid-code-admin'], self::dana() + ['code' => self::CODE_DANA]);
@@ -599,8 +643,8 @@ final class RegistrationAnswersTest extends SignInSiteCase
             $this->assertTrue($this->invitationFor('erin@example.test'), 'and only that one');
             $this->assertSame(['handle' => 'dana', 'email' => 'dana@example.test', 'title' => 'Dana Newcomer', 'admin' => false], $this->accountOf('dana'));
             // the code is of no use again, on the form and on the POST
-            $this->visit(['answer' => 'form-closed-used-code', 'then' => 'form-closed-used-code-then'], '/account/register?email=dana%40example.test&code=' . self::CODE_DANA);
-            $this->submit(['answer' => 'register-post-closed-used-code', 'then' => 'register-post-closed-used-code-then', 'after' => 'register-post-closed-used-code-after', 'user' => 'register-post-closed-used-code-user'], ['handle' => 'dana2'] + self::dana() + ['code' => self::CODE_DANA]);
+            $this->visit(['answer' => 'form-closed-used-code'], '/account/register?email=dana%40example.test&code=' . self::CODE_DANA);
+            $this->submit(['answer' => 'register-post-closed-used-code', 'user' => 'register-post-closed-used-code-user'], ['handle' => 'dana2'] + self::dana() + ['code' => self::CODE_DANA]);
             $this->assertSame(['ada', 'bob', 'carol', 'dana'], $this->handles());
 
             // an invitation by the address in another letter case
@@ -610,7 +654,7 @@ final class RegistrationAnswersTest extends SignInSiteCase
             $this->putBack(false);
             $this->runInSite('$i = new \Idno\Entities\Invitation(); $i->_id = "00000000000040008000000000000103"; $i->email = "blocked@example.test"; $i->code = ' . $this->literal(self::CODE_DANA) . '; $i->created = (int) strtotime("2026-03-01 12:00:00 UTC"); $i->save(true); return true;');
             $before = $this->handles();
-            $this->submit(['answer' => 'register-post-closed-blocked-address', 'then' => 'register-post-closed-blocked-address-then', 'after' => 'register-post-closed-blocked-address-after'], ['email' => 'blocked@example.test'] + self::dana() + ['code' => self::CODE_DANA], ['referer' => '/account/register?email=blocked%40example.test&code=' . self::CODE_DANA]);
+            $this->submit(['answer' => 'register-post-closed-blocked-address'], ['email' => 'blocked@example.test'] + self::dana() + ['code' => self::CODE_DANA], ['referer' => '/account/register?email=blocked%40example.test&code=' . self::CODE_DANA]);
             $this->assertSame($before, $this->handles());
             $this->assertTrue($this->invitationFor('blocked@example.test'), 'and its invitation stays');
             $this->putBack(true);
@@ -622,11 +666,10 @@ final class RegistrationAnswersTest extends SignInSiteCase
         $this->seedRegistration();
         $this->twice(function (): void {
             $this->putBack(true);
-            // a member who posts the form with a token is registered as a new account and the browser is switched to it: today's behaviour
+            // a member who posts the form, with a token, is sent home with a message: no account is made and the browser stays Bob's
             $cookie = $this->bobsSession();
             $this->submit(['answer' => 'register-post-bob-valid', 'then' => 'register-post-bob-valid-then', 'after' => 'register-post-bob-valid-after', 'user' => 'register-post-bob-valid-user', 'admin' => 'register-post-bob-valid-admin'], self::dana(), ['cookie' => $cookie]);
-            $this->assertNotSame([], $this->accountOf('dana'), 'an account was made for a signed-in member');
-            // the session Bob had before: still his, or not
+            $this->assertSame([], $this->accountOf('dana'), 'no account was made for a signed-in member');
             $this->answer('register-post-bob-valid-old-session', $this->site()->request('GET', '/currentUser?_t=json', ['Cookie' => $cookie]), $this->scrubViewers());
 
             $this->putBack(true);
@@ -640,8 +683,8 @@ final class RegistrationAnswersTest extends SignInSiteCase
             // the administrator, too
             $this->putBack(true);
             $admin = $this->loginCookie('ada', self::PASSWORD);
-            $this->submit(['answer' => 'register-post-admin-valid', 'then' => 'register-post-admin-valid-then', 'after' => 'register-post-admin-valid-after', 'user' => 'register-post-admin-valid-user', 'admin' => 'register-post-admin-valid-admin'], self::dana(), ['cookie' => $admin]);
-            $this->assertSame(['handle' => 'dana', 'email' => 'dana@example.test', 'title' => 'Dana Newcomer', 'admin' => false], $this->accountOf('dana'));
+            $this->submit(['answer' => 'register-post-admin-valid', 'then' => 'register-post-admin-valid-then', 'after' => 'register-post-admin-valid-after', 'user' => 'register-post-admin-valid-user'], self::dana(), ['cookie' => $admin]);
+            $this->assertSame([], $this->accountOf('dana'), 'nor for an administrator');
             $this->putBack(true);
         });
     }
@@ -726,18 +769,18 @@ final class RegistrationAnswersTest extends SignInSiteCase
 
             // a listener that finds the password too weak, and one that vetoes the registration
             $this->mode('weak-password');
-            $this->submit(['answer' => 'register-post-event-weak-password', 'then' => 'register-post-event-weak-password-then', 'after' => 'register-post-event-weak-password-after'], self::dana());
+            $this->submit(['answer' => 'register-post-event-weak-password'], self::dana());
             $this->assertSame(['ada', 'bob', 'carol'], $this->handles(), 'a listener can refuse the password');
             $this->events();
             $this->mode('veto-validate');
-            $this->submit(['answer' => 'register-post-event-vetoed', 'then' => 'register-post-event-vetoed-then', 'after' => 'register-post-event-vetoed-after'], self::dana());
+            $this->submit(['answer' => 'register-post-event-vetoed'], self::dana());
             $this->assertSame(['ada', 'bob', 'carol'], $this->handles(), 'a listener can veto the registration');
             $this->assertSame(['user/password/checkstrength', 'user/register/validate:dana', 'user/password/checkstrength'], $this->events(), 'a listener can veto');
             $this->mode('');
         });
     }
 
-    public function testTheUserLimitIsAskedByTheFormAndNotByThePost(): void
+    public function testTheUserLimitIsAskedByTheFormAndByThePost(): void
     {
         $this->seedRegistration(false);
         $this->twice(function (): void {
@@ -745,15 +788,15 @@ final class RegistrationAnswersTest extends SignInSiteCase
             $this->mode('deny-add');
             $this->events();
             // `users/add/check` says no (a full site): the form refuses, with the message of a closed site
-            $this->visit(['answer' => 'form-closed-no-room-valid-code', 'then' => 'form-closed-no-room-valid-code-then'], '/account/register?email=dana%40example.test&code=' . self::CODE_DANA);
+            $this->visit(['answer' => 'form-closed-no-room-valid-code'], '/account/register?email=dana%40example.test&code=' . self::CODE_DANA);
             $this->assertSame(['users/add/check'], $this->events(), 'the form asks the limit');
-            // the POST never asks it, and registers the invited address
+            // and so does the POST: a full site registers nobody, an invitation or not
             $this->register(self::dana() + ['code' => self::CODE_DANA]);
-            $this->assertSame(['user/password/checkstrength', 'user/register/validate:dana', 'site/newuser:dana', 'user/logon:dana'], $this->events(), 'the POST does not ask the limit');
-            $this->assertNotSame([], $this->accountOf('dana'), 'a full site still registers by POST');
-            $this->putBack(false);
-            $this->submit(['answer' => 'register-post-closed-no-room-valid-code', 'then' => 'register-post-closed-no-room-valid-code-then', 'after' => 'register-post-closed-no-room-valid-code-after', 'user' => 'register-post-closed-no-room-valid-code-user'], self::dana() + ['code' => self::CODE_DANA]);
-            $this->assertSame(['handle' => 'dana', 'email' => 'dana@example.test', 'title' => 'Dana Newcomer', 'admin' => false], $this->accountOf('dana'), 'a full site still registers by POST');
+            $this->assertSame(['users/add/check'], $this->events(), 'the POST asks the limit');
+            $this->assertSame([], $this->accountOf('dana'), 'a full site registers nobody by POST');
+            $this->assertTrue($this->invitationFor('dana@example.test'), 'and leaves the invitation');
+            $this->submit(['answer' => 'register-post-closed-no-room-valid-code', 'user' => 'register-post-closed-no-room-valid-code-user'], self::dana() + ['code' => self::CODE_DANA]);
+            $this->assertSame([], $this->accountOf('dana'));
             $this->putBack(false);
             $this->mode('');
         });
@@ -766,12 +809,12 @@ final class RegistrationAnswersTest extends SignInSiteCase
             $this->putBack(true);
             $this->visit(['answer' => 'form-walled-open-html'], '/account/register');
             $this->visit(['answer' => 'form-walled-open-json'], '/account/register?_t=json');
-            $this->refused(['answer' => 'register-walled-post-open-mismatched-passwords', 'then' => 'register-walled-post-open-mismatched-passwords-then', 'after' => 'register-walled-post-open-mismatched-passwords-after'], ['password2' => 'another-passphrase-1'], false);
+            $this->refused(['answer' => 'register-walled-post-open-mismatched-passwords'], ['password2' => 'another-passphrase-1'], false);
             $this->refused(['answer' => 'register-walled-post-open-valid', 'then' => 'register-walled-post-open-valid-then', 'after' => 'register-walled-post-open-valid-after', 'user' => 'register-walled-post-open-valid-user'], [], true);
             $this->putBack(false);
-            $this->visit(['answer' => 'form-walled-closed-no-code', 'then' => 'form-walled-closed-no-code-then'], '/account/register');
+            $this->visit(['answer' => 'form-walled-closed-no-code'], '/account/register');
             $this->visit(['answer' => 'form-walled-closed-valid-code'], '/account/register?email=dana%40example.test&code=' . self::CODE_DANA);
-            $this->submit(['answer' => 'register-walled-post-closed-no-code', 'then' => 'register-walled-post-closed-no-code-then', 'after' => 'register-walled-post-closed-no-code-after'], self::dana());
+            $this->submit(['answer' => 'register-walled-post-closed-no-code'], self::dana());
             $this->submit(['answer' => 'register-walled-post-closed-valid-code', 'then' => 'register-walled-post-closed-valid-code-then', 'after' => 'register-walled-post-closed-valid-code-after', 'user' => 'register-walled-post-closed-valid-code-user'], self::dana() + ['code' => self::CODE_DANA]);
             $this->assertNotSame([], $this->accountOf('dana'));
             $this->putBack(true);
@@ -784,9 +827,9 @@ final class RegistrationAnswersTest extends SignInSiteCase
         $this->seedRegistration(true);
         $this->twice(function (): void {
             $this->putBack(true);
-            $this->visit(['answer' => 'form-pinned-closed-no-code', 'then' => 'form-pinned-closed-no-code-then'], '/account/register');
+            $this->visit(['answer' => 'form-pinned-closed-no-code'], '/account/register');
             $this->visit(['answer' => 'form-pinned-closed-valid-code'], '/account/register?email=dana%40example.test&code=' . self::CODE_DANA);
-            $this->submit(['answer' => 'register-post-pinned-closed-no-code', 'then' => 'register-post-pinned-closed-no-code-then', 'after' => 'register-post-pinned-closed-no-code-after'], self::dana());
+            $this->submit(['answer' => 'register-post-pinned-closed-no-code'], self::dana());
             $this->assertSame(['ada', 'bob', 'carol'], $this->handles(), 'the stored setting does not open the site');
             $this->submit(['answer' => 'register-post-pinned-closed-valid-code', 'then' => 'register-post-pinned-closed-valid-code-then', 'after' => 'register-post-pinned-closed-valid-code-after', 'user' => 'register-post-pinned-closed-valid-code-user'], self::dana() + ['code' => self::CODE_DANA]);
             $this->assertNotSame([], $this->accountOf('dana'));
