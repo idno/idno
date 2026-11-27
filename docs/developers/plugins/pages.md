@@ -162,7 +162,7 @@ There are a number of variants on this function:
 * `$this->createGatekeeper()` checks to ensure the user is logged in and can create content
 * `$this->adminGatekeeper()` checks to ensure the user is logged in and is a site administrator
 * `$this->reverseGatekeeper()` checks to ensure the user is logged _out_ and otherwise shows the "access denied" page
-* `$this->sslGatekeeper()` redirects the request to HTTPS if the page is being accessed without SSL/TLS and the site is configured for SSL
+* `$this->sslGatekeeper()` is deprecated and does nothing; make the web server or proxy redirect http to https
 * `$this->xhrGatekeeper()` denies access unless the request was made by XMLHttpRequest
 * `$this->tokenGatekeeper()` denies access unless the request carries a valid [form token](forms.md)
 

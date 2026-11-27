@@ -1157,21 +1157,12 @@ namespace Idno\Common {
         }
 
         /**
-         * Force connection over SSL.
-         * If a page is requested over HTTP, this function will issue a 307 redirect to force
-         * the connection over TLS. 307 is used to preserve POST data on a web services call.
+         * Does nothing. Redirecting http to https is the web server's or the proxy's job.
+         *
+         * @deprecated Kept so that a plugin that still calls it keeps working.
          */
         function sslGatekeeper()
         {
-            if (!static::isSSL() && empty(\Idno\Core\Idno::site()->config()->ignore_ssl_gatekeeper) && \Idno\Core\Idno::site()->config()->hasSSL()) {
-
-                $url = str_replace('http://', 'https://', $this->currentUrl());
-
-                header("HTTP/1.1 307 Temporary Redirect");
-                header("Location: $url");
-
-                exit;
-            }
         }
 
         /**

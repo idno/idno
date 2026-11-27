@@ -7,7 +7,7 @@ namespace Tests\Characterisation;
 use Tests\Support\PrivateSiteTestCase;
 
 /**
- * A site whose configured `url` is http but which is reached over https (`force_ssl`, TLS added without changing `url`; here a request that says so with
+ * A site whose configured `url` is http but which is reached over https (TLS added without changing `url`; here a request that says so with
  * `X-Forwarded-Proto: https` and no `trusted_proxies` setting, as `LoginApiKeyTest` does).
  */
 final class IndieAuthSignInOverHttpsTest extends PrivateSiteTestCase

@@ -65,7 +65,7 @@ final class RedirectTargetTest extends TestCase
      */
     public static function schemeCases(): iterable
     {
-        // The configured address is http but the request came over https (`force_ssl`, TLS added without changing `url`): the site's address as the request
+        // The configured address is http but the request came over https (TLS added without changing `url`): the site's address as the request
         // sees it is https. IndieAuth sends the member to log in with an address built from the CONFIGURED url, which is http: it must land on the page it
         // came from, not the home page.
         yield 'configured http, request secure' => ['http://site.example/indieauth/auth?me=x', 'https://site.example/', 'http://site.example/', 'https://site.example/indieauth/auth?me=x'];

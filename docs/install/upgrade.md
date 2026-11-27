@@ -431,6 +431,8 @@ Thanks to [Chris Aldich](http://stream.boffosocko.com/2015/upgrading-withknown-o
 
 ### Settings that changed
 
+* **`force_ssl` is gone.** It had no effect in 2.0, and `ignore_ssl_gatekeeper` with it. If your site relied on it, set `url` to the site's `https://` address and make the web server or reverse proxy redirect http to https.
+
 * **MySQL sites:** every `database` setting that worked before still works (`MySQL`, `mysql`, `beanstalk-mysql`, and any other value that is not a database class, which has always meant MySQL), and a `sessions_storage = Idno\Data\MySQL` setting keeps your sessions in the database (now its `idno_sessions` table). Sessions are not carried over: users log in again after the upgrade.
 * **MongoDB sites do not start.** MongoDB is no longer a database Idno runs on; move the site with `php bin/console idno:import:mongo` (see "Moving a MongoDB site"). The upload directory then holds the files GridFS kept, and the site's users log in again (sessions are not carried over).
 

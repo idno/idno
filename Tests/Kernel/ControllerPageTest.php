@@ -650,28 +650,6 @@ final class ControllerPageTest extends TestCase
         $this->assertFalse($this->page('/x', 'GET', [], ['HTTPS' => 'off', 'SERVER_PORT' => '443'])->isSecure());
     }
 
-    public function testSslGatekeeperRedirectsWith307WhenTheSiteWantsHttps(): void
-    {
-        $config = Idno::site()->config();
-        $previous = $config->url;
-        $config->url = 'https://' . preg_replace('~^https?://~', '', (string) $previous);
-        try {
-            $page = $this->page('/secret');
-            try {
-                $page->sslGatekeeper();
-                $this->fail('the page redirects');
-            } catch (PageRedirect $redirect) {
-                $this->assertSame(307, $redirect->status);
-                $this->assertStringStartsWith('https://', $redirect->location);
-                $this->assertStringEndsWith('/secret', $redirect->location);
-            }
-            $this->page('/secret', 'GET', [], ['HTTPS' => 'on'])->sslGatekeeper();
-        } finally {
-            $config->url = $previous;
-        }
-        $this->addToAssertionCount(1);
-    }
-
     public function testWhatWasRegisteredWithTheRouterForTheClassStillApplies(): void
     {
         $routes = Idno::site()->routes();

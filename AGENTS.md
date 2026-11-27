@@ -1742,7 +1742,7 @@ the tag pages and the small public endpoints are served through them (and the fi
   `GoneHttpException` (each after setting the status), `forward()` a `PageRedirect` with the location `Page::forward()` computes (the template
   type, when it is not the default, in `_t`; the session closed first, as `finishEarly()` did; `forward_trace` logged and sent as
   `X-Idno-Forward-Trace`; a POST, PUT or DELETE sent as an XHR request cannot be redirected, so it is ENDED instead: `forward()` with `$exit` true throws `Idno\Http\Page\PageEnded`, which the listener answers as an empty response at the page's status (a legacy page's `forward()` exits there, with no `Location`), and with `$exit` false it returns; an API request gets the JSON
-  `{"location": ...}` in the redirect's `body` instead of a `Location`), `sslGatekeeper()` a 307 `PageRedirect` (when `Config::hasSSL()` says the site wants https: an https `url` or `force_ssl`; `ConfigHasSslTest`), `exception()` rethrows (the controller
+  `{"location": ...}` in the redirect's `body` instead of a `Location`), `exception()` rethrows (the controller
   wiring must not leave the exception handler `Page::init()` installs pointing at a `ControllerPage`); `forward($location, false)`, which a
   legacy page used to send the redirect and carry on, records the redirect on the context and returns, and `PageRequestListener::onResponse()`
   puts it on whatever the page answers (a 200 becomes the redirect; an API body is put before the page's); `AfterResponse::run()` for a

@@ -348,17 +348,6 @@ final class ControllerPage extends Page
         return \Idno\Http\TrustedProxies::isSecure($this->context->request());
     }
 
-    /**
-     * Where a legacy page redirects with a 307 (so that a POST is kept) and exits, this throws that redirect.
-     */
-    public function sslGatekeeper()
-    {
-        $config = Idno::site()->config();
-        if (!$this->isSecure() && empty($config->ignore_ssl_gatekeeper) && $config->hasSSL()) {
-            throw new PageRedirect(str_replace('http://', 'https://', $this->currentUrl()), null, 307);
-        }
-    }
-
     public function markdownSuffixRequested(): bool
     {
         return $this->context->markdownSuffixRequested();

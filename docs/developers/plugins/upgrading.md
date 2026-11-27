@@ -247,6 +247,8 @@ The bundled StaticPages plugin works this way: `IdnoPlugins\StaticPages\Pages\Ho
 
 ## Whether a request is secure
 
+`Page::sslGatekeeper()` and `Config::hasSSL()` no longer redirect: `sslGatekeeper()` is deprecated and does nothing, and `hasSSL()` and the `force_ssl` and `ignore_ssl_gatekeeper` settings are gone. Redirect http to https in the web server or proxy.
+
 `Page::isSSL()` and `ControllerPage::isSecure()` answer from one function, `Idno\Http\TrustedProxies::isSecure()`. A site that sets the boot setting `trusted_proxies` (the proxies whose `X-Forwarded-Proto` and `X-Forwarded-Port` are believed) gets Symfony's rule: the server's own `HTTPS`, or `X-Forwarded-Proto` from a listed proxy. A site that sets nothing gets the rule `isSSL()` always had (`HTTPS` `1` or `on`, port 443, or `X-Forwarded-Proto: https` from anyone), so a plugin that called `Page::isSSL()` sees no change there. The setting is never stored: `Idno\Core\Config` drops `trusted_proxies` from the stored settings. A plugin that reads `$_SERVER['HTTP_X_FORWARDED_PROTO']` or `HTTP_X_FORWARDED_PORT` itself decides for itself and should call `Page::isSSL()` instead.
 
 ## The static helpers of `Idno\Pages\Session\Login`

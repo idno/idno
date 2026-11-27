@@ -569,20 +569,6 @@ namespace Idno\Core {
         }
 
         /**
-         * Does this site have SSL?
-         *
-         * @return bool
-         */
-        function hasSSL()
-        {
-            if (substr_count((string) $this->getURL(), 'https://') || !empty($this->force_ssl)) {
-                return true;
-            }
-
-            return false;
-        }
-
-        /**
          * Retrieve the name of this site
          *
          * @return string
