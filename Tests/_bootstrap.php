@@ -52,6 +52,18 @@ $_SERVER['APP_DEBUG'] = '1';
 putenv('APP_ENV=test');
 putenv('APP_DEBUG=1');
 
+// The PHPUnit process boots the web path, so its sessions are files: kept in a directory of its own (removed when the run ends)
+// rather than PHP's shared one or Idno's own under var/sessions, as every test server keeps its own.
+$sessionDirectory = sys_get_temp_dir() . '/idno-phpunit-sessions-' . bin2hex(random_bytes(6));
+mkdir($sessionDirectory, 0700, true);
+ini_set('session.save_path', $sessionDirectory);
+register_shutdown_function(static function () use ($sessionDirectory): void {
+    foreach (glob($sessionDirectory . '/*') ?: [] as $file) {
+        @unlink($file);
+    }
+    @rmdir($sessionDirectory);
+});
+
 try {
     // Load Idno framework (boots the kernel, which boots the legacy application)
     include_once dirname(dirname(__FILE__)) . '/Idno/start.php';

@@ -79,6 +79,33 @@ namespace Idno\Core {
             return $this->native ??= Idno::container()->get(\Idno\Security\NativeSession::class);
         }
 
+        private static bool $sessionDirectoryWarned = false;
+
+        /**
+         * Where file sessions are kept (see Idno\Security\SessionDirectory); one warning a process when none could be made.
+         *
+         * @return array{path: ?string, own: bool, problem: ?string}
+         */
+        private function sessionDirectory(): array
+        {
+            $boot       = Idno::container()->get(\Idno\Config\BootConfig::class)->all();
+            $configured = $boot['session_path'] ?? null;
+            $override   = $_SERVER['IDNO_SESSION_DIR'] ?? $_ENV['IDNO_SESSION_DIR'] ?? getenv('IDNO_SESSION_DIR');
+            $chosen     = \Idno\Security\SessionDirectory::choose(
+                is_string($configured) ? $configured : null,
+                (string) ini_get('session.save_path'),
+                is_string($override) ? $override : null,
+                Idno::container()->getParameter('kernel.project_dir'),
+                sys_get_temp_dir()
+            );
+            if ($chosen['problem'] !== null && !self::$sessionDirectoryWarned) {
+                self::$sessionDirectoryWarned = true;
+                Idno::site()->logging()->warning($chosen['problem']);
+            }
+
+            return $chosen;
+        }
+
         function init()
         {
             // The ini values are set before any handler is installed, so that a handler a plugin supplies sees them
@@ -120,9 +147,23 @@ namespace Idno\Core {
             }
 
             // Fallback to files if no other session storage handler has been defined: PHP's own, in the configured directory
+            $savePath   = $sessions_handled ? null : Idno::site()->config()->session_path;
+            $collection = null;
+            if (!$sessions_handled && !defined('IDNO_CONSOLE') && $this->native()->storesFiles()) {
+                // Files, on a web request: a directory of the site's own unless the boot configuration or PHP names one
+                $chosen = $this->sessionDirectory();
+                if ($chosen['path'] !== null) {
+                    $savePath = $chosen['path'];
+                }
+                if ($chosen['own']) {
+                    // a host that collects its own directory by cron (gc_probability 0) never collects this one
+                    $collection = ['probability' => 1, 'divisor' => 1000];
+                }
+            }
             $this->native()->start(
                 Idno::site()->config()->sessionname === null ? null : (string) Idno::site()->config()->sessionname,
-                $sessions_handled ? null : Idno::site()->config()->session_path
+                $savePath,
+                $collection
             );
             $this->sessionStartedHere = !$this->native()->carriedCookie();
 

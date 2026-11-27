@@ -502,7 +502,10 @@ config/                        Kernel configuration: bundles.php, services.php, 
                                packages/ (framework, monolog, doctrine, twig), routes/test/ (test-only routes),
                                services_test.php (test-only services)
 var/                           The compiled container (var/cache/); must be writable by the web server
-                               (or set IDNO_CACHE_DIR). config/, bin/, var/ and Tests/ each hold a
+                               (or set IDNO_CACHE_DIR). Also var/sessions/, the private directory of a
+                               file-session site's own sessions (`Idno\Security\SessionDirectory`: IDNO_SESSION_DIR,
+                               else var/sessions/, else a per-project directory under the temporary directory; 0700,
+                               collection on; not made by the console). config/, bin/, var/ and Tests/ each hold a
                                deny-all .htaccess; none of them may be served (see Code Style)
 data/                          Where an SQLite site's database file lives (data/idno.sqlite): only its
                                deny-all .htaccess and readme.txt are tracked; never served (see Code Style)
@@ -2067,7 +2070,7 @@ the tag pages and the small public endpoints are served through them (and the fi
   `json_valid()`, with a `\LogicException` naming the version required and the one found): the same
   stores, held to the same contracts with the hook values of `JsonSqliteRecordStoreTest`. **SQLite is
   a supported production database for a small site**: one server, a local disk, sessions as PHP files
-  (see the `db()` bullet), search without a full-text index, ASCII-only case folding (below), backups
+  (see the `db()` bullet; kept in a private directory of the site's own when PHP's `session.save_path` and the boot setting `session_path` name none: `Idno\Security\SessionDirectory::choose()` picks `IDNO_SESSION_DIR`, else `var/sessions/`, else `<temporary directory>/idno-sessions-<12 hex of the SHA-256 of the project's real path>`, created 0700 and accepted only when `CacheDirResolver::usableAndPrivate($dir, requireOwner: true)` holds and `(fileperms & 0077) === 0` (a session file's name is its id, so a directory others can list gives sessions away; `CacheDirResolver`'s own rule is unchanged); `Session::init()` then starts the session with that path and `session.gc_probability` 1, `gc_divisor` 1000, on a web request of a file-session site only: never under `IDNO_CONSOLE`; none usable: PHP's default and one warning naming `session_path`; every test server names its own `session.save_path` and `Tests/_bootstrap.php` gives the PHPUnit process one; pinned by `SessionDirectoryTest` and `FileSessionSiteTest`; members of a site whose sessions were in PHP's temporary directory were signed out once by the upgrade), search without a full-text index, ASCII-only case folding (below), backups
   with `.backup` or a copy of the file while no writer is active. It is NOT supported on a network
   filesystem (NFS, SMB) or with several web servers on one file. The web installer and `idno:install` can set up an
   SQLite site (see "Entry points"), and so can a configuration written by hand (`database =

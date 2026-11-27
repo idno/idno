@@ -64,6 +64,15 @@ the cache is the `pool` directory beside the compiled cache (`var/cache/pool`, o
 cannot be written, the system temporary directory. It is never under `uploadpath`. The directory may be emptied at any
 time. The old `cache` setting (a cache class name) is gone: it is ignored, with one warning in the log.
 
+**session_path**<br>
+Where PHP keeps the session files of a site whose sessions are files (every SQLite site, and a MySQL site with
+`sessions_database` off). Optional. Without it, a web request uses the directory PHP's own `session.save_path` names (the
+host's, collected by the host), and where PHP names none Idno keeps the files in a private directory of its own: the
+environment variable `IDNO_SESSION_DIR` when set, else `var/sessions/` (when `var/` is writable), else a private directory
+under the system's temporary directory. Idno creates it readable by the web server's user only, because a session file's
+name is the session's id, and switches PHP's garbage collection on for it. The command line never makes it. It is read
+from `config.ini` or `config.json`, never from the stored settings.
+
 **smtp_host, smtp_port, smtp_username, smtp_password, smtp_secure, from_email**<br>
 Configuration for the SMTP server.  Without these set (here or in the UI)
 it will be impossible to send password recovery emails: `from_email` is the address mail is sent from.

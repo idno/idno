@@ -6,7 +6,8 @@ namespace Idno\Security;
 
 /**
  * The ONE owner of PHP's session: the only class of the application that calls PHP's `session_*` functions, sets a `session.` ini value
- * or reads the session's cookie from `$_COOKIE` (`Tests/Unit/Security/SessionOwnerTest` fails for any other file that does). Each method
+ * (`Tests/Unit/Security/SessionOwnerTest` fails for any other file that calls a session function or sets a `session.` ini value; that the
+ * session's cookie is read from `$_COOKIE` only here is by convention, not checked). Each method
  * is one primitive and nothing more, in the order and with the arguments the legacy session (`Idno\Core\Session`) has always made the
  * call with; the rules (who is signed in, when a request is stateless, what a logout does) stay in that class, which calls these.
  *
@@ -72,6 +73,14 @@ final class NativeSession
     public function carriedCookie(): bool
     {
         return $this->carriedCookie;
+    }
+
+    /**
+     * Whether PHP stores sessions as files (no save handler has been installed): only then does a save path mean anything.
+     */
+    public function storesFiles(): bool
+    {
+        return session_module_name() === 'files';
     }
 
     public function isActive(): bool

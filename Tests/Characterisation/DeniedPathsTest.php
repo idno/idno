@@ -27,6 +27,8 @@ namespace Tests\Characterisation {
                 'config/services.php',
                 'Config/services.php',
                 'var/',
+                'var/sessions/sess_x',
+                'VAR/sessions/sess_x',
                 'idno.php?x+about',
             ];
             foreach ($paths as $path) {
@@ -36,6 +38,18 @@ namespace Tests\Characterisation {
                 foreach (self::LEAKS as $leak) {
                     $this->assertStringNotContainsString($leak, $r->body, $path);
                 }
+            }
+        }
+
+        /**
+         * The directory of the site's own session files (`var/sessions/`): a session file's name is its session id, so it is never
+         * served, in any letter case or with a repeated slash.
+         */
+        public function testTheSessionDirectoryIsRefused(): void
+        {
+            foreach (['/var/sessions/sess_x', '/VAR/sessions/sess_x', '//var/sessions/sess_x'] as $raw) {
+                [$status, $body] = $this->rawGet($raw);
+                $this->assertSame(403, $status, $raw);
             }
         }
 

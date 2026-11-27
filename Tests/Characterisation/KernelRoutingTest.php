@@ -44,8 +44,8 @@ namespace Tests\Characterisation {
             $this->assertSame(200, $r->status);
             $family = \Idno\Storage\ConnectionParameters::driverFamily(\Idno\Core\Idno::container()->get(\Idno\Config\BootConfig::class)->all());
             $this->assertSame(
-                ['module' => $family === 'sqlite' ? 'files' : 'user'],
-                json_decode($r->body, true),
+                $family === 'sqlite' ? 'files' : 'user',
+                json_decode($r->body, true)['module'],
                 'an SQLite site keeps its sessions in files (nothing locks them in the database), a MySQL or MariaDB site in the database',
             );
         }

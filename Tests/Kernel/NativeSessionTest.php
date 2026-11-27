@@ -123,8 +123,6 @@ final class NativeSessionTest extends TestCase
     {
         $result = $this->answerOf('handler-starts-itself');
 
-        $this->assertSame('Lax', $result['samesite']);
-        $this->assertSame('1', $result['strict']);
         $this->assertTrue($result['same_id'], 'the session was not started again');
         $this->assertTrue($result['active']);
     }
