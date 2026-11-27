@@ -1,0 +1,173 @@
+status 403
+access-control-allow-origin: *
+cache-control: no-store, no-cache, must-revalidate
+content-type: text/html;charset=UTF-8
+expires: <past>
+link: <{site}/indieauth/auth>; rel="authorization_endpoint"
+link: <{site}/indieauth/token>; rel="token_endpoint"
+link: <{site}/micropub/endpoint>; rel="micropub"
+link: <{site}/webmention/>; rel="http://webmention.org/"
+link: <{site}/webmention/>; rel="webmention"
+link: <https://hub.example/>; rel="hub"
+link: <{site}/account/register?email=dana%40example.test&code=0123456789abcdef0123456789abcd01>; rel="self"
+pragma: no-cache
+referrer-policy: no-referrer
+vary: Accept
+x-clacks-overhead: GNU Terry Pratchett
+x-powered-by: https://idno.co
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Create a new account</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="initial-scale=1.0" media="(device-height: 568px)"/>
+<meta name="description" content="">
+<meta name="generator" content="Idno https://idno.co">
+<meta http-equiv="Content-Language" content="en">
+<meta http-equiv="Status" content="403"/>
+<!--Le fav and touch icons-->
+<link rel="apple-touch-icon" sizes="57x57" href="{site}/gfx/logos/apple-icon-57x57.png" />
+<link rel="apple-touch-icon" sizes="72x72" href="{site}/gfx/logos/apple-icon-72x72.png" />
+<link rel="apple-touch-icon" sizes="114x114" href="{site}/gfx/logos/apple-icon-114x114.png" />
+<link rel="apple-touch-icon" sizes="144x144" href="{site}/gfx/logos/apple-icon-144x144.png" />
+<link rel="shortcut icon" type="image/png" href="{site}/gfx/logos/logo_k.png">
+<!-- Make this an "app" when saved to an ios device's home screen -->
+<link rel="apple-touch-icon-precomposed" href="{site}/gfx/logos/logo_k.png">
+<!-- Make this an "app" when saved to an ios device's home screen -->
+<link rel="apple-touch-icon" href="{site}/gfx/logos/logo_k.png">
+<!-- <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+-->
+<!-- Android -->
+<link rel="manifest" href="{site}/chrome/manifest.json">
+<meta property="og:type" content="website" />
+<meta property="og:title" content="Create a new account" />
+<meta property="og:site_name" content="Fixture Site" />
+<meta property="og:image" content="{site}/gfx/logos/logo_k.png" />
+<!-- JSON+LD Structured Data -->
+<script type="application/ld+json">
+    {
+    "@context": "http://schema.org",
+    "@type": "WebSite",
+    "url": "{site}/account/register?email=dana%40example.test&code=0123456789abcdef0123456789abcd01",
+    "name": "Create a new account",
+    "description": "",
+    "publisher": "Fixture Site",
+    "potentialAction": {
+        "@type": "SearchAction",
+        "target": "{site}/content/all/?q={search_term}",
+        "query-input": "required name=search_term"
+    }
+}    
+</script>
+<!-- Dublin Core -->
+<link rel="schema.DC" href="http://purl.org/dc/elements/1.1/">
+<meta name="DC.title" content="Create a new account">
+<meta name="DC.description" content=""><link rel="stylesheet" href="{site}/css/idno-2026.min.css" />
+<!-- To silo is human, to syndicate divine -->
+<link rel="alternate" type="application/rss+xml" title="Create a new account"
+      href="{site}/account/register?email=dana%40example.test&amp;code=0123456789abcdef0123456789abcd01&amp;_t=rss"/>
+<link rel="feed" type="application/rss+xml" title="Create a new account"
+      href="{site}/account/register?email=dana%40example.test&amp;code=0123456789abcdef0123456789abcd01&amp;_t=rss"/>
+<link rel="alternate feed" type="application/rss+xml"
+      title="Fixture Site: all content"
+      href="{site}/content/all?_t=rss"/>
+<link rel="alternate" type="application/json"
+      title="Fixture Site: all content"
+      href="{site}/content/all?_t=rss" />
+<link rel="feed" type="text/html" title="Fixture Site"
+      href="{site}/content/all"/>
+<!-- Webmention endpoint -->
+<link href="{site}/webmention/" rel="http://webmention.org/"/>
+<link href="{site}/webmention/" rel="webmention"/>
+<!-- WebSub hub -->
+<link href="https://hub.example/" rel="hub"/>
+<link rel="openid.delegate" href="{site}/" />
+<link rel="openid.server" href="https://indieauth.com/openid" />
+<link rel="authorization_endpoint" href="{site}/indieauth/auth">
+<link rel="token_endpoint" href="{site}/indieauth/token">
+<link rel="micropub" href="{site}/micropub/endpoint"><link rel="stylesheet" href="{site}/IdnoPlugins/Checkin/external/leaflet/leaflet.min.css"/>
+<!--[if lte IE 8]>
+<link rel="stylesheet" href="{site}/IdnoPlugins/Checkin/external/leaflet/leaflet.min.ie.css"/>
+<![endif]-->
+<script type="text/javascript" src="{site}/IdnoPlugins/Checkin/external/leaflet/leaflet.js"></script>
+<script type="text/javascript" src="{site}/IdnoPlugins/Checkin/external/stamen-maps/tile.stamen.min.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+</head>
+<body class="idno_pages_account_register page-account page-account-register logged-out">
+<div class="idno-shell">
+<nav class="idno-nav-sidebar" aria-label="Main navigation">
+<a href="{site}/" class="idno-nav-logo">
+Fixture Site
+</a>
+<ul class="idno-nav-items">
+<li>
+<a href="{site}/" class="idno-nav-item">
+<svg class="idno-nav-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+<span class="idno-nav-label">Home</span>
+</a>
+</li>
+<li>
+<button type="button" class="idno-nav-item" x-data x-on:click="$dispatch('open-search')">
+<svg class="idno-nav-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+<span class="idno-nav-label">Search</span>
+</button>
+</li>
+</ul>
+<a href="{site}/session/login" class="idno-nav-item" style="margin-top:auto">
+<svg class="idno-nav-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+<span class="idno-nav-label">Log in</span>
+</a>
+</nav>
+<main class="idno-main">
+<div class="idno-feed h-feed">
+<div id="page-messages">
+</div>
+<a name="pagecontent"></a>
+<div class="idno-gate idno-gate-wide register-refused">
+<div class="idno-editor">
+<h1 class="idno-editor-heading">This invitation can&#039;t be used</h1>
+<p class="idno-gate-lead">The link may be incomplete, or the invitation may have been used already or withdrawn. Try the link in your invitation email again, or ask the person who invited you for a new one.</p>
+<div class="idno-gate-actions">
+<a class="idno-btn idno-btn-primary" href="{site}/session/login">Sign in</a>
+</div>
+<p class="idno-gate-foot">Already have an account? Sign in with it instead.</p>
+</div>
+</div>
+</div>
+</main>
+<div class="idno-spacer" aria-hidden="true"></div>
+</div>
+<div x-data="{ open: false, query: '' }"
+     x-show="open"
+     x-cloak
+     x-on:open-search.window="open = true; $nextTick(() => $refs.searchInput.focus())"
+     x-on:keydown.escape.window="open = false"
+     class="idno-modal-overlay">
+<div class="idno-modal" style="max-width:32rem" x-on:click.outside="open = false">
+<div class="idno-modal-header">
+<h3 class="idno-modal-title">Search</h3>
+<button type="button" class="idno-modal-close" x-on:click="open = false">
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="idno-nav-icon"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+</button>
+</div>
+<div class="idno-modal-body">
+<form x-on:submit.prevent="if (query.trim()) window.location.href = '/?q=' + encodeURIComponent(query.trim())"
+                  style="display:flex;gap:0.5rem">
+<input type="search" x-model="query" x-ref="searchInput"
+                       class="idno-input" style="flex:1"
+                       aria-label="Search"
+                       placeholder="Search posts...">
+<button type="submit" class="idno-btn idno-btn-primary">
+Search
+</button>
+</form>
+</div>
+</div>
+</div>
+<script src="{site}/js/idno-2026.min.js" defer></script>
+<div class="blank-footer">
+</div></body>
+</html>

@@ -20,18 +20,18 @@ x-powered-by: https://idno.co
 
 {
     "user": {
-        "id": "{new-id}",
-        "uuid": "{site}\/view\/{new-id}",
+        "id": "00000000-0000-4000-8000-000000000002",
+        "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000002",
         "content": "",
         "formattedContent": "",
-        "displayName": "Dana Newcomer",
+        "displayName": "Bob Member",
         "objectType": "person",
-        "url": "{site}\/profile\/dana",
+        "url": "{site}\/profile\/bob",
         "image": {
             "url": "{site}\/gfx/users/default-{n}.png"
         }
     },
-    "title": "Dana Newcomer",
-    "description": "The Fixture Site profile for Dana Newcomer",
+    "title": "Bob Member",
+    "description": "The Fixture Site profile for Bob Member",
     "messages": []
 }

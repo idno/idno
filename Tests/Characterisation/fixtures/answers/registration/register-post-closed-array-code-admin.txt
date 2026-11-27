@@ -1,7 +1,7 @@
 status 403
 access-control-allow-origin: *
 cache-control: no-store, no-cache, must-revalidate
-content-length: <the length of the body>
+content-length: <not the length of the body>
 content-type: text/html;charset=UTF-8
 expires: <past>
 link: <{site}/indieauth/auth>; rel="authorization_endpoint"
@@ -99,23 +99,8 @@ Fixture Site
 <div class="idno-admin-content">
 <div id="page-messages">
 </div>
-<div class="container result-403">
-<div class="row" style="margin-bottom: 2em; margin-top: 6em">
-<div class="col-md-offset-1 col-md-5">
-<h1 class="p-name" style="margin-bottom: 2em;">
-Hold on. You don&#039;t have access to this content.
-</h1>
-<p>It&#039;s nothing personal. You just don&#039;t have the right permissions to see what&#039;s here.</p>
-<p>
-Find something else to view on the
-<a href="{site}/">Fixture Site homepage</a>.
-</p>
-</div>
-<div class="col-md-5">
-<img src="{site}/gfx/robots/aleph_403.png" alt="Robot with a stop sign">
-</div>
-</div>
-</div>
+<a id="soft-forward"
+           href="{site}/session/login/?fwd=</admin/>">Click here to log in.</a>
 </div>
 </main>
 </div>

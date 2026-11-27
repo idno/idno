@@ -1,4 +1,4 @@
-status 404
+status 200
 access-control-allow-credentials: true
 access-control-allow-headers: Authorization, Content-Type
 access-control-allow-origin: *
@@ -19,6 +19,19 @@ x-clacks-overhead: GNU Terry Pratchett
 x-powered-by: https://idno.co
 
 {
-    "title": "This page can't be found.",
+    "user": {
+        "id": "00000000-0000-4000-8000-000000000002",
+        "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000002",
+        "content": "",
+        "formattedContent": "",
+        "displayName": "Bob Member",
+        "objectType": "person",
+        "url": "{site}\/profile\/bob",
+        "image": {
+            "url": "{site}\/gfx\/users\/default-01.png"
+        }
+    },
+    "title": "Bob Member",
+    "description": "The Fixture Site profile for Bob Member",
     "messages": []
 }

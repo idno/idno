@@ -1,0 +1,414 @@
+status 200
+access-control-allow-credentials: true
+access-control-allow-headers: Authorization, Content-Type
+access-control-allow-origin: *
+cache-control: no-store, no-cache, must-revalidate
+content-length: <not the length of the body>
+content-type: application/json
+expires: <past>
+last-modified: Fri, 20 Mar 2026 12:00:00 GMT
+link: <{site}/indieauth/auth>; rel="authorization_endpoint"
+link: <{site}/indieauth/token>; rel="token_endpoint"
+link: <{site}/micropub/endpoint>; rel="micropub"
+link: <{site}/webmention/>; rel="http://webmention.org/"
+link: <{site}/webmention/>; rel="webmention"
+link: <https://hub.example/>; rel="hub"
+link: <{site}/?_t=json>; rel="self"
+pragma: no-cache
+vary: Accept
+x-clacks-overhead: GNU Terry Pratchett
+x-powered-by: https://idno.co
+
+{
+    "items": [
+        {
+            "id": "00000000000040008000000000000047",
+            "uuid": "{site}\/view\/00000000000040008000000000000047",
+            "content": "A note to open by its id in a view address.",
+            "formattedContent": "\n<p>A note to open by its id in a view address.<\/p>\n",
+            "displayName": "A note to open by its id ...",
+            "objectType": "note",
+            "published": "2026-03-15T13:00:00+00:00",
+            "updated": "2026-03-20T12:00:00+00:00",
+            "url": "{site}\/2026\/a-note-to-open-by-its-id-in-a-view",
+            "actor": {
+                "id": "00000000-0000-4000-8000-000000000001",
+                "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000001",
+                "content": "Ada writes about computers, gardens and the open web.",
+                "formattedContent": "\n<p>Ada writes about computers, gardens and the open web.<\/p>\n",
+                "displayName": "Ada Admin",
+                "objectType": "person",
+                "url": "{site}\/profile\/ada",
+                "image": {
+                    "url": "{site}\/gfx/users/default-{n}.png"
+                }
+            }
+        },
+        {
+            "id": "00000000000040008000000000000046",
+            "uuid": "{site}\/view\/00000000000040008000000000000046",
+            "content": "Notes from a caf\u00e9, with an accent in the title.",
+            "formattedContent": "<p>Notes from a caf\u00e9, with an accent in the title.<\/p>",
+            "displayName": "Caf\u00e9 notes",
+            "objectType": "article",
+            "published": "2026-03-15T12:00:00+00:00",
+            "updated": "2026-03-20T12:00:00+00:00",
+            "url": "{site}\/2026\/caf%C3%A9-notes",
+            "actor": {
+                "id": "00000000-0000-4000-8000-000000000001",
+                "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000001",
+                "content": "Ada writes about computers, gardens and the open web.",
+                "formattedContent": "\n<p>Ada writes about computers, gardens and the open web.<\/p>\n",
+                "displayName": "Ada Admin",
+                "objectType": "person",
+                "url": "{site}\/profile\/ada",
+                "image": {
+                    "url": "{site}\/gfx/users/default-{n}.png"
+                }
+            }
+        },
+        {
+            "id": "00000000000040008000000000000043",
+            "uuid": "{site}\/view\/00000000000040008000000000000043",
+            "content": "Bob keeps a note to himself.",
+            "formattedContent": "\n<p>Bob keeps a note to himself.<\/p>\n",
+            "displayName": "Bob keeps a note to himself.",
+            "objectType": "note",
+            "published": "2026-03-14T14:00:00+00:00",
+            "updated": "2026-03-20T12:00:00+00:00",
+            "url": "{site}\/2026\/bob-keeps-a-note-to-himself",
+            "actor": {
+                "id": "00000000-0000-4000-8000-000000000002",
+                "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000002",
+                "content": "",
+                "formattedContent": "",
+                "displayName": "Bob Member",
+                "objectType": "person",
+                "url": "{site}\/profile\/bob",
+                "image": {
+                    "url": "{site}\/gfx/users/default-{n}.png"
+                }
+            }
+        },
+        {
+            "id": "00000000000040008000000000000042",
+            "uuid": "{site}\/view\/00000000000040008000000000000042",
+            "content": "Bob writes a note for the members of the site.",
+            "formattedContent": "\n<p>Bob writes a note for the members of the site.<\/p>\n",
+            "displayName": "Bob writes a note for the members ...",
+            "objectType": "note",
+            "published": "2026-03-14T13:00:00+00:00",
+            "updated": "2026-03-20T12:00:00+00:00",
+            "url": "{site}\/2026\/bob-writes-a-note-for-the-members-of-the-site",
+            "actor": {
+                "id": "00000000-0000-4000-8000-000000000002",
+                "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000002",
+                "content": "",
+                "formattedContent": "",
+                "displayName": "Bob Member",
+                "objectType": "person",
+                "url": "{site}\/profile\/bob",
+                "image": {
+                    "url": "{site}\/gfx/users/default-{n}.png"
+                }
+            }
+        },
+        {
+            "id": "00000000000040008000000000000041",
+            "uuid": "{site}\/view\/00000000000040008000000000000041",
+            "content": "Bob publishes a note anyone can read.",
+            "formattedContent": "\n<p>Bob publishes a note anyone can read.<\/p>\n",
+            "displayName": "Bob publishes a note anyone can read.",
+            "objectType": "note",
+            "published": "2026-03-14T12:00:00+00:00",
+            "updated": "2026-03-20T12:00:00+00:00",
+            "url": "{site}\/2026\/bob-publishes-a-note-anyone-can-read",
+            "actor": {
+                "id": "00000000-0000-4000-8000-000000000002",
+                "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000002",
+                "content": "",
+                "formattedContent": "",
+                "displayName": "Bob Member",
+                "objectType": "person",
+                "url": "{site}\/profile\/bob",
+                "image": {
+                    "url": "{site}\/gfx/users/default-{n}.png"
+                }
+            }
+        },
+        {
+            "id": "00000000-0000-4000-8000-000000000022",
+            "uuid": "{site}\/view\/00000000-0000-4000-8000-000000000022",
+            "content": "Listen to the recording.",
+            "formattedContent": "\n<p>Listen to the recording.<\/p>\n",
+            "displayName": "A fixture recording",
+            "objectType": "media",
+            "published": "2026-03-12T12:00:00+00:00",
+            "updated": "2026-03-20T12:00:00+00:00",
+            "url": "{site}\/2026\/a-fixture-recording",
+            "actor": {
+                "id": "00000000-0000-4000-8000-000000000001",
+                "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000001",
+                "content": "Ada writes about computers, gardens and the open web.",
+                "formattedContent": "\n<p>Ada writes about computers, gardens and the open web.<\/p>\n",
+                "displayName": "Ada Admin",
+                "objectType": "person",
+                "url": "{site}\/profile\/ada",
+                "image": {
+                    "url": "{site}\/gfx/users/default-{n}.png"
+                }
+            },
+            "attachments": [
+                {
+                    "filename": "sound.mp3",
+                    "url": "{site}\/file\/00000000000040008000000000000022\/sound.mp3",
+                    "mime-type": "audio\/mpeg",
+                    "length": 19
+                }
+            ]
+        },
+        {
+            "id": "00000000-0000-4000-8000-000000000021",
+            "uuid": "{site}\/view\/00000000-0000-4000-8000-000000000021",
+            "content": "A quiet afternoon with a book.",
+            "formattedContent": "\n<p>A quiet afternoon with a book.<\/p>\n",
+            "displayName": "Checked into The Library",
+            "objectType": "place",
+            "published": "2026-03-11T12:00:00+00:00",
+            "updated": "2026-03-20T12:00:00+00:00",
+            "url": "{site}\/2026\/checked-into-the-library",
+            "latitude": "51.5072",
+            "longitude": "-0.1276",
+            "placeName": "The Library",
+            "address": "1 Library Road, Springfield",
+            "tags": "#books",
+            "actor": {
+                "id": "00000000-0000-4000-8000-000000000001",
+                "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000001",
+                "content": "Ada writes about computers, gardens and the open web.",
+                "formattedContent": "\n<p>Ada writes about computers, gardens and the open web.<\/p>\n",
+                "displayName": "Ada Admin",
+                "objectType": "person",
+                "url": "{site}\/profile\/ada",
+                "image": {
+                    "url": "{site}\/gfx/users/default-{n}.png"
+                }
+            }
+        },
+        {
+            "id": "00000000-0000-4000-8000-000000000018",
+            "uuid": "{site}\/view\/00000000-0000-4000-8000-000000000018",
+            "content": "Bob says hello from the other account.",
+            "formattedContent": "\n<p>Bob says hello from the other account.<\/p>\n",
+            "displayName": "Bob says hello from the other account.",
+            "objectType": "note",
+            "published": "2026-03-08T12:00:00+00:00",
+            "updated": "2026-03-20T12:00:00+00:00",
+            "url": "{site}\/2026\/bob-says-hello-from-the-other-account",
+            "actor": {
+                "id": "00000000-0000-4000-8000-000000000002",
+                "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000002",
+                "content": "",
+                "formattedContent": "",
+                "displayName": "Bob Member",
+                "objectType": "person",
+                "url": "{site}\/profile\/bob",
+                "image": {
+                    "url": "{site}\/gfx/users/default-{n}.png"
+                }
+            }
+        },
+        {
+            "id": "00000000-0000-4000-8000-000000000017",
+            "uuid": "{site}\/view\/00000000-0000-4000-8000-000000000017",
+            "content": "I will be there.",
+            "formattedContent": "\n<p><data class=\"p-rsvp\" value=\"yes\"><a href=\"https:\/\/example.org\/event\/1\" class=\"u-in-reply-to\"><\/a>I will be there.<\/data><\/p>\n",
+            "displayName": "Yes: I will be there.",
+            "objectType": "rsvp",
+            "published": "2026-03-07T12:00:00+00:00",
+            "updated": "2026-03-20T12:00:00+00:00",
+            "url": "{site}\/2026\/i-will-be-there",
+            "actor": {
+                "id": "00000000-0000-4000-8000-000000000001",
+                "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000001",
+                "content": "Ada writes about computers, gardens and the open web.",
+                "formattedContent": "\n<p>Ada writes about computers, gardens and the open web.<\/p>\n",
+                "displayName": "Ada Admin",
+                "objectType": "person",
+                "url": "{site}\/profile\/ada",
+                "image": {
+                    "url": "{site}\/gfx/users/default-{n}.png"
+                }
+            }
+        },
+        {
+            "id": "00000000-0000-4000-8000-000000000016",
+            "uuid": "{site}\/view\/00000000-0000-4000-8000-000000000016",
+            "content": "A reply to something elsewhere.",
+            "formattedContent": "\n<p><a href=\"https:\/\/example.org\/post\/1\" class=\"u-in-reply-to\"><\/a>A reply to something elsewhere.<\/p>\n",
+            "displayName": "A reply to something elsewhere.",
+            "objectType": "note",
+            "published": "2026-03-06T12:00:00+00:00",
+            "updated": "2026-03-20T12:00:00+00:00",
+            "url": "{site}\/2026\/a-reply-to-something-elsewhere",
+            "actor": {
+                "id": "00000000-0000-4000-8000-000000000001",
+                "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000001",
+                "content": "Ada writes about computers, gardens and the open web.",
+                "formattedContent": "\n<p>Ada writes about computers, gardens and the open web.<\/p>\n",
+                "displayName": "Ada Admin",
+                "objectType": "person",
+                "url": "{site}\/profile\/ada",
+                "image": {
+                    "url": "{site}\/gfx/users/default-{n}.png"
+                }
+            }
+        }
+    ],
+    "contentTypes": {
+        "0": {
+            "entity_class": "IdnoPlugins\\Status\\Status",
+            "handler_class": "Idno\\Common\\ContentType",
+            "title": "Status update",
+            "indieWebContentType": [
+                "note"
+            ],
+            "createable": true,
+            "category_title": "Status updates",
+            "editUrl": "{site}\/status\/edit"
+        },
+        "2": {
+            "entity_class": "IdnoPlugins\\Text\\Entry",
+            "handler_class": "Idno\\Common\\ContentType",
+            "title": "Post",
+            "indieWebContentType": [
+                "article",
+                "entry"
+            ],
+            "createable": true,
+            "category_title": "Posts",
+            "logo": "<i class=\"icon-align-left\"><\/i>",
+            "editUrl": "{site}\/entry\/edit"
+        },
+        "3": {
+            "entity_class": "IdnoPlugins\\Photo\\Photo",
+            "handler_class": "Idno\\Common\\ContentType",
+            "title": "Photo",
+            "indieWebContentType": [
+                "photo",
+                "picture"
+            ],
+            "createable": true,
+            "category_title": "Photos",
+            "editUrl": "{site}\/photo\/edit"
+        },
+        "4": {
+            "entity_class": "IdnoPlugins\\Like\\Like",
+            "handler_class": "Idno\\Common\\ContentType",
+            "title": "Bookmark",
+            "indieWebContentType": [
+                "bookmark",
+                "like",
+                "repost"
+            ],
+            "createable": true,
+            "category_title": "Bookmarked pages",
+            "editUrl": "{site}\/like\/edit"
+        },
+        "5": {
+            "entity_class": "IdnoPlugins\\Checkin\\Checkin",
+            "handler_class": "Idno\\Common\\ContentType",
+            "title": "Location",
+            "indieWebContentType": [
+                "checkin"
+            ],
+            "createable": true,
+            "category_title": "Locations",
+            "editUrl": "{site}\/checkin\/edit"
+        },
+        "6": {
+            "entity_class": "IdnoPlugins\\Media\\Media",
+            "handler_class": "Idno\\Common\\ContentType",
+            "title": "Audio",
+            "indieWebContentType": [
+                "media",
+                "audio",
+                "video"
+            ],
+            "createable": true,
+            "category_title": "Audio",
+            "editUrl": "{site}\/media\/edit"
+        },
+        "7": {
+            "entity_class": "IdnoPlugins\\Event\\Event",
+            "handler_class": "Idno\\Common\\ContentType",
+            "title": "Event",
+            "indieWebContentType": [
+                "event"
+            ],
+            "createable": true,
+            "category_title": "Events",
+            "logo": "<i class=\"icon-calendar\"><\/i>",
+            "editUrl": "{site}\/event\/edit"
+        },
+        "8": {
+            "entity_class": "IdnoPlugins\\Event\\RSVP",
+            "handler_class": "Idno\\Common\\ContentType",
+            "title": "RSVP",
+            "indieWebContentType": [
+                "rsvp"
+            ],
+            "createable": true,
+            "logo": "<i class=\"icon-calendar\"><\/i>",
+            "editUrl": "{site}\/rsvp\/edit"
+        }
+    },
+    "offset": 0,
+    "count": 19,
+    "subject": null,
+    "content": [],
+    "object": {
+        "id": "00000000-0000-4000-8000-000000000016",
+        "uuid": "{site}\/view\/00000000-0000-4000-8000-000000000016",
+        "content": "A reply to something elsewhere.",
+        "formattedContent": "\n<p><a href=\"https:\/\/example.org\/post\/1\" class=\"u-in-reply-to\"><\/a>A reply to something elsewhere.<\/p>\n",
+        "displayName": "A reply to something elsewhere.",
+        "objectType": "note",
+        "published": "2026-03-06T12:00:00+00:00",
+        "updated": "2026-03-20T12:00:00+00:00",
+        "url": "{site}\/2026\/a-reply-to-something-elsewhere",
+        "actor": {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000001",
+            "content": "Ada writes about computers, gardens and the open web.",
+            "formattedContent": "\n<p>Ada writes about computers, gardens and the open web.<\/p>\n",
+            "displayName": "Ada Admin",
+            "objectType": "person",
+            "url": "{site}\/profile\/ada",
+            "image": {
+                "url": "{site}\/gfx/users/default-{n}.png"
+            }
+        }
+    },
+    "user": {
+        "id": "00000000-0000-4000-8000-000000000001",
+        "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000001",
+        "content": "Ada writes about computers, gardens and the open web.",
+        "formattedContent": "\n<p>Ada writes about computers, gardens and the open web.<\/p>\n",
+        "displayName": "Ada Admin",
+        "objectType": "person",
+        "url": "{site}\/profile\/ada",
+        "image": {
+            "url": "{site}\/gfx/users/default-{n}.png"
+        }
+    },
+    "items_per_page": 10,
+    "title": "Fixture Site",
+    "description": "A social website powered by Idno",
+    "messages": [
+        {
+            "message": "You&#039;re already signed in as Bob Member. To create another account, sign out first.",
+            "message_type": "alert-info"
+        }
+    ]
+}

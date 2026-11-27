@@ -24,14 +24,14 @@ x-powered-by: https://idno.co
         "uuid": "{site}\/view\/{new-id}",
         "content": "",
         "formattedContent": "",
-        "displayName": "x",
+        "displayName": "dana",
         "objectType": "person",
         "url": "{site}\/profile\/dana",
         "image": {
             "url": "{site}\/gfx/users/default-{n}.png"
         }
     },
-    "title": "x",
-    "description": "The Fixture Site profile for x",
+    "title": "dana",
+    "description": "The Fixture Site profile for dana",
     "messages": []
 }

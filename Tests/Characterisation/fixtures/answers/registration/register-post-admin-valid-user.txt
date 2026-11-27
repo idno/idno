@@ -20,18 +20,18 @@ x-powered-by: https://idno.co
 
 {
     "user": {
-        "id": "{new-id}",
-        "uuid": "{site}\/view\/{new-id}",
-        "content": "",
-        "formattedContent": "",
-        "displayName": "Dana Newcomer",
+        "id": "00000000-0000-4000-8000-000000000001",
+        "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000001",
+        "content": "Ada writes about computers, gardens and the open web.",
+        "formattedContent": "\n<p>Ada writes about computers, gardens and the open web.<\/p>\n",
+        "displayName": "Ada Admin",
         "objectType": "person",
-        "url": "{site}\/profile\/dana",
+        "url": "{site}\/profile\/ada",
         "image": {
             "url": "{site}\/gfx/users/default-{n}.png"
         }
     },
-    "title": "Dana Newcomer",
-    "description": "The Fixture Site profile for Dana Newcomer",
+    "title": "Ada Admin",
+    "description": "The Fixture Site profile for Ada Admin",
     "messages": []
 }

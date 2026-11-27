@@ -12,6 +12,7 @@ link: <{site}/webmention/>; rel="webmention"
 link: <https://hub.example/>; rel="hub"
 link: <{site}/account/register>; rel="self"
 pragma: no-cache
+referrer-policy: no-referrer
 vary: Accept
 x-clacks-overhead: GNU Terry Pratchett
 x-powered-by: https://idno.co
@@ -126,62 +127,51 @@ Fixture Site
 <div id="page-messages">
 </div>
 <a name="pagecontent"></a>
-<div class="row">
-<div class="col-md-8 col-md-offset-2">
-<h3 class="register">
-Hello there!
-</h3>
-<h4 class="register">Create a new account to get started.</h4>
-<div class="jumbotron">
-<p>
-</p>
-<form action="{site}/account/register" method="post" style="width: 100%" class="form-horizontal">
-<div class="control-group">
-<label class="control-label" for="inputUsername">Your name</label>
-<div class="controls">
-<input type="text" id="inputName" placeholder="Henri Matisse" class="" style="width: 100%" name="name" value="">
+<div class="idno-gate idno-gate-wide">
+<div class="idno-editor">
+<h1 class="idno-editor-heading">
+Create your account
+</h1>
+<form action="{site}/account/register" method="post">
+<div class="idno-form-field">
+<label class="idno-label" for="register-email">Your email address</label>
+<input type="email" id="register-email" name="email" class="idno-input" required
+                       value="" autocapitalize="off" autocomplete="email">
 </div>
+<div class="idno-form-field">
+<label class="idno-label" for="register-name">Your name</label>
+<input type="text" id="register-name" name="name" class="idno-input" autocomplete="name" value="">
 </div>
-<div class="control-group">
-<label class="control-label" for="inputUsername">Choose a handle
-<br /><small>Handles identify you throughout the site. Something simple is best: for example,
-<em>janedoe</em>.</small></label>
-<div class="controls">
-<input type="text" id="inputUsername" placeholder="username" class="" style="width: 100%" name="handle" value="" autocapitalize="off" autocorrect="off" spellcheck="false">
+<div class="idno-form-field">
+<label class="idno-label" for="register-handle">Choose a handle</label>
+<input type="text" id="register-handle" name="handle" class="idno-input" required maxlength="32"
+                       pattern="[A-Za-z0-9_]+" autocapitalize="off" autocorrect="off" spellcheck="false" autocomplete="username"
+                       aria-describedby="register-handle-help" value="">
+<p class="idno-form-help" id="register-handle-help">Your handle identifies you on the site and is part of your profile&#039;s address. Letters, numbers and underscores: for example, janedoe.</p>
 </div>
+<div class="idno-form-field">
+<label class="idno-label" for="register-password">Create a password</label>
+<input type="password" id="register-password" name="password" class="idno-input" required minlength="7"
+                       autocomplete="new-password" aria-describedby="register-password-help">
+<p class="idno-form-help" id="register-password-help">At least 7 characters.</p>
 </div>
-<div class="control-group">
-<label class="control-label" for="inputEmail">Your email address</label>
-<div class="controls">
-<input type="email" id="inputEmail" placeholder="you@email.com" class="" style="width: 100%" name="email" value="" autocapitalize="off">
-</div>
-</div>
-<div class="control-group">
-<label class="control-label" for="inputEmail">Create a password
-<br /><small>At least 7 characters please.</small></label>
-<div class="controls">
-<input type="password" id="inputPassword" placeholder="secret-password" class="" style="width: 100%" name="password" >
-</div>
-</div>
-<div class="control-group">
-<label class="control-label" for="inputEmail">Your password again</label>
-<div class="controls">
-<input type="password" id="inputPassword" placeholder="secret-password" class="" style="width: 100%" name="password2">
-</div>
-</div>
-<div class="control-group">
-<div class="controls">
-<button type="submit" class="btn btn-reg">Create Account</button>
-<input type="hidden" name="code" value="">
-</div>
+<div class="idno-form-field">
+<label class="idno-label" for="register-password2">Your password again</label>
+<input type="password" id="register-password2" name="password2" class="idno-input" required minlength="7" autocomplete="new-password">
 </div>
 <!-- Captcha control -->
+<div class="idno-gate-actions">
+<button type="submit" class="idno-btn idno-btn-primary">Create account</button>
+</div>
+<input type="hidden" name="code" value="">
 <span class="known-security-token" style="display: none;" id="tid{id}"></span>
 <input type="hidden" name="__bTs" value="{token-time}" />
 <input type="hidden" name="__bTk" value="{token}" />
 <input type="hidden" name="__bTa" value="/account/register" />
 </form>
-</div>
+<p class="idno-gate-foot">
+<a href="{site}/session/login">Already have an account? Sign in</a>
+</p>
 </div>
 </div>
 </div>

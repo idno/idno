@@ -12,6 +12,7 @@ link: <https://hub.example/>; rel="hub"
 link: <{site}/account/register?_t=markdown>; rel="self"
 link: <{site}/account/register>; rel="canonical"
 pragma: no-cache
+referrer-policy: no-referrer
 vary: Accept
 x-clacks-overhead: GNU Terry Pratchett
 x-content-type-options: nosniff

@@ -10,6 +10,7 @@ link: <{site}/webmention/>; rel="webmention"
 link: <https://hub.example/>; rel="hub"
 link: <{site}/account/register?_t=rss>; rel="self"
 pragma: no-cache
+referrer-policy: no-referrer
 vary: Accept
 x-clacks-overhead: GNU Terry Pratchett
 x-powered-by: https://idno.co

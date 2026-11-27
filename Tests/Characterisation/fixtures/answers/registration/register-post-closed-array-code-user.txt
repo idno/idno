@@ -1,9 +1,9 @@
-status 200
+status 404
 access-control-allow-credentials: true
 access-control-allow-headers: Authorization, Content-Type
 access-control-allow-origin: *
 cache-control: no-store, no-cache, must-revalidate
-content-length: <not the length of the body>
+content-length: <the length of the body>
 content-type: application/json
 expires: <past>
 link: <{site}/indieauth/auth>; rel="authorization_endpoint"
@@ -19,19 +19,6 @@ x-clacks-overhead: GNU Terry Pratchett
 x-powered-by: https://idno.co
 
 {
-    "user": {
-        "id": "{new-id}",
-        "uuid": "{site}\/view\/{new-id}",
-        "content": "",
-        "formattedContent": "",
-        "displayName": "Dana Newcomer",
-        "objectType": "person",
-        "url": "{site}\/profile\/dana",
-        "image": {
-            "url": "{site}\/gfx/users/default-{n}.png"
-        }
-    },
-    "title": "Dana Newcomer",
-    "description": "The Fixture Site profile for Dana Newcomer",
+    "title": "This page can't be found.",
     "messages": []
 }
