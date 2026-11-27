@@ -344,17 +344,7 @@ final class ControllerPage extends Page
      */
     public function isSecure(): bool
     {
-        $server = $this->context->request()->server;
-        $https = $server->get('HTTPS');
-        if ($https !== null) {
-            if ($https == '1' || strtolower((string) $https) === 'on') {
-                return true;
-            }
-        } elseif ($server->get('SERVER_PORT') == '443') {
-            return true;
-        }
-
-        return strtolower((string) $server->get('HTTP_X_FORWARDED_PROTO', '')) === 'https';
+        return \Idno\Http\TrustedProxies::isSecure($this->context->request());
     }
 
     /**

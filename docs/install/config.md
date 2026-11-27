@@ -199,6 +199,23 @@ a `socks5` proxy (names resolved by the server) or no proxy, the address checked
 A prefix length of 0 (`0.0.0.0/0`, `::/0`) is refused as an invalid entry: `*` is the way to switch the check off.
 Set `http_allow_private = *` if the server cannot resolve external names at all.
 
+**trusted_proxies**<br>
+The reverse proxies (a load balancer, nginx, Caddy, a CDN) whose `X-Forwarded-Proto` and `X-Forwarded-Port` headers Idno
+believes. IP addresses or CIDR ranges (IPv4 or IPv6; a prefix length of 0 is refused), or the words `REMOTE_ADDR` (the
+address that made the request: use it only when every request comes through a proxy) and `PRIVATE_SUBNETS` (the private
+address ranges), as a list in `config.ini`, or comma-separated in the environment variable `IDNO_TRUSTED_PROXIES`. Like
+`http_allow_private`, it is read from `config.ini` or the environment only, never from the settings saved in the
+database, and an entry that is none of these stops the site with a message naming the setting.
+
+    trusted_proxies[] = '10.0.0.0/8'
+    trusted_proxies[] = '192.0.2.10'
+
+With it set, a request is https when the web server says so or when `X-Forwarded-Proto: https` comes from one of the
+listed proxies; the header from anyone else is ignored. Without it, which is how every site behaved before and how a
+site that sets nothing still behaves, `X-Forwarded-Proto: https` is believed from anyone, so a site behind a proxy keeps
+its secure session cookie, but a visitor can also claim https for their own request. Sites behind a proxy should set it.
+`X-Forwarded-Host` and `X-Forwarded-Prefix` are never believed: the `url` setting decides the site's address.
+
 **webservice_max_download**<br>
 The most bytes of a response an outgoing request keeps, 10 MB (10485760) by default. A response that declares a
 larger length is refused, and one with no declared length is cut at this size. It is also the largest file the site

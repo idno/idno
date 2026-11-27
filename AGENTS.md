@@ -608,7 +608,7 @@ There are three ways in, with one result (a configuration file, the tables, ONE 
      when `pdo_mysql` is there), the kernel's cache in a temporary directory (warn), a base path (fail:
      Idno is installed at the top of a domain), HTTPS (fail; a warning on `localhost`, `127.0.0.1`,
      `[::1]`, `*.localhost`, `*.test`: `SiteAddress::isLocal()`). HTTPS is the connection or
-     `X-Forwarded-Proto: https` (`WebInstaller::secure()`, the rule `Page::isSSL()` uses). Every failure
+     `X-Forwarded-Proto: https` (`WebInstaller::secure()`: a rule of the installer's own, not `Page::isSSL()`'s and not `TrustedProxies`: any `HTTPS` value but `off`, the first entry of a comma list in `X-Forwarded-Proto`, no port test). Every failure
      is a `CheckResult` with what it means, the fix and, where there is one, the command. URL rewriting
      is checked by the page's script, which fetches `js/canary.js` (the rewrite rules of `.htaccess`,
      `warmup/webserver-configs/htaccess.dist`, `htaccess-2.4.dist`, `nginx.conf`,
@@ -5342,6 +5342,16 @@ Boot config precedence, highest first (pinned by `Tests/Kernel/LegacyConfigLoade
 `BootConfig::isDefault()` (the site is not installed: see "Installation") is true when no
 configuration file was read AND the merged configuration names no `database`.
 
+`trusted_proxies` (boot only, never stored: `Idno\Core\Config` drops it from the stored settings in both places it drops `http_allow_private`; `IDNO_TRUSTED_PROXIES` is one comma-separated string) names the reverse proxies whose
+`X-Forwarded-Proto` and `X-Forwarded-Port` are believed (never `X-Forwarded-Host` or `-Prefix`: the configured `url` decides the site's address): IP addresses, CIDR ranges with a prefix above 0, `REMOTE_ADDR` or
+`PRIVATE_SUBNETS`. `Idno\Http\TrustedProxies` (static, excluded from the container scan) parses and validates it (`fromConfig()`: any other entry throws a `\LogicException` naming the setting, the entry cleaned and cut to
+100 bytes), `Kernel::boot()` applies it right after `parent::boot()` in every kernel, the legacy application booted or not (`apply()`: `Request::setTrustedProxies()`, or `([], 0)` for none, so a second kernel in a process starts clean), so a bad setting
+stops every entry point at once. ONE function decides whether a request is https, `TrustedProxies::isSecure(Request)`, used by `Page::isSSL()` (after its console rule: with no request, https exactly when the boot `url` is; the
+`Request` is built from `$_SERVER` by `TrustedProxies::requestFor()`, once and rebuilt only when a variable the rules read changes), `ControllerPage::isSecure()` and so the session cookie's Secure flag and `$_SESSION['secure']`.
+WITH the setting it is `Request::isSecure()` (the server's `HTTPS`, or `X-Forwarded-Proto` from a trusted proxy alone; port 443 alone no longer counts), and `Config::detectBaseURL()` believes `X-Forwarded-Port` from a trusted proxy alone.
+WITHOUT it (every existing site) the rule is what it always was: `HTTPS` `1` or `on`, port 443, or `X-Forwarded-Proto: https` from ANYONE, so a site behind a proxy that has never heard of the setting keeps its secure
+cookie. The installer's `WebInstaller::secure()` and the API login failure's `X-Forwarded-For` line are not part of this. Pinned by `Tests/Unit/Http/TrustedProxiesTest` and `Tests/Characterisation/TrustedProxiesSiteTest`.
+
 `path` and `host` can never be set; `uploadpath` always ends in a single `/`. The
 former per-host `configuration/{host}.ini` file is no longer read (silently: the upgrade
 notes in `docs/install/upgrade.md` tell sites to move its settings into `config.ini`), and
@@ -5927,8 +5937,8 @@ no installer writes one.
   - A private site (`walled_garden`) still delivers its public posts to ActivityPub followers, pings its hub, sends webmentions and syncs to a PDS: the private-site check of `dev` (`c1048f68a`) is not ported here.
   - On a private site the webmention endpoint (public, as a sender is no visitor) tells a stranger which public-access posts exist (`target_not_found` or not) and stores mentions of them, which members then see.
   - IndieAuth access tokens are stored in plain text, never expire, and their scope is not enforced by the Micropub endpoint.
-  - `Page::isSSL()` trusts `X-Forwarded-Proto` from any client (there are no trusted proxies), and the login throttle counts by account
-    for that reason.
+  - A site that sets no `trusted_proxies` still believes `X-Forwarded-Proto` from any client (`TrustedProxies::isSecure()`, behind `Page::isSSL()`), so a visitor can claim https for their own request; with the setting it is believed from the listed proxies alone (see "Configuration"). The line an API login failure logs still names the first `X-Forwarded-For` entry, which a client can choose. The login throttle counts by account,
+    not by address, because a client address is not dependable.
   - Registration and the password reset request let someone learn whether a handle or an email address has an account.
   - A page served through a deprecated shell ends the request when it answers (`exit`), so code after `parent::getContent()` and `kernel.terminate` do not run for it; a listener of yours that `exit`s during a
     controller's page skips the work the page asked to be done after its response.

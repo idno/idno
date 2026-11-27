@@ -142,6 +142,7 @@ namespace Idno\Core {
                 unset($config['proxy_string']);
                 unset($config['proxy_type']);
                 unset($config['http_allow_private']);
+                unset($config['trusted_proxies']);
                 unset($config['disable_ssl_verify']);
                 unset($config['upload_tmp_dir']);
                 unset($config['bypass_fulltext_search']);
@@ -230,6 +231,7 @@ namespace Idno\Core {
             unset($array['proxy_string']);
             unset($array['proxy_type']);
             unset($array['http_allow_private']);
+            unset($array['trusted_proxies']);
             unset($array['disable_ssl_verify']);
             unset($array['directloadplugins']);
             unset($array['bypass_fulltext_search']);
@@ -304,7 +306,7 @@ namespace Idno\Core {
 
                 // Servername specified, so we can construct things in the normal way.
                 $url = (\Idno\Common\Page::isSSL() ? 'https://' : 'http://') . $_SERVER['SERVER_NAME'];
-                if (!empty($_SERVER['HTTP_X_FORWARDED_PORT'])) {
+                if (!empty($_SERVER['HTTP_X_FORWARDED_PORT']) && \Idno\Http\TrustedProxies::believesForwardedPort(\Idno\Http\TrustedProxies::requestFor($_SERVER))) {
                     if ($_SERVER['HTTP_X_FORWARDED_PORT'] != 80 && $_SERVER['HTTP_X_FORWARDED_PORT'] != 443) {
                         $url .= ':' . $_SERVER['HTTP_X_FORWARDED_PORT'];
                     }

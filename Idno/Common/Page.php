@@ -1161,22 +1161,7 @@ namespace Idno\Common {
                 return $config !== null && str_starts_with((string) $config->url, 'https://');
             }
 
-            if (isset($_SERVER['HTTPS'])) {
-                if ($_SERVER['HTTPS'] == '1') {
-                    return true;
-                }
-                if (strtolower($_SERVER['HTTPS']) == 'on') {
-                    return true;
-                }
-            } else if (isset($_SERVER['SERVER_PORT']) && ($_SERVER['SERVER_PORT'] == '443')) {
-                return true;
-            }
-
-            if (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && strtolower($_SERVER['HTTP_X_FORWARDED_PROTO']) == 'https') {
-                return true;
-            }
-
-            return false;
+            return \Idno\Http\TrustedProxies::isSecure(\Idno\Http\TrustedProxies::requestFor($_SERVER));
         }
 
         /**

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Idno;
 
+use Idno\Config\BootConfig;
+use Idno\Http\TrustedProxies;
 use Idno\Kernel\CacheDirResolver;
 use Idno\Kernel\CodeFingerprint;
 use Idno\Kernel\DoctrineTrimPass;
@@ -113,6 +115,8 @@ class Kernel extends BaseKernel
     public function boot(): void
     {
         parent::boot();
+        // A bad setting stops the boot here, whichever entry point built the kernel.
+        TrustedProxies::apply($this->getContainer()->get(BootConfig::class)->all());
 
         if (!$this->bootLegacy) {
             return;
