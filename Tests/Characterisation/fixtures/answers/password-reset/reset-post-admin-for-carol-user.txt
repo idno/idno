@@ -1,0 +1,37 @@
+status 200
+access-control-allow-credentials: true
+access-control-allow-headers: Authorization, Content-Type
+access-control-allow-origin: *
+cache-control: no-store, no-cache, must-revalidate
+content-length: <the length of the body>
+content-type: application/json
+expires: <past>
+link: <{site}/indieauth/auth>; rel="authorization_endpoint"
+link: <{site}/indieauth/token>; rel="token_endpoint"
+link: <{site}/micropub/endpoint>; rel="micropub"
+link: <{site}/webmention/>; rel="http://webmention.org/"
+link: <{site}/webmention/>; rel="webmention"
+link: <https://hub.example/>; rel="hub"
+link: <{site}/currentUser?_t=json>; rel="self"
+pragma: no-cache
+vary: Accept
+x-clacks-overhead: GNU Terry Pratchett
+x-powered-by: https://idno.co
+
+{
+    "user": {
+        "id": "00000000-0000-4000-8000-000000000001",
+        "uuid": "https:\/\/fixture.example\/view\/00000000-0000-4000-8000-000000000001",
+        "content": "Ada writes about computers, gardens and the open web.",
+        "formattedContent": "\n<p>Ada writes about computers, gardens and the open web.<\/p>\n",
+        "displayName": "Ada Admin",
+        "objectType": "person",
+        "url": "{site}\/profile\/ada",
+        "image": {
+            "url": "{site}\/gfx\/users\/default-04.png"
+        }
+    },
+    "title": "Ada Admin",
+    "description": "The Reset Test Site profile for Ada Admin",
+    "messages": []
+}
