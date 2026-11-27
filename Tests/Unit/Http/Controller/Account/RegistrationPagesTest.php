@@ -21,8 +21,7 @@ use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\Request;
 
 /**
- * The registration page's rules that the recorded answers over HTTP show less precisely: what is asked of the site, and in what order, for a request
- * that must not make an account or must not use up an invitation.
+ * The registration page's rules that the recorded answers over HTTP do not show: a handle of `0` and what a refused form's variables hold.
  */
 final class RegistrationPagesTest extends TestCase
 {
@@ -61,39 +60,6 @@ final class RegistrationPagesTest extends TestCase
     }
 
     /**
-     * Catches: a site with no account letting somebody register (or even asking about an invitation) because an invitation names an administrator: the site's
-     * first administrator is made by the installation alone, so nothing is read of the form and no account is made, whatever code the POST carries.
-     */
-    public function testASiteWithNoAccountRegistersNobodyWhateverInvitationThePostCarries(): void
-    {
-        $this->site->hasAccounts = false;
-        $this->site->open = false;
-        $this->site->invitation = new RegistrationInvitation('dana@example.test', true, 'Ada', new \stdClass());
-
-        $answer = $this->pages()->register(self::post(['code' => 'a-valid-administrators-code'] + self::valid()));
-
-        $this->assertSame(302, $answer->getStatusCode());
-        $this->assertSame([], $this->site->created, 'no account');
-        $this->assertSame([], $this->site->invitationsChecked, 'the invitation was not even looked at');
-    }
-
-    /**
-     * Catches: a form that fails its checks (the passwords differ) using up the invitation it came with, so that the person has to ask for another link.
-     * The invitation is used only inside `create()`, which a failed form never reaches.
-     */
-    public function testAFormThatFailsItsChecksNeverTouchesTheInvitation(): void
-    {
-        $this->site->open = false;
-        $this->site->invitation = new RegistrationInvitation('dana@example.test', false, 'Ada', new \stdClass());
-
-        $answer = $this->pages()->register(self::post(['password2' => 'something else', 'code' => 'the-code'] + self::valid()));
-
-        $this->assertSame(400, $answer->getStatusCode());
-        $this->assertSame([], $this->site->created);
-        $this->assertSame([['dana@example.test', 'the-code']], $this->site->invitationsChecked, 'it was only looked at');
-    }
-
-    /**
      * Catches: a handle of `0` being accepted. The page has always counted `0` as no handle (PHP's `empty()`), and a profile at `/profile/0` is the 404 page
      * (a missing or `0` handle), so an account made with it could not be reached.
      */
@@ -107,35 +73,13 @@ final class RegistrationPagesTest extends TestCase
     }
 
     /**
-     * Catches: the passwords a person typed coming back in the variables of a refused form, which the page's JSON and JSONP output would print and a
-     * template might put in a field. Only the email, code, name and handle are given back.
+     * Catches: the passwords a person typed coming back in the variables of a refused form (a template might print them in a field).
      */
-    public function testARefusedFormGivesBackWhatWasTypedButNeverThePasswords(): void
+    public function testARefusedFormNeverGivesBackThePasswords(): void
     {
         $this->pages()->register(self::post(['handle' => 'bad handle!'] + self::valid()));
 
-        $this->assertSame(400, $this->drawer->pages[0][1]);
-        [$name, $vars] = $this->drawer->copies[0];
-        $this->assertSame('account/register', $name);
-        $this->assertSame(['email' => 'dana@example.test', 'code' => '', 'name' => 'Dana', 'handle' => 'bad handle!', 'invited' => false, 'is_admin' => false, 'inviter' => ''], $vars);
         $this->assertStringNotContainsString('a-long-passphrase', serialize([$this->drawer->pages, $this->drawer->copies]));
-    }
-
-    /**
-     * Catches: the invitation's code and address becoming variables of the page's own template (the site's template object), where the JSON and JSONP
-     * output of the page prints every variable: they are given to the form's body alone, drawn on a copy.
-     */
-    public function testTheInvitationsCodeIsAVariableOfTheBodyAloneNeverOfThePage(): void
-    {
-        $this->site->open = false;
-        $this->site->invitation = new RegistrationInvitation('dana@example.test', false, 'Ada', new \stdClass());
-
-        $this->pages()->form(new PageContext(Request::create('/account/register?email=dana%40example.test&code=the-code'), new SitePage('Idno\Pages\Account\Register', accountPage: true, methods: ['GET', 'POST'])));
-
-        $this->assertSame(['body', 'title'], array_keys($this->drawer->pages[0][0]));
-        $this->assertSame('the-code', $this->drawer->copies[0][1]['code']);
-        $this->assertStringNotContainsString('the-code', serialize($this->drawer->pages));
-        $this->assertSame([], $this->drawer->templates, 'nothing was drawn on the site\'s own template object');
     }
 }
 

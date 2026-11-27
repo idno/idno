@@ -394,6 +394,8 @@ final class RegistrationAnswersTest extends SignInSiteCase
         $answer = $this->site()->request('POST', '/account/register', ['Cookie' => $cookie, 'X-Requested-With' => 'XMLHttpRequest'], self::dana());
         $this->assertSame(403, $answer->status);
         $this->assertNull($answer->header('Location'));
+        $this->assertStringContainsString('</html>', $answer->body, 'the site\'s 403 page, not an empty answer');
+        $this->assertStringContainsString('idno-account-shell', $answer->body, 'drawn as every refusal of an /account page is');
         $this->assertSame($before, $this->handles());
     }
 
@@ -407,8 +409,9 @@ final class RegistrationAnswersTest extends SignInSiteCase
         $answer = $this->site()->request('GET', '/account/register?_t=jsonp&callback=f');
         $this->assertSame(200, $answer->status);
         $this->assertStringStartsWith('text/html', (string) $answer->header('Content-Type'));
+        $this->assertSame('nosniff', $answer->header('X-Content-Type-Options'));
         $this->assertStringContainsString('name="handle"', $answer->body, 'the form');
-        $this->assertStringNotContainsString('f(', substr($answer->body, 0, 3));
+        $this->assertStringStartsWith('<!DOCTYPE html>', ltrim($answer->body), 'a page, not a callback wrapped around JSON');
     }
 
     /**
