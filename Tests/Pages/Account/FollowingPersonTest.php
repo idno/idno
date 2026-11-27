@@ -8,9 +8,9 @@ namespace Tests\Pages\Account {
     use Tests\LocalHttpServer;
 
     /**
-     * Following a person stayed when the feed reader was removed: the settings page with its
-     * bookmarklet, the page the bookmarklet opens, the follow itself, and the WebSub
-     * subscription to the followed person's hub with the callback that confirms it.
+     * Following a person: the settings page with its bookmarklet, the page the bookmarklet
+     * opens, the follow itself, and the WebSub subscription to the followed person's hub with
+     * the callback that confirms it.
      *
      * The person followed is a page of Tests\LocalHttpServer, and so are their feed and their
      * hub: nothing leaves the machine. The requests to the site are made over HTTP, so these
@@ -54,7 +54,6 @@ namespace Tests\Pages\Account {
 
             $this->assertSame(200, $page['status']);
             $this->assertStringContainsString('account/settings/following/bookmarklet?u=', $page['body'], 'The settings page should hold the bookmarklet.');
-            $this->assertStringNotContainsString('following/confirm', $page['body']);
         }
 
         public function testSettingsPageIsForMembers()
@@ -86,10 +85,7 @@ namespace Tests\Pages\Account {
                 static::$member
             );
 
-            // It used to end here with the error page: the follow was saved, and then the feed
-            // reader was asked for the person's feed
             $this->assertLessThan(400, $result['status'], 'Following a person should not end with an error page.');
-            $this->assertStringNotContainsString('following/confirm', $result['location'], 'The reader\'s confirmation page is gone; nothing should send the member there.');
 
             $person = $this->followed();
             $this->assertInstanceOf(RemoteUser::class, $person, 'The person followed should have been stored.');
@@ -99,7 +95,6 @@ namespace Tests\Pages\Account {
 
             $next = $this->get(self::SETTINGS, static::$member);
             $this->assertStringContainsString('You are now following Fixture Person', $next['body']);
-            $this->assertStringNotContainsString('subscribe to their feed', $next['body'], 'The member is no longer offered a feed subscription.');
 
             return $person->getUUID();
         }

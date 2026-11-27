@@ -869,8 +869,8 @@ was: a page that fetches an address a member types must use `Webservice::safeSen
   answers as it does for a post that does not exist.
 - The bookmarklet no longer offers to subscribe to the followed person's feed.
 - `simplepie/simplepie` stays: `Migration::importFeedXML()` (the Blogger import) uses it.
-- `Tests/Pages/FeedReaderRemovedTest.php` and `Tests/Data/RemovedReaderRecordsTest.php`
-  check this over HTTP.
+- `Tests/Data/RecordOfMissingClassTest.php` checks, over HTTP, what a record of a class
+  that is not there does.
 
 ### WebSub, and the names it had
 
@@ -1442,3 +1442,9 @@ Idno allows code that has been generated using AI models. When new code is writt
 it should be tested using the existing test suite. New tests MUST always be written
 for new code, and existing tests MUST always pass. When there are architectural changes, 
 the existing tests MUST be updated, and appropriate edits MUST be made to AGENTS.md.
+
+Tests are for what the site has now, and a test class is named for the thing it tests. When
+a feature is removed, delete the tests that exercised it; don't add a test that it is gone
+(that its addresses answer 404, that its classes do not exist) or one that goes on looking
+for traces of it. If the removal shows that something that stays had no tests, add them
+under that thing's name.

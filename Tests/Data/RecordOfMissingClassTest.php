@@ -6,22 +6,21 @@ namespace Tests\Data {
     use Idno\Core\Idno;
 
     /**
-     * The feed reader's classes were removed in November 2026, and nothing it stored was: the
-     * `reader` collection and its tables stay, and a record of one of the removed classes
-     * (which the reader in fact saved to `entities`) stays where it is. Such a record is not
-     * a post: lookups do not return it, the pages that list posts are drawn without it, and
-     * its own address answers as the address of a post that does not exist.
+     * A record whose class is not loaded (the record of a plugin that has been taken away or
+     * turned off, say) stays in the database and is not a post: lookups do not return it,
+     * the pages that list posts are drawn without it, and its own address answers as the
+     * address of a post that does not exist.
      *
      * The requests are made over HTTP, so these tests need the site to be running (see
      * IDNO_DOMAIN / IDNO_PORT).
      */
-    class RemovedReaderRecordsTest extends \Tests\BrowserTestCase
+    class RecordOfMissingClassTest extends \Tests\BrowserTestCase
     {
 
+        /// Classes that no plugin has: one in a plugin's namespace and one in core's
         const CLASSES = [
-            'Idno\Entities\Reader\Feed',
-            'Idno\Entities\Reader\FeedItem',
-            'Idno\Entities\Reader\Subscription',
+            'IdnoPlugins\\NotInstalledAnyMore\\Thing',
+            'Idno\\Entities\\NotThereAnyMore',
         ];
 
         private static $member;
@@ -60,7 +59,7 @@ namespace Tests\Data {
             static::$post = $this->post(static::$member, 'A real post ' . static::$postMarker);
 
             $db = Idno::site()->db();
-            foreach (['entities', 'reader'] as $collection) {
+            foreach (['entities'] as $collection) {
                 foreach (self::CLASSES as $class) {
                     $marker = static::marker();
                     $record = [
@@ -97,7 +96,7 @@ namespace Tests\Data {
         public static function records()
         {
             $cases = [];
-            foreach (['entities', 'reader'] as $collection) {
+            foreach (['entities'] as $collection) {
                 foreach (self::CLASSES as $class) {
                     $cases["$class in $collection"] = ["$class in $collection"];
                 }
@@ -111,29 +110,10 @@ namespace Tests\Data {
             return ['a visitor' => [false], 'the member who owns the records' => [true]];
         }
 
-        public function testReaderCollectionStillTakesAndGivesRecords()
+        public function testClassesAreNotThere()
         {
-            $record = static::$records[self::CLASSES[0] . ' in reader'];
-
-            $this->assertIsArray($record['stored'], 'The reader collection should still hold what is saved to it.');
-            $this->assertSame(self::CLASSES[0], $record['stored']['entity_subtype']);
-            $this->assertNotEmpty(Idno::site()->db()->getRecordByUUID($record['uuid'], 'reader'));
-        }
-
-        public function testInstallationSchemaStillHasTheReaderTables()
-        {
-            $schema = file_get_contents(dirname(__DIR__, 2) . '/warmup/schemas/mysql/mysql.sql');
-
-            foreach (['reader', 'reader_search', 'reader_metadata'] as $table) {
-                $this->assertStringContainsString('CREATE TABLE IF NOT EXISTS `' . $table . '`', $schema, "A new installation should still get the $table table.");
-            }
-        }
-
-        public function testNoUpgradeDropsTheReaderTables()
-        {
-            foreach (glob(dirname(__DIR__, 2) . '/warmup/schemas/mysql/*.sql') as $file) {
-                $this->assertDoesNotMatchRegularExpression('/\b(drop|truncate|rename)\s+table\b[^;]*\breader/i', file_get_contents($file), basename($file) . ' should leave the reader tables alone.');
-                $this->assertDoesNotMatchRegularExpression('/\bdelete\s+from\s+`?reader/i', file_get_contents($file), basename($file) . ' should delete nothing from the reader tables.');
+            foreach (self::CLASSES as $class) {
+                $this->assertFalse(class_exists($class), "The test needs $class not to exist.");
             }
         }
 
@@ -201,7 +181,7 @@ namespace Tests\Data {
             $path = strtr($path, [
                 '{handle}'   => static::$member->getHandle(),
                 '{post}'     => static::$postMarker,
-                '{leftover}' => static::$records[self::CLASSES[1] . ' in entities']['marker'],
+                '{leftover}' => static::$records[self::CLASSES[0] . ' in entities']['marker'],
             ]);
 
             $result = $this->get($path, $asMember ? static::$member : null);
