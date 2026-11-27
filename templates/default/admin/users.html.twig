@@ -24,7 +24,12 @@
         {% else %}
             <p>{{ t('No usernames are kept back.') }}</p>
         {% endfor %}
-        {% if reserved_handles_more|default(0) > 0 %}<p><small>{{ t('And more are kept back than are listed here.') }}</small></p>{% endif %}
+        {% if reserved_total|default(0) > reserved_per_page|default(25) %}
+            <p>
+                {% if reserved_offset|default(0) > 0 %}<a href="{{ site_url() }}admin/users?reserved_offset={{ max(0, reserved_offset - reserved_per_page) }}#reserved-handles">{{ t('Newer') }}</a>{% endif %}
+                {% if reserved_offset|default(0) + reserved_per_page < reserved_total %}<a href="{{ site_url() }}admin/users?reserved_offset={{ reserved_offset + reserved_per_page }}#reserved-handles">{{ t('Older') }}</a>{% endif %}
+            </p>
+        {% endif %}
     </div>
 
     {% if can_add_users() %}

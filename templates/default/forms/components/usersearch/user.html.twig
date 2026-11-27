@@ -31,7 +31,7 @@
         <div class="idno-account-remaining">
             <p>{{ t('Not everything could be deleted. What remains:') }}
             {% for class, count in removal.classes|default({}) %}<span>{{ class }} ({{ count }})</span>{% if not loop.last %}, {% endif %}{% endfor %}
-            {% if removal.reason|default('') == 'unreadable' %}{{ t('The database could not be read.') }}{% endif %}</p>
+            {% if removal.reason|default('') == 'unreadable' %}{{ t('The database could not be read.') }}{% elseif removal.reason|default('') == 'count' %}{{ t('The records left do not add up: try again.') }}{% endif %}</p>
             <p>{{ t('A plugin\'s listener may have refused to delete them: disable that plugin and press Continue deleting, or delete the records by hand.') }}</p>
         </div>
         {% endif %}{% endif %}

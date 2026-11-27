@@ -36,6 +36,7 @@ final class AccountContent
         \Idno\Entities\UnfurledUrl::class,
         \Idno\Entities\AsynchronousQueuedEvent::class,
         \Idno\Entities\GenericDataItem::class,
+        \Idno\Entities\ReservedHandle::class,
         // a bundled plugin's, named here and not registered by the plugin, so that a site that has the plugin switched off keeps its pages
         'IdnoPlugins\\StaticPages\\StaticPage',
     ];
@@ -55,7 +56,19 @@ final class AccountContent
      */
     public static function classes(): array
     {
-        return array_values(array_unique([...array_map(static fn (string $class): string => ltrim($class, '\\'), self::CORE), ...array_values(self::$kept)]));
+        $names = [...array_map(static fn (string $class): string => ltrim($class, '\\'), self::CORE), ...array_values(self::$kept)];
+        // What a listing exempts is matched by the stored type, which never matches a subclass: the loaded subclasses of the kept classes are named too (a plugin's
+        // classes are loaded when it is; a class that is not loaded yet is named by keep())
+        foreach (get_declared_classes() as $declared) {
+            foreach ($names as $kept) {
+                if (is_subclass_of($declared, $kept)) {
+                    $names[] = $declared;
+                    break;
+                }
+            }
+        }
+
+        return array_values(array_unique($names));
     }
 
     /**

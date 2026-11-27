@@ -12,6 +12,9 @@ namespace Idno\Pages\Admin {
     class Users extends \Idno\Common\Page
     {
 
+        /// How many reserved usernames the page lists at a time
+        const RESERVED_PER_PAGE = 25;
+
         /**
          * The invitation the form names (`invitation_id`), and only an invitation: an id of anything else (a post) is none.
          *
@@ -40,11 +43,11 @@ namespace Idno\Pages\Admin {
             $count = User::countFromX(["Idno\\Entities\\User", "Idno\\Entities\\RemoteUser"]);
 
             $invitations = Invitation::all();
-            $reserved    = array_values(\Idno\Core\AccountRegistry::reservedHandles());
-            usort($reserved, static fn (array $a, array $b): int => $b['at'] <=> $a['at']);
+            $reservedOffset = max(0, (int) $this->getTextInput('reserved_offset', 0));
+            $reserved       = array_map(static fn ($r) => ['handle' => (string) $r->display, 'at' => (int) $r->created], \Idno\Entities\ReservedHandle::page(self::RESERVED_PER_PAGE, $reservedOffset));
 
             $t        = \Idno\Core\Idno::site()->template();
-            $t->body  = $t->__(array('items' => $users, 'invitations' => $invitations, 'mail_configured' => \Idno\Core\Email::isConfigured(), 'invitation_days' => Invitation::lifetimeDays(), 'invitation_batch' => Invitation::MAX_PER_BATCH, 'count' => $count, 'items_per_page' => $limit, 'reserved_handles' => array_slice($reserved, 0, 100), 'reserved_handles_more' => max(0, count($reserved) - 100)))->draw('admin/users');
+            $t->body  = $t->__(array('items' => $users, 'invitations' => $invitations, 'mail_configured' => \Idno\Core\Email::isConfigured(), 'invitation_days' => Invitation::lifetimeDays(), 'invitation_batch' => Invitation::MAX_PER_BATCH, 'count' => $count, 'items_per_page' => $limit, 'reserved_handles' => $reserved, 'reserved_total' => \Idno\Entities\ReservedHandle::total(), 'reserved_offset' => $reservedOffset, 'reserved_per_page' => self::RESERVED_PER_PAGE))->draw('admin/users');
             $t->title = \Idno\Core\Idno::site()->language()->_('User Management');
             $t->drawPage();
 

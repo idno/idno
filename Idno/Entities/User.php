@@ -104,11 +104,11 @@ namespace Idno\Entities {
                     if (!$user instanceof User || !$user->isClosed()) {
                         return; // gone already, or never closed: a message for the account of nobody, or of an account that is in use, deletes nothing
                     }
-                    $outcome = $user->removeAccount();
+                    $outcome = $user->removeAccount(self::CONTENT_BATCH, self::removalSeconds());
                     if ($outcome === 'time') {
                         \Idno\Core\Idno::site()->queue()->enqueue('default', self::REMOVE_EVENT, ['uuid' => $uuid], false);
                     } else if ($outcome === 'refused') {
-                        \Idno\Core\Idno::site()->logging()->warning('The removal of an account stopped: something refused to be deleted. Deleting the account again on the Users page carries on.');
+                        \Idno\Core\Idno::site()->logging()->warning('The removal of an account stopped: nothing more could be removed (a record was refused or could not be read; the log says which). Deleting the account again on the Users page carries on.');
                     }
                 }
             );
@@ -1317,8 +1317,30 @@ namespace Idno\Entities {
          */
         function close()
         {
+            $uuid = (string) $this->getUUID();
             if ($this->isClosed()) {
+                // (closed already: the set is asserted again, so that a settings save from a stale copy that took the uuid out does not leave the posts listed)
+                try {
+                    if (!\Idno\Core\AccountRegistry::isClosed($uuid)) {
+                        \Idno\Core\AccountRegistry::markClosed($uuid);
+                    }
+                } catch (\Throwable $e) {
+                    \Idno\Core\Idno::site()->logging()->error('A closed account could not be put back in the stored set of closed accounts: ' . get_class($e));
+                }
+
                 return true;
+            }
+            // The set that keeps the account's posts out of every listing is written BEFORE the account is marked, and a failure to write it is a failure to close
+            // (nothing is changed): hiding the posts a moment early is harmless, and an account closed with its posts listed is not closed
+            if (\Idno\Core\AccountRegistry::closedIsFull()) {
+                return false;
+            }
+            try {
+                \Idno\Core\AccountRegistry::markClosed($uuid);
+            } catch (\Throwable $e) {
+                \Idno\Core\Idno::site()->logging()->error('A closed account could not be added to the stored set of closed accounts: ' . get_class($e));
+
+                return false;
             }
             $previous = [$this->account_closed, $this->password, $this->password_generation, $this->apikey, $this->indieauth_codes, $this->indieauth_tokens, $this->password_recovery_code];
             $this->account_closed      = time();
@@ -1334,13 +1356,13 @@ namespace Idno\Entities {
                 [$this->account_closed, $this->password, $this->password_generation, $this->apikey, $this->indieauth_codes, $this->indieauth_tokens, $this->password_recovery_code] = $previous;
                 $this->passwordHashChanged   = false;
                 $this->passwordMarkerChanged = false;
+                try {
+                    \Idno\Core\AccountRegistry::unmarkClosed($uuid);
+                } catch (\Throwable $e) {
+                    \Idno\Core\Idno::site()->logging()->error('A closed set could not be put back: ' . get_class($e));
+                }
 
                 return false;
-            }
-            try {
-                \Idno\Core\AccountRegistry::markClosed((string) $this->getUUID());
-            } catch (\Throwable $e) {
-                \Idno\Core\Idno::site()->logging()->error('A closed account could not be added to the stored set of closed accounts: ' . get_class($e));
             }
             try {
                 \Idno\Core\Idno::site()->events()->triggerEvent('account/closed', ['object' => $this]);
@@ -1391,6 +1413,11 @@ namespace Idno\Entities {
             $site    = \Idno\Core\Idno::site();
             $session = $site->session();
             $lang    = $site->language();
+            if (!$this->isClosed() && \Idno\Core\AccountRegistry::closedIsFull()) {
+                $session->addErrorMessage($lang->_("Too many accounts are being deleted at once. Wait until some of them are gone, then try again."));
+
+                return false;
+            }
             if (!$this->close()) {
                 $session->addErrorMessage($lang->esc_("%s could not be closed, so nothing was deleted. Please try again.", [$this->getTitle()]));
 
@@ -1410,8 +1437,7 @@ namespace Idno\Entities {
                     $outcome = $this->removeAccount();
                 } while ($outcome === 'time');
             } else {
-                $budget  = $site->config()->account_removal_seconds;
-                $outcome = $this->removeAccount(self::CONTENT_BATCH, is_numeric($budget) ? (float) $budget : null);
+                $outcome = $this->removeAccount(self::CONTENT_BATCH, self::removalSeconds());
             }
             if ($outcome === 'removed') {
                 return true;
@@ -1435,6 +1461,23 @@ namespace Idno\Entities {
         }
 
         /**
+         * The time one run of the removal works for: the setting `account_removal_seconds` (in `config.ini` or `IDNO_ACCOUNT_REMOVAL_SECONDS`; no form sets it), kept
+         * between 0 and 60% of PHP's time limit (an hour where there is none); null when it is not set, for deleteContent()'s default.
+         *
+         * @return float|null
+         */
+        static function removalSeconds()
+        {
+            $setting = \Idno\Core\Idno::site()->config()->account_removal_seconds;
+            if (!is_numeric($setting) || !is_finite((float) $setting)) {
+                return null;
+            }
+            $limit = (int) ini_get('max_execution_time');
+
+            return max(0.0, min((float) $setting, $limit > 0 ? $limit * 0.6 : 3600.0));
+        }
+
+        /**
          * The job of deleting a closed account, as far as it gets in $seconds: its content (deleteContent()) and, when nothing is left, the account
          * record, quietly (AccountContent::whileRemoving()). One job runs at a time: it holds a claim on the stored state (`account_removing_until`, `account_removing_by`) for
          * a few minutes, and a claim that is stale (a job that was killed) is taken over.
@@ -1450,6 +1493,9 @@ namespace Idno\Entities {
         function removeAccount($batch = self::CONTENT_BATCH, $seconds = null)
         {
             $token = bin2hex(random_bytes(8));
+            if (!\Idno\Core\AccountRegistry::isClosed((string) $this->getUUID())) {
+                \Idno\Core\AccountRegistry::markClosed((string) $this->getUUID()); // (asserted again by every run: see close())
+            }
             $fresh = static::getByUUID((string) $this->getUUID(), false);
             if ($fresh instanceof User && (int) $fresh->account_removing_until > time() && (string) $fresh->account_removing_by !== '') {
                 return 'busy';
@@ -1480,10 +1526,10 @@ namespace Idno\Entities {
                 return $outcome;
             } finally {
                 if ($removed) {
-                    \Idno\Core\AccountRegistry::unmarkClosed($uuid);
                     if ($handle !== '') {
-                        \Idno\Core\AccountRegistry::reserveHandle($handle, $uuid);
+                        \Idno\Core\AccountRegistry::reserveHandle($handle, $uuid); // (first: a process that stops between the two leaves the handle kept back)
                     }
+                    \Idno\Core\AccountRegistry::unmarkClosed($uuid);
                 } else {
                     $this->account_removing_until = 0;
                     $this->account_removing_by    = '';
@@ -1605,7 +1651,15 @@ namespace Idno\Entities {
                     return 'refused';
                 }
 
-                return $owned === $kept ? 'done' : ($removed > 0 ? 'time' : 'refused');
+                if ($owned === $kept) {
+                    return 'done';
+                }
+                if ($removed > 0) {
+                    return 'time';
+                }
+                $this->removalReport = ['classes' => [], 'at' => time(), 'reason' => 'count'];
+
+                return 'refused';
             } finally {
                 $db->setIgnoreAccess($before);
                 ignore_user_abort($abort);

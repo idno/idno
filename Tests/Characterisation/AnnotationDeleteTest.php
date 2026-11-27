@@ -77,6 +77,8 @@ final class AnnotationDeleteTest extends PermalinkSiteCase
         $store = \Idno\Core\Idno::container()->get(\Idno\Storage\RecordStore::class);
         $record = $store->findById('entities', '0000000000004000800000000000006b');
         $carol = \Idno\Entities\User::getByHandle('carol');
+        // (an annotation is the member's only if it is not older than the account: Carol's account is made older than her comment)
+        $store->save('entities', ['created' => (int) strtotime('2025-06-01 00:00:00 UTC')] + $store->findById('entities', $carol->getID()));
         $key = \Idno\Core\Idno::site()->config()->getURL() . %NOTE% . '/annotations/' . md5('by-carol');
         $record['annotations']['reply'][$key] = ['permalink' => $key, 'owner_name' => 'Carol Member', 'owner_url' => $carol->getURL(), 'owner_image' => '', 'content' => 'Carol comments on Bob\'s note herself.', 'time' => (int) strtotime('2025-12-11 17:00:00 UTC'), 'title' => ''];
         $store->save('entities', $record);

@@ -3219,6 +3219,14 @@ namespace Idno\Common {
                     }
                     $madeHere = array_key_exists('made_here', $stored) ? !empty($stored['made_here']) : $stored['permalink'] === $key;
 
+                    // An annotation cannot be the work of an account that did not exist yet: a newcomer who has the handle (and so the profile address) of a member
+                    // that was deleted is not the author of that member's annotations
+                    $time = (int) ($stored['time'] ?? 0);
+                    $born = (int) $user->created;
+                    if ($time > 0 && $born > 0 && $time < $born) {
+                        return null;
+                    }
+
                     return $madeHere && $stored['owner_url'] === $user->getURL() ? $key : null;
                 }
             }

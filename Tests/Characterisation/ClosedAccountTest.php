@@ -257,6 +257,82 @@ final class ClosedAccountTest extends PrivateSiteTestCase
     }
 
     /**
+     * Catches the member's posts coming back into a listing because another request saved the whole settings document from a copy it loaded before the
+     * account was closed (the daily maintenance, an administrator's settings form): the closed set is asserted again by every run of the job, and the posts
+     * stay out of the feed.
+     */
+    public function testASettingsSaveFromAStaleCopyDoesNotPutAClosedAccountsPostsBackInTheListings(): void
+    {
+        $this->prepare();
+        $this->addUser('mia');
+        $this->runInSite(<<<'PHP'
+        \Idno\Core\Idno::site()->db()->setIgnoreAccess(true);
+        foreach (range(1, 3) as $n) {
+            $post = new \IdnoPlugins\Status\Status();
+            $post->body = 'zebraunique ' . $n;
+            $post->setOwner(\Idno\Entities\User::getByHandle('mia'));
+            $post->setAccess('PUBLIC');
+            $post->save(true);
+        }
+        return true;
+        PHP);
+        $this->runInSite(<<<'PHP'
+        $db = \Idno\Core\Idno::site()->db();
+        $stale = $db->getAnyRecord('config');
+        \Idno\Entities\User::getByHandle('mia')->close();
+        $db->saveRecord('config', $stale);
+        return true;
+        PHP, true);
+        $this->assertFalse((bool) $this->runInSite('return \Idno\Core\AccountRegistry::isClosed(\Idno\Entities\User::getByHandle("mia")->getUUID());'), 'the stale save took the uuid out of the set');
+
+        $this->runInSite('\Idno\Entities\User::getByHandle("mia")->removeAccount(100, 0.0); return true;', true);
+
+        $this->assertTrue((bool) $this->runInSite('return \Idno\Core\AccountRegistry::isClosed(\Idno\Entities\User::getByHandle("mia")->getUUID());'), 'the job put it back');
+        $this->assertStringNotContainsString('zebraunique', $this->site()->request('GET', '/feed.xml')->body);
+    }
+
+    /**
+     * Catches the closed set growing past what a listing's query can hold (the placeholder limits of the databases), which would fail every visitor's query or
+     * expose the posts: past the bound no account is closed, and the administrator is told, and the account is not changed.
+     */
+    public function testNoMoreAccountsAreClosedWhenTheClosedSetIsFull(): void
+    {
+        $this->prepare();
+        $this->addUser('mia');
+        $result = $this->runInSite(<<<'PHP'
+        $config = \Idno\Core\Idno::site()->config();
+        $config->closed_accounts = array_map(static fn ($n) => 'https://x.example/view/' . $n, range(1, \Idno\Core\AccountRegistry::MAX_CLOSED));
+        $config->save();
+        $mia = \Idno\Entities\User::getByHandle('mia');
+        $closed = $mia->close();
+        return [$closed, \Idno\Entities\User::getByHandle('mia')->isClosed()];
+        PHP);
+        $this->assertSame([false, false], $result);
+    }
+
+    /**
+     * Catches reserved handles being kept in the settings every request loads: each is a record of its own, found only when an account is made or renamed and
+     * on the Users page, which pages them.
+     */
+    public function testReservedHandlesAreRecordsOfTheirOwnAndTheUsersPagePagesThem(): void
+    {
+        $this->prepare();
+        $this->runInSite(<<<'PHP'
+        foreach (range(1, 30) as $n) {
+            \Idno\Core\AccountRegistry::reserveHandle('gone' . $n, 'https://x.example/view/' . $n);
+        }
+        return true;
+        PHP);
+        $this->assertNull($this->runInSite('return \Idno\Core\Idno::site()->config()->reserved_handles;'), 'nothing of it is in the settings');
+        $first = $this->site()->request('GET', 'admin/users', ['Cookie' => $this->admin])->body;
+        $second = $this->site()->request('GET', 'admin/users?reserved_offset=25', ['Cookie' => $this->admin])->body;
+
+        $this->assertSame(25, preg_match_all('~>gone\d+ <small>~', $first), 'a page of them');
+        $this->assertSame(5, preg_match_all('~>gone\d+ <small>~', $second), 'and the next');
+        $this->assertSame(0, preg_match_all('~>gone\d+ <small>~', (string) $this->site()->request('GET', 'feed.xml')->body), 'they are in no feed');
+    }
+
+    /**
      * Catches a newcomer taking the handle of a deleted member (and with it the member's annotations and actor address): the handle is kept back for an
      * administrator creating a user and for a registration, and an administrator's release gives it back.
      */

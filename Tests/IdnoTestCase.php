@@ -122,8 +122,8 @@ namespace Tests {
                 static::$testAdmin = false;
             }
             // The handles of the accounts the tests deleted are reserved: the site the tests share must not keep them back from the next class
-            foreach (\Idno\Core\AccountRegistry::reservedHandles() as $reserved) {
-                \Idno\Core\AccountRegistry::releaseHandle($reserved['handle']);
+            foreach (\Idno\Entities\ReservedHandle::page(1000, 0) as $one) {
+                \Idno\Core\AccountRegistry::releaseHandle((string) $one->display);
             }
         }
     }

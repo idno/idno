@@ -29,7 +29,7 @@ final class AnnotationAuthorDeleteTest extends PermalinkSiteCase
         $base = \Idno\Core\Idno::site()->config()->getURL();
         $carol = \Idno\Entities\User::getByHandle('carol');
         $ada = \Idno\Entities\User::getByHandle('ada');
-        $make = static fn (string $permalink, string $ownerUrl, string $content): array => ['permalink' => $permalink, 'owner_name' => 'Someone', 'owner_url' => $ownerUrl, 'owner_image' => '', 'content' => $content, 'time' => (int) strtotime('2025-12-12 10:00:00 UTC'), 'title' => ''];
+        $make = static fn (string $permalink, string $ownerUrl, string $content): array => ['permalink' => $permalink, 'owner_name' => 'Someone', 'owner_url' => $ownerUrl, 'owner_image' => '', 'content' => $content, 'time' => (int) strtotime('2026-02-12 10:00:00 UTC'), 'title' => ''];
         $key = static fn (string $name): string => $base . %NOTE% . '/annotations/' . md5($name);
         $record['annotations'] = ['reply' => [], 'like' => [], 'mention' => []];
         $record['annotations']['like'][$key('carol-like')] = $make($key('carol-like'), $carol->getURL(), '');

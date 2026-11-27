@@ -71,8 +71,8 @@ final class AnnotationLayoutTest extends \Tests\IdnoTestCase
         $old = $this->base() . '2026/03/a-note/annotations/abc123';
         $remote = 'https://example.org/reply/1';
         $post->annotations = ['like' => [
-            $old => ['permalink' => $old, 'owner_name' => 'Ada', 'owner_url' => 'https://example.org/ada', 'owner_image' => '', 'content' => '', 'time' => 1, 'title' => ''],
-            $this->base() . '2026/a-note/annotations/def456' => ['permalink' => $remote, 'owner_name' => 'Bob', 'owner_url' => 'https://example.org/bob', 'owner_image' => '', 'content' => '', 'time' => 2, 'title' => ''],
+            $old => ['permalink' => $old, 'owner_name' => 'Ada', 'owner_url' => 'https://example.org/ada', 'owner_image' => '', 'content' => '', 'time' => time(), 'title' => ''],
+            $this->base() . '2026/a-note/annotations/def456' => ['permalink' => $remote, 'owner_name' => 'Bob', 'owner_url' => 'https://example.org/bob', 'owner_image' => '', 'content' => '', 'time' => time(), 'title' => ''],
         ]];
 
         $shown = $post->getAnnotations('like');
@@ -87,7 +87,7 @@ final class AnnotationLayoutTest extends \Tests\IdnoTestCase
     {
         $post = $this->post();
         $old = $this->base() . '2026/03/a-note/annotations/abc123';
-        $post->annotations = ['like' => [$old => ['permalink' => $old, 'owner_name' => 'Ada', 'owner_url' => 'https://example.org/ada', 'owner_image' => '', 'content' => '', 'time' => 1, 'title' => '']]];
+        $post->annotations = ['like' => [$old => ['permalink' => $old, 'owner_name' => 'Ada', 'owner_url' => 'https://example.org/ada', 'owner_image' => '', 'content' => '', 'time' => time(), 'title' => '']]];
 
         // the key, as the delete link posts it
         $byKey = clone $post;
@@ -109,8 +109,8 @@ final class AnnotationLayoutTest extends \Tests\IdnoTestCase
         $old = $this->base() . '2026/03/a-note/annotations/abc123';
         $foreign = $this->base() . '2026/03/another-note/annotations/def456';
         $post->annotations = ['like' => [
-            $old => ['permalink' => $old, 'owner_name' => 'Ada', 'owner_url' => 'https://example.org/ada', 'owner_image' => '', 'content' => '', 'time' => 1, 'title' => ''],
-            $foreign => ['permalink' => $foreign, 'owner_name' => 'Bob', 'owner_url' => 'https://example.org/bob', 'owner_image' => '', 'content' => '', 'time' => 2, 'title' => ''],
+            $old => ['permalink' => $old, 'owner_name' => 'Ada', 'owner_url' => 'https://example.org/ada', 'owner_image' => '', 'content' => '', 'time' => time(), 'title' => ''],
+            $foreign => ['permalink' => $foreign, 'owner_name' => 'Bob', 'owner_url' => 'https://example.org/bob', 'owner_image' => '', 'content' => '', 'time' => time(), 'title' => ''],
         ]];
         $annotations = new \Idno\Legacy\LegacyAnnotations();
 
@@ -126,7 +126,7 @@ final class AnnotationLayoutTest extends \Tests\IdnoTestCase
         $post = $this->post();
         $key = $this->base() . '2026/03/a-note/annotations/own1';
         $remote = $this->base() . '2026/a-note/annotations/own2';
-        $make = static fn (string $permalink, string $owner): array => ['permalink' => $permalink, 'owner_name' => 'X', 'owner_url' => $owner, 'owner_image' => '', 'content' => '', 'time' => 1, 'title' => ''];
+        $make = static fn (string $permalink, string $owner): array => ['permalink' => $permalink, 'owner_name' => 'X', 'owner_url' => $owner, 'owner_image' => '', 'content' => '', 'time' => time(), 'title' => ''];
         $post->annotations = ['reply' => [
             $key => $make($key, $mine->getURL()),
             $remote => $make('https://remote.example/claim', $mine->getURL()),
@@ -149,7 +149,7 @@ final class AnnotationLayoutTest extends \Tests\IdnoTestCase
         $mine = \Idno\Core\Idno::site()->session()->currentUser();
         $post = $this->post();
         $base = $this->base() . '2026/a-note/annotations/';
-        $make = fn (string $key, array $more): array => ['permalink' => $key, 'owner_name' => 'X', 'owner_url' => $mine->getURL(), 'owner_image' => '', 'content' => '', 'time' => 1, 'title' => ''] + $more;
+        $make = fn (string $key, array $more): array => ['permalink' => $key, 'owner_name' => 'X', 'owner_url' => $mine->getURL(), 'owner_image' => '', 'content' => '', 'time' => time(), 'title' => ''] + $more;
         $post->annotations = ['reply' => [
             $base . 'marked' => $make($base . 'marked', ['made_here' => true]),
             $base . 'unmarked-forged' => $make($base . 'unmarked-forged', ['made_here' => false]),

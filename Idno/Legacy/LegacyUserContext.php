@@ -33,7 +33,7 @@ final class LegacyUserContext implements UserContext
                 if (($user instanceof User && $user->isClosed()) || (!$user instanceof User && \Idno\Core\AccountRegistry::isDeletedAccount($uuid))) {
                     // Queued as an account that has since been closed or deleted: nothing is done as it (nothing is announced for a closed actor), and the
                     // event is dropped, not failed: one line says so
-                    \Idno\Core\Idno::site()->logging()->info('An event queued as an account that was closed or deleted was dropped.');
+                    \Idno\Core\Idno::site()->logging()->warning('An event queued as an account that was closed or deleted was dropped.');
 
                     return null;
                 }

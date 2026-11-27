@@ -11,8 +11,8 @@ namespace Idno\Core;
  *  - `closed_accounts`: the uuids of the accounts that are closed (User::close()) and not yet deleted. EntityRepository leaves the records these own out of every
  *    listing and count for everyone but an administrator (AccessContext::closedOwners()), and Entity::canRead() asks it. The set is small, and an uuid is in it
  *    from the moment the account is closed until its record is deleted.
- *  - `reserved_handles`: the handles of accounts that were deleted, each with the account's uuid and the time. A reserved handle is "taken" for a
- *    registration, an administrator creating a user, the installer's administrator step and a change of handle, until an administrator releases it on the
+ *  - the handles of accounts that were deleted are RECORDS of their own (Idno\Entities\ReservedHandle), looked up only when an account is created or renamed and
+ *    on the Users page, never loaded with every request. A reserved handle is "taken" for a registration, an administrator creating a user, the installer's administrator step and a change of handle, until an administrator releases it on the
  *    Users page. So a newcomer can neither inherit the old member's annotations (an annotation is tied to its author by the profile address, which is made
  *    of the handle) nor be taken for the old member's ActivityPub actor.
  *
@@ -36,6 +36,18 @@ final class AccountRegistry
         return is_string($uuid) && $uuid !== '' && in_array($uuid, self::closed(), true);
     }
 
+    /// The most accounts that can be closed at once: each adds a value to the exclusion every visitor's listing carries, and a statement can hold only so many
+    public const MAX_CLOSED = 500;
+
+    public static function closedIsFull(): bool
+    {
+        return count(self::closed()) >= self::MAX_CLOSED;
+    }
+
+    /**
+     * Adds the uuid to the stored set, against a fresh read of the settings. Throws when the settings could not be saved: the set is the guarantee that a closed
+     * account's posts are in no listing, so a failure to write it is a failure, never ignored.
+     */
     public static function markClosed(string $uuid): void
     {
         self::change(static function (Config $config) use ($uuid): void {
@@ -61,31 +73,15 @@ final class AccountRegistry
     {
         $handle = mb_strtolower(trim($handle), 'UTF-8');
         if (class_exists(\Normalizer::class)) {
-            $handle = (string) preg_replace('/\p{Mn}+/u', '', (string) \Normalizer::normalize($handle, \Normalizer::FORM_D));
+            $handle = (string) preg_replace('/\p{Mn}+/u', '', (string) \Normalizer::normalize($handle, \Normalizer::FORM_KD));
         }
 
         return str_replace('ß', 'ss', $handle);
     }
 
-    /**
-     * @return array<string, array{handle: string, uuid: string, at: int}> by normalised handle
-     */
-    public static function reservedHandles(): array
-    {
-        $reserved = [];
-        $stored = Idno::site()->config()->reserved_handles;
-        foreach (is_array($stored) ? $stored : [] as $key => $entry) {
-            if (is_array($entry) && is_string($entry['handle'] ?? null)) {
-                $reserved[(string) $key] = ['handle' => $entry['handle'], 'uuid' => (string) ($entry['uuid'] ?? ''), 'at' => (int) ($entry['at'] ?? 0)];
-            }
-        }
-
-        return $reserved;
-    }
-
     public static function handleIsReserved(mixed $handle): bool
     {
-        return is_string($handle) && $handle !== '' && isset(self::reservedHandles()[self::normaliseHandle($handle)]);
+        return is_string($handle) && $handle !== '' && \Idno\Entities\ReservedHandle::forKey(self::normaliseHandle($handle)) !== false;
     }
 
     /**
@@ -93,25 +89,21 @@ final class AccountRegistry
      */
     public static function isDeletedAccount(string $uuid): bool
     {
-        foreach (self::reservedHandles() as $entry) {
-            if ($entry['uuid'] === $uuid && $uuid !== '') {
-                return true;
-            }
-        }
-
-        return false;
+        return \Idno\Entities\ReservedHandle::hasDeletedAccount($uuid);
     }
 
     public static function reserveHandle(string $handle, string $uuid): void
     {
-        if (self::normaliseHandle($handle) === '') {
+        $key = self::normaliseHandle($handle);
+        if ($key === '' || \Idno\Entities\ReservedHandle::forKey($key) !== false) {
             return;
         }
-        self::change(static function (Config $config) use ($handle, $uuid): void {
-            $reserved = is_array($config->reserved_handles) ? $config->reserved_handles : [];
-            $reserved[self::normaliseHandle($handle)] = ['handle' => $handle, 'uuid' => $uuid, 'at' => time()];
-            $config->reserved_handles = $reserved;
-        });
+        $reserved = new \Idno\Entities\ReservedHandle();
+        $reserved->handle = $key;
+        $reserved->display = $handle;
+        $reserved->account_uuid = $uuid;
+        $reserved->owner = '';
+        $reserved->save(true);
     }
 
     /**
@@ -119,15 +111,11 @@ final class AccountRegistry
      */
     public static function releaseHandle(string $handle): bool
     {
-        $key = self::normaliseHandle($handle);
-        if (!isset(self::reservedHandles()[$key])) {
+        $reserved = \Idno\Entities\ReservedHandle::forKey(self::normaliseHandle($handle));
+        if ($reserved === false) {
             return false;
         }
-        self::change(static function (Config $config) use ($key): void {
-            $reserved = is_array($config->reserved_handles) ? $config->reserved_handles : [];
-            unset($reserved[$key]);
-            $config->reserved_handles = $reserved;
-        });
+        \Idno\Entities\ReservedHandle::unrestricted(static fn () => $reserved->delete());
 
         return true;
     }
@@ -150,7 +138,9 @@ final class AccountRegistry
         $config->init();
         $config->load();
         $change($config);
-        $config->save();
+        if (!$config->save()) {
+            throw new \RuntimeException('The settings could not be saved.');
+        }
         $timezone = $config->config['timezone'] ?? null;
         if (is_string($timezone) && $timezone !== '' && in_array($timezone, timezone_identifiers_list(), true)) {
             date_default_timezone_set($timezone);

@@ -11,26 +11,39 @@ namespace Idno\Core {
 
         /**
          * Runs $work after the answer the page is about to give, wherever the page ends (a legacy page forwards and exits, a controller page returns a Response):
-         * for a controller page when the kernel terminates; for a legacy page in a shutdown function, which closes the connection first (the output the page made is sent with
-         * its length, so the client lets go) and lifts the time limit. Unlike run() it does not answer or end the request itself, so code deep in a page can ask for it.
+         * for a controller page when the kernel terminates, or, when the request never reaches that (a deprecated shell writes its answer and exits), in a shutdown function; for a legacy page in a shutdown function, which closes the connection first (the output the page made is sent with
+         * its length, so the client lets go) and lifts the time limit. The work runs once, whichever of the two runs it. Unlike run() it does not answer or end the request itself, so code deep in a page can ask for it.
          * From the command line there is no answer to wait for and $work runs at once.
          *
          * @param callable $work
          */
         static function later(callable $work): void
         {
-            $page = \Idno\Core\Idno::site()->currentPage();
-            if ($page instanceof \Idno\Legacy\ControllerPage) {
-                $page->context()->afterResponse(\Closure::fromCallable($work));
-
-                return;
-            }
             if (PHP_SAPI === 'cli') {
                 $work();
 
                 return;
             }
-            register_shutdown_function(static function () use ($work): void {
+            $done = false;
+            $once = static function () use ($work, &$done): bool {
+                if ($done) {
+                    return false;
+                }
+                $done = true;
+                $work();
+
+                return true;
+            };
+            $page = \Idno\Core\Idno::site()->currentPage();
+            if ($page instanceof \Idno\Legacy\ControllerPage) {
+                // Run when the kernel terminates, which a request served through a deprecated shell never reaches (the shell writes its answer and exits): the shutdown
+                // function below is for that, and whichever runs first runs the work, once
+                $page->context()->afterResponse(\Closure::fromCallable($once));
+            }
+            register_shutdown_function(static function () use ($once, &$done): void {
+                if ($done) {
+                    return;
+                }
                 ignore_user_abort(true);
                 if (!headers_sent() && ($length = ob_get_length()) !== false) {
                     header('Connection: close');
@@ -45,9 +58,13 @@ namespace Idno\Core {
                 }
                 set_time_limit(0);
                 try {
-                    $work();
+                    $once();
                 } catch (\Throwable $e) {
-                    \Idno\Core\Idno::site()->logging()->error('Work after the response failed: ' . get_class($e));
+                    try {
+                        \Idno\Core\Idno::container()->get(\Idno\Http\Page\PageLifecycle::class)->reportException($e);
+                    } catch (\Throwable) {
+                        \Idno\Core\Idno::site()->logging()->error('Work after the response failed: ' . get_class($e));
+                    }
                 }
             });
         }

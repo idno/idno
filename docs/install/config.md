@@ -236,3 +236,10 @@ downloads when a Micropub client gives it a URL.
 The internal identifier used to store the user session. The default is 'idno'.
 
     sessionname = 'idnosession'
+
+**account_removal_seconds**<br>
+How long one run of the removal of a deleted account works before it stops and carries on (after the page has answered, or in the next queued message). Not set by default: 60% of PHP's
+`max_execution_time`, or 30 seconds where that has no limit. A value is kept between 0 and that 60% (an hour where there is no limit); 0 removes one record at a time. No form sets it. It can
+also be given as `IDNO_ACCOUNT_REMOVAL_SECONDS`.
+
+    account_removal_seconds = 20

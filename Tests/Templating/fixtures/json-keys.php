@@ -35,7 +35,7 @@ return [
     'admin /admin/statistics/' => ['messages', 'report', 'statistics', 'tab', 'title'],
     'admin /admin/styles/' => ['#status 404'],
     'admin /admin/themes/' => ['messages', 'theme', 'themes_stored', 'themes_with_preview', 'title'],
-    'admin /admin/users/' => ['count', 'formFields', 'invitation_batch', 'invitation_days', 'invitations', 'items', 'items_per_page', 'mail_configured', 'messages', 'reserved_handles', 'reserved_handles_more', 'title'],
+    'admin /admin/users/' => ['count', 'formFields', 'invitation_batch', 'invitation_days', 'invitations', 'items', 'items_per_page', 'mail_configured', 'messages', 'reserved_handles', 'reserved_offset', 'reserved_per_page', 'reserved_total', 'title'],
     'admin /admin/webhooks/' => ['messages', 'title'],
     'admin /admin/welcome/' => ['compose_url', 'mail_is_set_up', 'messages', 'queue_is_on', 'title'],
     'admin /checkin/edit/' => ['content_type', 'formFields', 'label', 'messages', 'object', 'posseLinks', 'services', 'title'],
