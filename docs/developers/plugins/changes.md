@@ -27,6 +27,29 @@ the database back end supports. Any other array makes the query match nothing, o
 * A page that reads one text from the request should use `$this->getTextInput('name')`, which gives an empty string
   when the field was sent as an array (`name[]=x`).
 
+## Deleting an account
+
+Deleting an account is a job in two stages (`Idno\Entities\User::delete()`): the account is closed
+(`User::close()`, `User::isClosed()`), and then what it owns is deleted entity by entity, the account record last.
+
+- `User::delete()` returns `true` only when the account is gone. On a site with the asynchronous queue, or when the
+  job did not finish in the request, it returns `false` and the account stays closed while the rest is removed.
+  Don't read `false` as "nothing happened".
+- **An entity class that belongs to the site, not to the member who made it**, must say so, or its records are
+  deleted with the account of whoever made them: call `\Idno\Core\AccountContent::keep(YourClass::class)` in your
+  plugin's `registerEventHooks()`. Core keeps users, access groups, invitations, link previews, queued events and the
+  StaticPages plugin's pages. Everything else an account owns is its content.
+- Your `delete` and `deleted` listeners still run for every entity that is removed with an account. One that tells
+  another server about each post (a syndication plugin) should do nothing while
+  `\Idno\Core\AccountContent::removalInProgress()` is true; `Entity::unsyndicate()` already does nothing then. Listen
+  to `account/closed` (`object`: the user, which still has its keys and settings) to say once that the account is gone.
+- A listing or count made through `getObjects()` / `countObjects()` (so `Entity::get()`, `getFromX()`,
+  `countFromX()`) leaves out what a closed account owns, for everyone but an administrator. A page that draws a
+  member by handle should treat a closed account as missing: `$user->isClosed()`.
+- Before giving somebody a username, ask `\Idno\Core\AccountRegistry::handleIsReserved($handle)` as well as
+  `User::getByHandle()`: the usernames of deleted accounts are kept back until an administrator releases them.
+- `AsynchronousQueue::enqueue()` takes `false` as its fourth argument to queue an event that runs as nobody.
+
 ## The feed reader was removed
 
 The feed reader (following a feed to read its items in the site, at `/following/` and `/stream/`) was removed.

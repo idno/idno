@@ -43,7 +43,7 @@ namespace IdnoPlugins\Portfolios\Pages {
             }
             // As the profile does: a member banned together with everything they posted has
             // no profile to show, and no portfolios
-            if ($member->isHiddenByBan() && !Idno::site()->session()->isAdmin()) {
+            if (($member->isHiddenByBan() || $member->isClosed()) && !Idno::site()->session()->isAdmin()) {
                 $this->noContent();
             }
 

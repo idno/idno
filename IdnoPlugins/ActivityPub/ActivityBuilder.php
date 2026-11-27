@@ -105,7 +105,7 @@ class ActivityBuilder
         }
         $owner = $entity->getOwner();
 
-        return $owner instanceof User && !$owner->isBanned();
+        return $owner instanceof User && !$owner->isBanned() && !$owner->isClosed();
     }
 
     /**
@@ -333,6 +333,29 @@ class ActivityBuilder
         }
 
         return $activity;
+    }
+
+    /**
+     * The activity that tells other servers a local account is gone: a Delete whose object
+     * is the actor itself. Mastodon and the servers like it answer by removing what they
+     * hold of the actor, its posts included, so no Delete is sent for each post. Its id is
+     * unique to each deletion.
+     *
+     * @param User $actor The account that is being deleted
+     * @return array ActivityPub Delete activity
+     */
+    public static function buildActorDelete(User $actor): array
+    {
+        $actorId = $actor->getActivityPubActorID();
+
+        return [
+            '@context' => 'https://www.w3.org/ns/activitystreams',
+            'id'       => $actorId . '#delete-' . time() . '-' . bin2hex(random_bytes(4)),
+            'type'     => 'Delete',
+            'actor'    => $actorId,
+            'to'       => [self::PUBLIC_AUDIENCE],
+            'object'   => $actorId,
+        ];
     }
 
     /**

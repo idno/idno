@@ -25,8 +25,8 @@ namespace Idno\Pages\Webfinger {
                 if (substr($acct, 0, 5) == 'acct:' && strlen($acct) > 8) {
                     $handle = str_replace('@' . \Idno\Core\Idno::site()->config()->host, '', substr($acct, 5));
                     $user = \Idno\Entities\User::getByHandle($handle);
-                    if ($user && $user->isBanned()) {
-                        $user = false; // A banned member is not found
+                    if ($user && ($user->isBanned() || $user->isClosed())) {
+                        $user = false; // A banned member is not found, nor an account that is being deleted
                     }
                     if ($user) {
                         $links = \Idno\Core\Idno::site()->events()->triggerEvent('webfinger', array('object' => $user));

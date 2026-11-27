@@ -22,6 +22,9 @@ namespace Idno\Data {
         protected $dbhost;
         protected $dbport;
 
+        /// The key of a search array under which getObjects() and countObjects() put DataConcierge::closedAccountsExclusion(); no caller sets it
+        const NOT_OWNED_BY_CLOSED = '$notOwnedByClosed';
+
         function __construct($dbuser = null, $dbpass = null, $dbname = null, $dbhost = null, $dbport = null)
         {
             $this->dbuser = $dbuser;
@@ -198,6 +201,12 @@ namespace Idno\Data {
             // Join the rest of the search query elements to this search
             $query_parameters = array_merge($query_parameters, $search);
 
+            // Nothing a closed account owns is listed (after the caller's conditions, so none of them lifts it)
+            unset($query_parameters[self::NOT_OWNED_BY_CLOSED]);
+            if ($exclusion = $this->closedAccountsExclusion()) {
+                $query_parameters[self::NOT_OWNED_BY_CLOSED] = $exclusion;
+            }
+
             // Prepare the fields array for searching, if required
             if (!empty($fields) && is_array($fields)) {
                 $fields = array_flip($fields);
@@ -278,6 +287,12 @@ namespace Idno\Data {
 
             // Join the rest of the search query elements to this search
             $query_parameters = array_merge($query_parameters, $search);
+
+            // Nothing a closed account owns is counted
+            unset($query_parameters[self::NOT_OWNED_BY_CLOSED]);
+            if ($exclusion = $this->closedAccountsExclusion(true)) {
+                $query_parameters[self::NOT_OWNED_BY_CLOSED] = $exclusion;
+            }
 
             return $this->countRecords($query_parameters, $collection);
         }

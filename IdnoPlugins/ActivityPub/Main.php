@@ -165,6 +165,10 @@ class Main extends Plugin
             if ($object instanceof ActivityPubFollower) return;
             if ($object instanceof \Idno\Entities\AsynchronousQueuedEvent) return;
 
+            // What the removal of an account deletes is not announced post by post: followers'
+            // servers were told once, when the account was closed, that the actor is gone
+            if (\Idno\Core\AccountContent::removalInProgress()) return;
+
             // A draft was never sent to anyone, so there is nothing to take back
             if (!self::shouldFederateDeletion($object)) return;
 
@@ -180,6 +184,27 @@ class Main extends Plugin
             } catch (\Exception $e) {
                 \Idno\Core\Idno::site()->logging()->error('ActivityPub: Error building Delete activity: ' . $e->getMessage());
             }
+        });
+
+        // -------------------------------------------------------
+        // An account is closed (the first step of deleting it): its followers' servers
+        // are sent one Delete of the actor, signed now, while the account has its key
+        // -------------------------------------------------------
+        \Idno\Core\Idno::site()->events()->addListener('account/closed', function (\Idno\Core\Event $event) {
+            $user = $event->data()['object'] ?? null;
+            if ($user instanceof User && !($user instanceof \Idno\Entities\RemoteUser)) {
+                Delivery::announceActorDeleted($user);
+            }
+        });
+
+        // A delivery that was signed when it was queued (the Delete of an actor)
+        \Idno\Core\Idno::site()->events()->addListener('activitypub/deliver-signed', function (\Idno\Core\Event $event) {
+            $data = $event->data();
+            if (empty($data['inbox']) || empty($data['body']) || empty($data['headers']) || !is_string($data['inbox']) || !is_string($data['body']) || !is_array($data['headers'])) {
+                \Idno\Core\Idno::site()->logging()->warning('ActivityPub: Incomplete signed delivery event data');
+                return;
+            }
+            Delivery::deliverSigned($data['inbox'], $data['body'], $data['headers']);
         });
 
         // -------------------------------------------------------

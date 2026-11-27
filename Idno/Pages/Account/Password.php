@@ -42,7 +42,8 @@ namespace Idno\Pages\Account {
             $this->reverseGatekeeper();
             $email_address = $this->getTextInput('email'); // A text: a field sent as an array is an empty one
 
-            if ($user = User::getByEmail($email_address)) {
+            // (an account that is closed is being deleted: it is sent no code)
+            if (($user = User::getByEmail($email_address)) && !$user->isClosed()) {
 
                 if ($auth_code = $user->addPasswordRecoveryCode()) {
 

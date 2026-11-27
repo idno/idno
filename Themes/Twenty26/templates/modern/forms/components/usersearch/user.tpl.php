@@ -40,7 +40,10 @@ if ($user instanceof \Idno\Entities\User) {
             </div>
             <div class="idno-user-meta-item">
                 <?php
-                if ($user instanceof \Idno\Entities\RemoteUser) {
+                if ($user->isClosed()) {
+                    // Being deleted: the state, what is left, and the control that carries on
+                    echo $this->__(['user' => $user])->draw('forms/components/usersearch/user/closed');
+                } else if ($user instanceof \Idno\Entities\RemoteUser) {
                     echo '<span>' . \Idno\Core\Idno::site()->language()->_('Remote member') . '</span>';
                 } else if ($user->isAdmin()) {
                     echo '<strong>' . \Idno\Core\Idno::site()->language()->_('Administrator') . '</strong>';
@@ -51,7 +54,7 @@ if ($user instanceof \Idno\Entities\User) {
             </div>
         </div>
         <div class="idno-user-actions">
-            <?php if (!$isSelf) {
+            <?php if (!$isSelf && !$user->isClosed()) {
                 // Admin toggle
                 if (!($user instanceof \Idno\Entities\RemoteUser)) {
                     if ($user->isAdmin()) {

@@ -30,6 +30,10 @@ namespace Idno\Pages\User {
             if ($user->isHiddenByBan() && !\Idno\Core\Idno::site()->session()->isAdmin()) {
                 $this->noContent();
             }
+            // An account that is being deleted has no profile either
+            if ($user->isClosed() && !\Idno\Core\Idno::site()->session()->isAdmin()) {
+                $this->noContent();
+            }
 
             // Users own their own profiles
             $this->setOwner($user);

@@ -31,6 +31,13 @@
     </div>
     <?php } ?>
 
+    <?php if (!empty($vars['reserved_handles']['items'])) { ?>
+    <div class="idno-admin-card" id="reserved-usernames">
+        <h2 class="idno-admin-card-title"><?= \Idno\Core\Idno::site()->language()->_('Usernames of deleted accounts') ?></h2>
+        <?= $this->__(['reserved_handles' => $vars['reserved_handles']])->draw('admin/users/reserved') ?>
+    </div>
+    <?php } ?>
+
     <div class="idno-admin-card">
         <form action="<?= \Idno\Core\Idno::site()->config()->getDisplayURL() ?>admin/users" method="post">
             <h2 class="idno-admin-card-title"><?= \Idno\Core\Idno::site()->language()->_('Block email addresses') ?></h2>

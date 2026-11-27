@@ -40,7 +40,7 @@ class PageDocument
         $entity = ($page && $page->isPermalink()) ? $page->getEntity() : null;
 
         if ($entity instanceof User) {
-            if ($entity->isBanned()) {
+            if ($entity->isBanned() || $entity->isClosed()) {
                 return self::error(410);
             }
 

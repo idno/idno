@@ -108,6 +108,11 @@ class Main extends Plugin
         // A post is being deleted: delete its record (via the queue)
         $events->addListener('delete', function (\Idno\Core\Event $event) {
             $object = $event->data()['object'] ?? null;
+            // The posts of an account that is being deleted are not taken off its PDS one by
+            // one: the PDS is the member's own, and the connection goes with the account
+            if (\Idno\Core\AccountContent::removalInProgress()) {
+                return;
+            }
             if (self::isContent($object) && self::isEnabled() && (self::shouldSync($object) || self::hasRemoteRecord($object)) && self::sessionFor($object)) {
                 \Idno\Core\Idno::site()->queue()->enqueue('default', 'atmosphere/delete', ['object' => $object]);
             }

@@ -25,7 +25,7 @@ class Outbox extends \Idno\Common\Page
         }
 
         // A banned member has no actor: other servers are told it is gone
-        if ($user->isBanned()) {
+        if ($user->isBanned() || $user->isClosed()) {
             $this->goneContent();
             return;
         }
