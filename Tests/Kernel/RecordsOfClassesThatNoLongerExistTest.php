@@ -13,7 +13,7 @@ use Tests\Support\PrivateSiteTestCase;
  *
  * The class names are strings on purpose: no class of that name exists to build.
  */
-final class RemovedFeedReaderRecordsTest extends PrivateSiteTestCase
+final class RecordsOfClassesThatNoLongerExistTest extends PrivateSiteTestCase
 {
     /**
      * @return array{bob: string, ids: array<string, string>}

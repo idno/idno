@@ -52,6 +52,20 @@ final class RedirectTargetTest extends TestCase
     }
 
     /**
+     * Catches: a site installed under a subdirectory (`https://site.example/blog/`) being taken for another host, so that every redirect to one of its own
+     * pages was sent to the site's address; and an address on another host that borrows the subdirectory's path being kept.
+     */
+    public function testASiteInASubdirectoryKeepsItsOwnAddressesAndRefusesAnotherHostWithTheSamePath(): void
+    {
+        $site = 'https://site.example/blog/';
+
+        $this->assertSame('https://site.example/blog/2026/a-note', RedirectTarget::sanitize('https://site.example/blog/2026/a-note', $site));
+        $this->assertSame('/blog/2026/a-note', RedirectTarget::sanitize('/blog/2026/a-note', $site));
+        $this->assertSame($site, RedirectTarget::sanitize('https://evil.test/blog/2026/a-note', $site));
+        $this->assertSame($site, RedirectTarget::sanitize('https://site.example.evil.test/blog/', $site));
+    }
+
+    /**
      * @dataProvider cases
      */
     public function testSanitize(string $url, string $site, string $expected): void

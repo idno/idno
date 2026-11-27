@@ -146,25 +146,6 @@ final class EntityAliasesTest extends TestCase
         }
     }
 
-    /**
-     * The feed reader's classes are gone and no alias is declared for them, so a row of theirs that a site still holds keeps the class name as its type
-     * and is never found by a class.
-     */
-    public function testTheRemovedFeedReaderClassesHaveNoAlias(): void
-    {
-        $map = new AttributeTypeMap();
-        foreach (['Feed', 'FeedItem', 'Subscription'] as $name) {
-            $class = 'Idno\\Entities\\Reader\\' . $name;
-            self::assertFalse(class_exists($class), $class);
-            self::assertSame($class, $map->typeFor($class), $class);
-            self::assertSame([$class], $map->typesFor($class), $class);
-        }
-        foreach (self::entityClasses() as $name => $class) {
-            $attribute = self::attribute($class);
-            self::assertNotContains($attribute?->alias, ['feed', 'feed_item', 'feed_subscription'], $name);
-        }
-    }
-
     public function testTheAliasesOfTheCoreAndBundledClasses(): void
     {
         $map = new AttributeTypeMap();

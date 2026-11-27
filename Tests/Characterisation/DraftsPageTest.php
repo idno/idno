@@ -10,8 +10,7 @@ use Tests\Support\RecordedAnswers;
  * What the member's drafts page (`/drafts/`) answers, recorded from the legacy page over HTTP: the status, headers and body of it to a visitor, to members
  * with and without drafts, to an administrator, in each template type, for each page of the drafts, for each method, for a signed request and for a request
  * that says it is an XHR one. The answers are `Tests/Characterisation/fixtures/answers/member/`; the page that replaced the legacy one is held to them.
- * Each case is a literal, in the call. The addresses of the feed reader that was removed (`/following/`, `/stream/` and the pages under `/following/`)
- * are the site's missing page.
+ * Each case is a literal, in the call.
  *
  * The viewers are `visitor` (nobody), `member` (Carol, who has no draft), `owner` (Bob, who has twenty-six drafts, so that the drafts have a second page)
  * and `admin` (Ada, who has two drafts).
@@ -198,29 +197,6 @@ final class DraftsPageTest extends PermalinkSiteCase
             $this->assertSame(404, $answer->status, $case);
             $this->assertStringContainsString("This page can't be found", html_entity_decode($answer->body, ENT_QUOTES), $case);
             $this->assertNull($answer->header('Location'), $case);
-        }
-    }
-
-    /**
-     * The addresses of the feed reader that was removed (the following list, the pages that followed a feed, the stream of the items of the feeds) are
-     * the site's missing page for every viewer and method: the pages that served them are gone, and no placeholder holds a place for them.
-     */
-    public function testTheAddressesOfTheRemovedFeedReaderAreTheNotFoundPage(): void
-    {
-        $paths = ['/following/', '/following', '/following/add/', '/following/confirm/?feed=https%3A%2F%2Ffeed.example%2F', '/following/refresh/', '/stream/', '/stream'];
-        foreach ($paths as $path) {
-            foreach (['visitor', 'member', 'owner', 'admin'] as $viewer) {
-                $answer = $this->site()->request('GET', $path, $this->asViewer($viewer));
-                $this->assertSame(404, $answer->status, $viewer . ' ' . $path);
-                $this->assertStringContainsString("This page can't be found", html_entity_decode($answer->body, ENT_QUOTES), $viewer . ' ' . $path);
-            }
-            $this->assertSame(404, $this->site()->request('HEAD', $path)->status, 'HEAD ' . $path);
-            $this->assertSame(404, $this->site()->request('GET', $path . (str_contains($path, '?') ? '&' : '?') . '_t=json', $this->asViewer('owner'))->status, 'json ' . $path);
-        }
-        foreach (['/following/', '/following/add/', '/following/confirm/', '/following/refresh/'] as $path) {
-            $answer = $this->site()->request('POST', $path, $this->asViewer('owner'), ['feed' => 'https://feed.example/', '__bTk' => $this->tokenOf('owner')]);
-            $this->assertSame(404, $answer->status, 'POST ' . $path);
-            $this->assertNull($answer->header('Location'), 'POST ' . $path);
         }
     }
 

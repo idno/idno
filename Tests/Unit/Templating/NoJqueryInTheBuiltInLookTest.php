@@ -36,7 +36,6 @@ final class NoJqueryInTheBuiltInLookTest extends TestCase
         foreach ($this->templates($root) as $relative => $path) {
             $this->assertDoesNotMatchRegularExpression('~jquery~i', (string) preg_replace('~\{#.*?#\}~s', '', (string) file_get_contents($path)), $relative . ' names jQuery');
         }
-        $this->assertFileDoesNotExist($root . '/templates/default/shell/simple.html.twig', 'the onboarding shell, the last page that loaded jQuery, is gone');
     }
 
     /** @return list<string> */

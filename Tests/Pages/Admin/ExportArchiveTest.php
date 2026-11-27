@@ -307,8 +307,6 @@ namespace Tests\Pages\Admin {
             foreach (['/Idno/Pages/Admin/Diagnostics.php', '/Idno/Portability/ArchiveExporter.php'] as $file) {
                 $this->assertStringContainsString('SettingsRedactor::redact(', file_get_contents(dirname(__DIR__, 3) . $file));
             }
-            // and no second rule is left in the configuration class
-            $this->assertStringNotContainsString('redactSecrets', file_get_contents(dirname(__DIR__, 3) . '/Idno/Core/Config.php'));
         }
 
         public function testRecordDumpIsACompleteCopyOfTheSite()

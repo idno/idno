@@ -40,7 +40,6 @@ final class TrustedProxiesSiteTest extends PrivateSiteTestCase
     public function testWithoutTheSettingAForwardedHttpsRequestIsSecureAsBefore(): void
     {
         // Catches: an upgraded site behind a proxy that sets nothing losing its Secure session cookie.
-        // An upgraded site behind a proxy sets nothing: its members must keep the Secure cookie.
         $this->assertMatchesRegularExpression('/;\s*secure\b/i', $this->loginPageCookie('', ['X-Forwarded-Proto' => 'https']));
     }
 
@@ -71,5 +70,9 @@ final class TrustedProxiesSiteTest extends PrivateSiteTestCase
         $response = (new HttpSiteClient($this->startExtraServer(['IDNO_TRUSTED_PROXIES' => '10.0.0.0/0'])))->request('GET', 'session/login');
 
         $this->assertSame(500, $response->status);
+        // The message naming the entry is for the log and the console: a visitor learns nothing of the setting, a server path or a trace.
+        foreach (['trusted_proxies', '10.0.0.0', '/Idno/', '.php', 'Stack trace', '#0 '] as $leak) {
+            $this->assertStringNotContainsString($leak, $response->body, $leak);
+        }
     }
 }

@@ -205,7 +205,8 @@ believes. IP addresses or CIDR ranges (IPv4 or IPv6; a prefix length of 0 is ref
 address that made the request: use it only when every request comes through a proxy) and `PRIVATE_SUBNETS` (the private
 address ranges), as a list in `config.ini`, or comma-separated in the environment variable `IDNO_TRUSTED_PROXIES`. Like
 `http_allow_private`, it is read from `config.ini` or the environment only, never from the settings saved in the
-database, and an entry that is none of these stops the site with a message naming the setting.
+database. An entry that is none of these stops the whole site until it is fixed: visitors get a generic error page, and every
+command-line command exits 1; the message that names the setting and the entry is in the error log and on the console.
 
     trusted_proxies[] = '10.0.0.0/8'
     trusted_proxies[] = '192.0.2.10'
@@ -220,7 +221,7 @@ The proxy must OVERWRITE `X-Forwarded-Proto`, `X-Forwarded-For` and `X-Forwarded
 Idno believes the leftmost value, so a proxy that appends lets a client choose it (in nginx, `proxy_set_header
 X-Forwarded-Proto $scheme;` overwrites; `$proxy_add_x_forwarded_for` appends, which is right only for `X-Forwarded-For`
 when the proxy is itself behind another trusted proxy). With the setting on, a connection on port 443 alone no longer
-means https (the web server's `HTTPS` variable, any value but `off`, or the proxy's header does). The word `*` is
+means https (the web server's `HTTPS` variable, with any value but `off`, `0` or empty, or the proxy's header does). The word `*` is
 refused here, unlike in `http_allow_private`: name the proxies. An entry `REMOTE_ADDR` trusts whichever address made the
 request, which is everybody, so use it only when the server can be reached through the proxy alone.
 

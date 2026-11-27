@@ -496,26 +496,6 @@ final class BuiltInLookTest extends RenderedSiteTestCase
         $this->assertStringNotContainsString('A draft note, not yet published.', $visitor->body);
         $this->assertSame(200, $member->status);
         $this->assertStringContainsString('A draft note, not yet published.', $member->body);
-        $this->assertFalse(class_exists('Themes\\Twenty26\\Pages\\Drafts'));
-    }
-
-    public function testNoTemplateReferencesThemesTwenty26(): void
-    {
-        $root = dirname(__DIR__, 2);
-        $directories = array_merge([$root . '/templates'], glob($root . '/IdnoPlugins/*/templates', GLOB_ONLYDIR) ?: []);
-        $found = [];
-        foreach ($directories as $directory) {
-            foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($directory, \FilesystemIterator::SKIP_DOTS)) as $file) {
-                if ($file->isFile() && preg_match('#Themes/Twenty26|dist/modern#', (string) file_get_contents($file->getPathname())) === 1) {
-                    $found[] = substr($file->getPathname(), strlen($root) + 1);
-                }
-            }
-        }
-
-        $this->assertSame([], $found);
-        $this->assertDirectoryDoesNotExist($root . '/Themes/Twenty26');
-        $this->assertFileExists($root . '/css/idno-2026.min.css');
-        $this->assertFileExists($root . '/js/idno-2026.min.js');
     }
 
     public function testNoCoreOrBundledDirectoryHasAModernTemplateType(): void

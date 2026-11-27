@@ -326,7 +326,7 @@ final class LegacyHomeStreamBehaviourTest extends PrivateSiteTestCase
         ];
         PHP);
 
-        $this->assertSame(['types' => [\IdnoPlugins\Like\Like::class], 'friendly' => []], $result['liked'], 'the request\'s types, as given, in an array');
+        $this->assertSame(['types' => [\IdnoPlugins\Like\Like::class], 'friendly' => []], $result['liked'], 'the requested types that are registered content types, in an array');
         $this->assertSame([\IdnoPlugins\Text\Entry::class], $result['articles']);
         $this->assertTrue($result['everything'], 'no types asked for: every registered class');
         $this->assertSame([\IdnoPlugins\Like\Like::class], $result['bookmarkClasses']);

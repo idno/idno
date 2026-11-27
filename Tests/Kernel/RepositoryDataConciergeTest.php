@@ -666,7 +666,6 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
         }
         $this->assertSame($adapterOnMysql, $this->bootWithDatabase('beanstalk-mysql', $rds), 'beanstalk-mysql');
         $this->assertSame(['class' => FixtureDataBackend::class, 'family' => 'other'], $this->bootWithDatabase(FixtureDataBackend::class));
-        $this->assertFalse(class_exists('Idno\\Data\\MySQL') || class_exists('Idno\\Data\\AbstractSQL'), 'the old SQL backend is gone');
     }
 
     /**
@@ -904,10 +903,8 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
             $this->assertSame('mongo', ConnectionParameters::driverFamily(['database' => $database]), $database);
             $this->assertNull(ConnectionParameters::backendClass(['database' => $database]), $database);
         }
-        // The backend class is gone, and LegacyServiceFactory::db() refuses these names (the schema
+        // LegacyServiceFactory::db() refuses these names (the schema
         // gate keeps the legacy application from booting on such a site, so this is a last defence).
-        $this->assertFileDoesNotExist(dirname(__DIR__, 2) . '/Idno/Data/Mongo.php');
-        $this->assertFalse(class_exists('Idno\\Data\\Mongo'));
         $source = (string) file_get_contents(dirname(__DIR__, 2) . '/Idno/Legacy/LegacyServiceFactory.php');
         $this->assertStringContainsString("if (\$family === 'mongo') {", $source);
         $this->assertStringContainsString('mongoRetired()', $source);

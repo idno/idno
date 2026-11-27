@@ -160,7 +160,7 @@ final class TrustedProxiesTest extends TestCase
 
     public function testAForwardedPortIsBelievedFromAListedProxyAndNotFromAnUnlistedPeer(): void
     {
-        // Catches: Config::detectBaseURL() building the site's address with a port a stranger chose.
+        // Catches: an unlisted peer's forwarded port being believed (the answer Config::detectBaseURL() asks before it builds the site's address with a port).
         $forwarded = ['HTTP_X_FORWARDED_PORT' => '8443'];
         $this->assertTrue(TrustedProxies::believesForwardedPort(self::request($forwarded)), 'with no setting, as before: anyone');
 

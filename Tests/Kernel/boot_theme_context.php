@@ -9,7 +9,7 @@ if (PHP_SAPI !== 'cli' && PHP_SAPI !== 'phpdbg') {
 }
 
 /**
- * Subprocess helper for RemovedFeaturesTest: boots the application in a clean PHP process,
+ * Subprocess helper for BootPluginsAndThemesTest: boots the application in a clean PHP process,
  * the way the console or a web request does, and reports what plugin and theme discovery
  * and theme loading did.
  *

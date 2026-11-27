@@ -719,7 +719,6 @@ final class WebserviceAdapterTest extends IdnoTestCase
         $source = (string) file_get_contents(dirname(__DIR__, 2) . '/Idno/Core/Webservice.php');
 
         $this->assertSame(0, preg_match('/\bcurl_[a-z_]+\s*\(/', $source));
-        $this->assertFalse(method_exists(Webservice::class, 'webservice_exec'));
     }
 
     public function testTheClientIsFetchedAtCallTimeNotKept(): void

@@ -106,6 +106,8 @@ final class WebmentionLegacyPageTest extends PrivateSiteTestCase
     public function testAPageTheLegacyRouterServesAndThatTakesNoMentionIsNoTarget(): void
     {
         // (the page has a getContent() and the base page's webmentionContent(): a mention of it is refused before the source is fetched)
+        // The list of fetched pages is kept per port in the temporary directory and a port is reused by other classes' sites: forget what an earlier test left.
+        $this->site()->request('GET', '_test/remote-fetched');
         $answer = $this->site()->request('POST', 'webmention/', [], ['source' => 'http://93.184.216.34/never-fetched', 'target' => $this->baseUrl() . 'session/login']);
 
         $this->assertSame(400, $answer->status);

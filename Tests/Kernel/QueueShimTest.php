@@ -266,38 +266,4 @@ final class QueueShimTest extends TestCase
         $this->assertTrue(Idno::site()->queue()->isComplete($id));
         $this->assertSame('done', Idno::site()->queue()->getResult($id));
     }
-
-    /**
-     * The plugin's own test of whether federation can work is the adapter's: ActivityPub, and the
-     * StandardSiteSync backfill, ask `isAsynchronous()` of the site's queue. Over HTTP on a site with
-     * the asynchronous queue and on one without: see Tests\Queue\QueueSettingSiteTest.
-     */
-    public function testTheDeletedClassesAreGoneAndNothingBundledNamesThem(): void
-    {
-        $root = dirname(__DIR__, 2);
-        $this->assertFileDoesNotExist($root . '/Idno/Core/AsynchronousQueue.php');
-        $this->assertFileDoesNotExist($root . '/Idno/Core/SynchronousQueue.php');
-        $this->assertDirectoryDoesNotExist($root . '/ConsolePlugins/EventQueueService');
-        $this->assertDirectoryDoesNotExist($root . '/Idno/Pages/Service/Queues');
-        $this->assertFalse(class_exists('Idno\\Core\\AsynchronousQueue', false));
-        $this->assertFalse(class_exists('Idno\\Core\\SynchronousQueue', false));
-
-        $hits = [];
-        foreach (['Idno', 'IdnoPlugins', 'ConsolePlugins', 'templates', 'Themes', 'config', 'bin'] as $directory) {
-            $files = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root . '/' . $directory, \FilesystemIterator::SKIP_DOTS));
-            foreach ($files as $file) {
-                if (!$file->isFile() || !in_array($file->getExtension(), ['php', 'inc'], true)) {
-                    continue;
-                }
-                $text = (string) file_get_contents($file->getPathname());
-                // The setting's value `AsynchronousQueue` is a word of the adapter and the docs; what must
-                // not appear is a class or a page handler under those names.
-                if (preg_match('/Core\\\\(?:Asynchronous|Synchronous)Queue\b|Service\\\\Queues/', $text) === 1) {
-                    $hits[] = substr($file->getPathname(), strlen($root) + 1);
-                }
-            }
-        }
-        // The adapter names the setting's values; nothing else may name the classes.
-        $this->assertSame([], array_values(array_diff($hits, ['Idno/Legacy/MessengerEventQueue.php'])), 'files that still name a deleted class');
-    }
 }

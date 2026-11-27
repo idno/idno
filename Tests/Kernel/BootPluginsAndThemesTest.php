@@ -8,21 +8,11 @@ use Idno\Config\BootConfig;
 use Idno\Core\Config;
 
 /**
- * Pins features that were removed outright, so they cannot quietly return.
- * Extends the characterisation base class for black-box requests via site().
+ * Which plugins and themes a web request and the console discover and load (the project root's, a configured theme only for a request with a Host
+ * header), and that settings an older site still stores boot without effect. Extends the characterisation base class for black-box requests via site().
  */
-final class RemovedFeaturesTest extends \Tests\Characterisation\CharacterisationTestCase
+final class BootPluginsAndThemesTest extends \Tests\Characterisation\CharacterisationTestCase
 {
-    public function testHubIsGone(): void
-    {
-        $this->assertFalse(class_exists(\Idno\Core\Hub::class));
-        $this->assertFalse(method_exists(\Idno\Core\Idno::class, 'hub'));
-        $this->assertFalse(class_exists('Idno\Pages\Hub\Register\Site'));
-        $this->assertFalse(class_exists('Idno\Pages\Hub\Register\User'));
-        $this->assertSame(404, $this->site()->request('GET', 'hub/register/site/callback')->status);
-        $this->assertSame(404, $this->site()->request('GET', 'hub/register/user/callback')->status);
-    }
-
     public function testHubConfigSettingsAreIgnored(): void
     {
         $config = new Config(new BootConfig(['known_hub' => 'https://hub.example.com/', 'idno_hub' => 'https://hub.example.com/'], false));
@@ -31,45 +21,9 @@ final class RemovedFeaturesTest extends \Tests\Characterisation\Characterisation
         $this->assertTrue(is_string($config->url) && $config->url !== '');
     }
 
-    public function testFeedbackPageSurvivesWithoutHub(): void
+    public function testTheFeedbackPageIsServed(): void
     {
-        // Feedback posts to the project's feedback service, not a hub, so the pages stay.
-        $this->assertTrue(class_exists(\Idno\Pages\Account\Settings\Feedback::class));
         $this->assertNotSame(404, $this->site()->request('GET', 'account/settings/feedback/')->status);
-        $this->assertStringNotContainsString(
-            'hub',
-            (string)file_get_contents((new \ReflectionClass(\Idno\Pages\Account\Settings\Feedback::class))->getFileName())
-        );
-    }
-
-    private const PHANTOM_HOST = 'hosts-removed.test';
-
-    protected function tearDown(): void
-    {
-        try {
-            $this->removeHostsDirectory();
-        } finally {
-            parent::tearDown();
-        }
-    }
-
-    private function removeHostsDirectory(): void
-    {
-        $hosts = dirname(__DIR__, 2) . '/hosts';
-        $base = $hosts . '/' . self::PHANTOM_HOST;
-        foreach (['/IdnoPlugins/Phantom/plugin.ini', '/Themes/PhantomTheme/theme.ini'] as $file) {
-            if (is_file($base . $file)) {
-                unlink($base . $file);
-            }
-        }
-        foreach (['/IdnoPlugins/Phantom', '/IdnoPlugins', '/Themes/PhantomTheme', '/Themes', ''] as $dir) {
-            if (is_dir($base . $dir)) {
-                rmdir($base . $dir);
-            }
-        }
-        if (is_dir($hosts) && count(scandir($hosts)) === 2) {
-            rmdir($hosts);
-        }
     }
 
     /**
@@ -104,39 +58,6 @@ final class RemovedFeaturesTest extends \Tests\Characterisation\Characterisation
         $this->assertIsArray($decoded, "probe did not print JSON.\nstdout: $stdout\nstderr: $stderr");
 
         return $decoded;
-    }
-
-    public function testMultiTenantConstantsAreGone(): void
-    {
-        $this->assertFalse(defined('IDNO_MULTITENANT_HOST'));
-        $this->assertFalse(defined('KNOWN_MULTITENANT_HOST'));
-        $this->assertFalse(method_exists(\Idno\Legacy\LegacyBootstrap::class, 'defineMultitenantHost'));
-
-        // Under PHPUnit there is no Host header, so the constants were never defined here even
-        // before they were removed: a request with a Host header is what used to define them.
-        $this->assertFalse($this->probe('web')['constants_defined'], 'a web request with a Host header must not define them');
-        $this->assertFalse($this->probe('console')['constants_defined']);
-    }
-
-    public function testHostDirectoryPluginsAreIgnored(): void
-    {
-        $dir = dirname(__DIR__, 2) . '/hosts/' . self::PHANTOM_HOST . '/IdnoPlugins/Phantom';
-        $themeDir = dirname(__DIR__, 2) . '/hosts/' . self::PHANTOM_HOST . '/Themes/PhantomTheme';
-        mkdir($dir, 0777, true);
-        mkdir($themeDir, 0777, true);
-        file_put_contents($dir . '/plugin.ini', "[Plugin description]\nname = \"Phantom\"\nversion = \"1.0\"\n");
-        file_put_contents($themeDir . '/theme.ini', "[Theme description]\nname = \"PhantomTheme\"\nversion = \"1.0\"\n");
-
-        $this->assertArrayNotHasKey('Phantom', \Idno\Core\Idno::site()->plugins()->getStored());
-        $this->assertFalse(\Idno\Core\Idno::site()->plugins()->exists('Phantom'));
-
-        // Under PHPUnit there is no Host header; the old code only read hosts/ for a request
-        // that had one, so check in a process that does, whose Host names the directory.
-        $web = $this->probe('web', self::PHANTOM_HOST);
-        $this->assertNotContains('Phantom', $web['plugins_stored']);
-        $this->assertNotContains('Phantom', $web['plugins_loaded']);
-        $this->assertFalse($web['phantom_exists']);
-        $this->assertNotContains('PhantomTheme', $web['themes_stored']);
     }
 
     public function testStoredPluginsAndThemesAreTheProjectRootOnes(): void

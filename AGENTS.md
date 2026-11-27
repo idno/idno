@@ -302,7 +302,7 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
   announced once), a pinned theme, `?_t=modern` (the default type), `?_t=classic` and traversal types (refused, in any letter case: on a file
   system that ignores case `CLASSIC` is the directory), a third-party plugin's `templates/modern/` file (still wins; one deprecation
   line a request) and a theme in `Themes/` (its `default/` override and `[extensions]`), a hostile webmention author, the drafts page
-  and that no template refers to `Themes/Twenty26`. The Twig templates of core and the bundled plugins are proven by the golden pages and by the tests that pin
+  and the drafts page. The Twig templates of core and the bundled plugins are proven by the golden pages and by the tests that pin
   what a golden does not draw; the `.tpl.php` files they replaced are gone, and nothing compares a Twig file with another rendering.
   `Tests/Unit/Templating/CoreTemplatesAreTwigTest` holds the end state: no `.tpl.php` is left under a `default`, `email` or `email-text`
   directory of core or a bundled plugin, and a locator over core and every bundled plugin resolves a Twig file for every name that has one there.
@@ -1326,15 +1326,15 @@ for classes that extend `PageShell`, and holds each to the rule); it is `Idno\Pa
   `Idno::site()->reader()`, the `reader` service), `Idno\Entities\Reader\Feed`, `FeedItem` and `Subscription`, the pages `Idno\Pages\Following\Add`, `Confirm`, `Refresh` and `Home` and the stream page `Idno\Pages\Stream\Home`, the
   templates `following/*`, `entity/FeedItem`, `entity/Subscription` and `content/feed/end` (the Twig files and their `classic` copies), the test route `/_test/hostile/feed`, the `simplepie/simplepie` dependency, and the follow
   bookmarklet's offer to subscribe to the followed person's feed (it follows the person and says so). The five addresses `/following/`, `/following/add/`, `/following/confirm/`, `/following/refresh/` and `/stream/` register nothing: each is in `omitted` in
-  `Tests/Kernel/fixtures/core-routes.php` with its reason, and is the site's 404 page for every viewer and method (`Tests/Characterisation/DraftsPageTest::testTheAddressesOfTheRemovedFeedReaderAreTheNotFoundPage`). WHAT STAYS: following a
+  `Tests/Kernel/fixtures/core-routes.php` with its reason, and is the site's 404 page for every viewer and method. WHAT STAYS: following a
   PERSON (`User::addFollowing()`, the `follow` and `unfollow` events, `/account/settings/following/` and its bookmarklet, the `pubsub_pending`, `pubsub_self`, `pubsub_hub` and `pubsub_secrets` fields of a user) and WebSub for those follows (`Idno\Core\WebSub`, the callback controller), which never
   depended on these classes; the member's drafts page; the `reader` COLLECTION and its table `idno_reader` (the baseline migration creates it and is never edited: it keeps `access`'s index), the 1.x upgrade's copy of the 1.x `reader`
   tables into it (`LegacyDataCopier`, the progress label "Feed reader") and the MongoDB import's of the `reader` collection, because no record is deleted or migrated. WHAT HAPPENS TO A STORED RECORD of a removed class (an upgraded
   site's, in `reader`, or one a save of the old classes put in `entities`): it stays in the database untouched and is in the export archive's SQL dump; no code reads it. A lookup that meets it (`Entity::getFromAll()` and the
   listings built on it, the home page, the profile, a feed, the drafts page) skips it, because `EntityRepository::hydrate()` and `DataConcierge::rowToEntity()` give nothing for a class that does not exist; `getByUUID()` and
   `getByID()` give false, so its address `/view/<id>` is the 410 page; a count (`countFromAll()`, the drafts page's total) still counts the record, as it counts any record whose class is gone. A copy of a 1.x database stores its
-  `type` as the class name (no alias is declared for the removed classes: `AttributeTypeMap::typeFor()` gives the name back). Pinned by `Tests/Kernel/RemovedFeedReaderRecordsTest` (rows of each removed class in both collections;
-  the listings, pages and address above; the rows and the dump), `Tests/Kernel/EntityAliasesTest::testTheRemovedFeedReaderClassesHaveNoAlias` and the copier's test of a 1.x `reader` row. The declared indexes `feed_url` on the three classes and
+  `type` as the class name (no alias is declared for the removed classes: `AttributeTypeMap::typeFor()` gives the name back). Pinned by `Tests/Kernel/RecordsOfClassesThatNoLongerExistTest` (rows of each removed class in both collections;
+  the listings, pages and address above; the rows and the dump) and the copier's test of a 1.x `reader` row. The declared indexes `feed_url` on the three classes and
   the entity-level ones (`slug`, `shorturl`, `url`, `canonical`) those classes carried into `reader` are not declared any more, and an index is never dropped: a database made by an earlier build keeps `ix_feed_url`, `ix_slug` and
   the others on `idno_reader` (unused), and a database made now has only `access` there (the rig's databases need recreating, `composer test:down` then `test:up`, for a fresh one; `UpgradeCommandTest::CORE_INDEXES` and
   `EntityAliasesTest` expect `reader` to hold `access` alone). A third-party plugin that extends or names one of the deleted classes stops the site booting until it is disabled.
@@ -2384,8 +2384,8 @@ the tag pages and the small public endpoints are served through them (and the fi
   were: `siteHasUsers()` (`User::get()`), `singleUserOwner()` (the one administrator of a `single_user` site, else null, with the warning logged when there is not
   exactly one), `isSingleUser()`, `firstAdministrator()` (`User::getOne(['admin' => true])`: what a webmention of the root is passed on to, which does not insist on
   exactly one), `types($friendly, $query, $requested)` (the friendly path's
-  types, `all` for every one; without a path and without a query the configured home page types; without a path and with a query the request's `types` as given;
-  empty is every registered class; the friendly names come back as `array_filter()` left them, keys kept, because the page prints them as `content`),
+  types, `all` for every one; without a path and without a query the configured home page types; without a path and with a query the request's `types` that are registered content types (any other class is dropped);
+  empty, or naming only unregistered classes, is every registered content type; the friendly names come back as `array_filter()` left them, keys kept, because the page prints them as `content`),
   `page($types, $query, $offset)` (published posts only, by the viewer's read groups: `Entity::countFromX()` then `getFromX()` with `items_per_page`; `items` is
   what the finder returned, false included), `creatableTypes()` (the logged-in member's content types, each with `editUrl` set; false for a visitor), `titles()`,
   `siteAddress()` (the configured `url` as written: where the search page sends a query), `lastModified($timestamp)` (the page's `Last-Modified`, from its first item's `updated`, asked for with `PageContext::addHeader()`) 
@@ -5236,9 +5236,9 @@ the event `websub/received`, the tests, the recorded answers and the fixtures. W
   does an event that was queued before the upgrade), and keeps a listener that is added under both names once. Rename an event by adding it there,
   never by triggering two events.
 - `docs/install/upgrade.md` ("Names that changed") and `docs/developers/plugins/upgrading.md` are the places that spell the earlier names, for the
-  one who upgrades. `Tests/Unit/Core/WebSubNamingTest` reads every tracked file (contents and paths) and fails if an earlier name is anywhere but the
-  files it lists, with each exception's reason there (the stub, the alias, the dispatcher, the two upgrade documents, the compatibility test), or
-  outside the kept spellings above, and unless this section's heading is the one place outside them that tells the history. `Tests/Core/WebSubCompatibilityTest` checks
+  one who upgrades. The earlier names appear nowhere else, apart from the kept spellings above: not in code, templates, text, documentation or the
+  names of tests (the stub, the alias, the dispatcher, the two upgrade documents and the compatibility test are the exceptions, and this section's
+  heading is the one other place that tells the history). `Tests/Core/WebSubCompatibilityTest` checks
   that the earlier class name and event name still work, that a listener added under both runs once, and that the callback address is where core
   registers it.
 
@@ -5916,7 +5916,7 @@ no installer writes one.
   with its `/service/vendor/messages` page and the `noping` setting. Don't add a notice, news or
   update feed from a fixed host; if one is ever wanted, it must be off until the site's owner
   configures it, fetched with `Webservice::safeSend()`, and escaped where it is printed.
-  `Tests/Pages/Admin/VendorMessagesTest.php` checks this (the page a new administrator lands on, `/admin/welcome/`, makes no request and adds no message).
+  `Tests/Pages/Admin/WelcomePageTest.php` checks this (the page a new administrator lands on, `/admin/welcome/`, makes no request and adds no message).
 - Known limits of the security model (stated plainly; none is fixed by the authentication changes):
   - The webmention endpoint has no rate limit: an anonymous sender can make the site fetch one public page per POST that names a post a visitor may see (at most six requests: the redirects are followed, each hop is checked), and a mention that changes something is saved and, for a post that is itself a reply, forwarded to its reply targets.
   - A WebSub subscription made before the site sent `hub.secret` (or to a hub whose address is plain http, which WebSub forbids sending a secret to) has no secret, so its deliveries are not signed: anyone who knows a member's id and the id
@@ -5977,6 +5977,8 @@ h-entry, h-card, h-event as appropriate.
 ## Agents code
 
 Idno allows code that has been generated using AI models. When new code is written, 
-it should be tested using the existing test suite. New tests MUST always be written
-for new code, and existing tests MUST always pass. When there are architectural changes, 
+it should be tested using the existing test suite. Every new test names, in its name or a one-line comment, the bug or behaviour it would catch that someone using or extending
+the site would notice; if you cannot name one, do not write the test. No test scans for a name or pins wording, and no test asserts that
+deleted code is absent; a guard that scans code for a forbidden call or shape is fine. Add tests where functional coverage is missing; existing
+tests MUST always pass. When there are architectural changes, 
 the existing tests MUST be updated, and appropriate edits MUST be made to AGENTS.md.

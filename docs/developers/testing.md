@@ -161,6 +161,10 @@ Starting one mode while the other is running stops the other first, which delete
 
 The rig replaces a `configuration/config.ini` that begins with that line (or with `; Idno configuration for the local test rig (see Tests/rig/up.sh).`, which older versions of the rig wrote); that is how it switches modes. It never touches a `configuration/config.ini` without the marker, such as your own site's: it stops with an error before starting or stopping anything. Move your file aside, and put it back when you have finished testing.
 
+## What a test is for
+
+Every new test names, in its name or a one-line comment, the bug or behaviour it would catch that someone using or extending the site would notice; if you cannot name one, do not write the test. No test scans for a name or pins wording, and no test asserts that deleted code is absent; a guard that scans code for a forbidden call or shape is fine. Add tests where functional coverage is missing.
+
 ## Test suites
 
 The suite is split into three test suites in `phpunit.xml`: `Idno Basic Unit Tests` (`Tests/`), `Characterisation` (`Tests/Characterisation/`) and `Plugins` (`IdnoPlugins/*/Tests/`). Use `--testsuite` to run one of them.

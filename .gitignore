@@ -106,5 +106,5 @@ configbackup.ini
 !/data/readme.txt
 /config/reference.php
 
-# Per-host plugin/theme directories were removed; RemovedFeaturesTest creates one transiently
+# Per-host plugin/theme directories are not read any more
 /hosts/
