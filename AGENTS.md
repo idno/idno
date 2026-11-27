@@ -386,6 +386,7 @@ Idno/
                                ShortlinkController and AnnotationController, with Permalink/ShortlinkPages and AnnotationPages and Annotations, the interface of what the annotation pages ask the site;
                                ProfileController, with Profile/ProfilePages, the one implementation of a member's profile page, and Profiles, the interface of what it asks the site;
                                MemberPagesController, with Member/MemberPages, the one implementation of the member's drafts page, and MemberLists, the interface of what it asks the site;
+                               SessionController, with Session/SessionPages, the one implementation of the login page and the logout, and SignIn, the interface of what it asks the site;
                                FileController, with File/FilePages, the one implementation of the page of a stored file (streamed), StoredFiles, the interface of what it asks the site,
                                and its value objects (FileLookup, ServedFile, FileCaching, the enum FileOutcome) and static helpers (ByteRange, FileStream);
                                SiteFilesController, WebfingerController, MentionSearchController and FormTokenController, with
@@ -403,7 +404,7 @@ Idno/
                                BarePage, ControllerRoute (the placeholder in the legacy route table), LegacyRouteOverride, LegacyRoutedPages (and Placeholder/, the placeholders of pages routed by the legacy table: AnnotationView, AnnotationDelete, AnnotationOtherLayout and PermalinkOtherLayout),
                                LegacyPageLifecycle, LegacyPageDrawer, LegacyHeaderReconciler (with HeaderQueue and PhpHeaders:
                                the headers of a site page), the adapters of what the controllers' services ask the site
-                               (LegacyHomeStream, LegacyPermalinks, LegacyAnnotations, LegacyProfiles, LegacyMemberLists, LegacyStoredFiles, LegacySubscriptions, LegacySiteIcons, LegacyWebfingerDirectory, LegacyMentionCandidates, LegacyWebmentionTargets, LegacyWebmentionSources) and
+                               (LegacyHomeStream, LegacyPermalinks, LegacyAnnotations, LegacyProfiles, LegacyMemberLists, LegacySignIn, LegacyStoredFiles, LegacySubscriptions, LegacySiteIcons, LegacyWebfingerDirectory, LegacyMentionCandidates, LegacyWebmentionTargets, LegacyWebmentionSources) and
                                PageShell (the base of the deprecated shells)
   start.php                    Boots the legacy application for code that includes it (tests, scripts)
   Common/                      Legacy base classes (Entity, Page, Plugin, ContentType, Theme)
@@ -823,7 +824,7 @@ Four kinds of request therefore take four paths through the kernel:
 
 - A LEGACY PAGE (`Idno\Common\Page`, a plugin's, or a core page that is still a legacy class): router, the catch-all, `LegacyController`, a `LegacyResponse`; the page runs while the response is sent, writes
   with `header()`/`echo`/`exit`, and its exceptions are the legacy handler's (`Page::exception()`, the 500 page).
-- A SITE PAGE (a controller with `#[SitePage]`: the home page, the feeds, the search, the tag pages, `robots.txt`, the manifest, the service worker, WebFinger, the mention search, the form token endpoint, the shortlink, the annotation pages, a stored file, the webmention endpoint, the WebSub callback, the member's drafts and following pages):
+- A SITE PAGE (a controller with `#[SitePage]`: the home page, the feeds, the search, the tag pages, `robots.txt`, the manifest, the service worker, WebFinger, the mention search, the form token endpoint, the shortlink, the annotation pages, a stored file, the webmention endpoint, the WebSub callback, the member's drafts and following pages, the login page and the logout):
   1. Symfony's router matches the controller's route (`RouterListener`, priority 32); 2. `LegacyRouteOverride` (31) asks the legacy router which page it would choose for the path and hands the request to the
   catch-all when that is a plugin's page (then the legacy path above applies); 3. `PageRequestListener::onController()` (`kernel.controller`, priority 0) refuses an undeclared method (405), begins the page
   (`LegacyPageLifecycle`: `page/ready`, the template type), refuses an API request on an account page, answers OPTIONS, applies the walled garden and enters it (`page/head`, the form token for a state-changing
@@ -1320,6 +1321,27 @@ for classes that extend `PageShell`, and holds each to the rule); it is `Idno\Pa
   the headers of the same request that is not XHR. Pinned by `Tests/Characterisation/DraftsPageTest` (recordings from the legacy page: `fixtures/answers/member/`, a visitor, a member with nothing, Bob with twenty-six drafts, an
   administrator, each template type, each page of the drafts, each method, a signed request, XHR; each case that differs on purpose in the class's `CHANGED` with its own assertion) and
   `Tests/Unit/Http/Controller/Member/MemberPagesTest` (on a double of `MemberLists`).
+- THE LOGIN PAGE AND THE LOGOUT (`/session/login` and `/session/logout`). `Idno\Pages\Session\Logout` is deleted and `Idno\Pages\Session\Login` is no page: a `final` class holding only its four static helpers
+  (`sanitizeRedirectUrl()`, `throttleKeyFor()`, `throttleAttempt()`, `throttleReset()`, each a delegate to `RedirectTarget` or `LoginAttempts`), `@deprecated`, removed in 3.0. No shell is kept (nothing extends the classes in the
+  repository; a plugin that does must be disabled before the upgrade). `Idno\Http\Controller\SessionController` has `login()` on `/{lead}session/login{slash}` (`idno_login`, GET, HEAD, OPTIONS and POST;
+  `#[SitePage(name: 'Idno\Pages\Session\Login', publicOnPrivateSite: true, methods: ['GET', 'POST'])]`: a visitor of a private site has to be able to sign in) and `logout()` on `/{lead}session/logout{slash}` (`idno_logout`,
+  POST and OPTIONS; `#[SitePage(name: 'Idno\Pages\Session\Logout', methods: ['POST'])]`). Both POSTs have the session's form token checked by the lifecycle (so no `#[IsCsrfTokenValid]`); a signed request needs none.
+  Core still registers both patterns where it always did (`Idno\Core\Session::init()`), with `Idno\Legacy\ControllerRoute`, the login page as public, so a single sign-on plugin's `hijackRoute('/session/login', ...)`
+  still replaces the page in every spelling (`RouteOverrideTest::testAPluginsLoginPageIsServedForEverySpelling`). The logic is `Idno\Http\Controller\Session\SessionPages` (`login()`, `signIn()`, `logout()`), which asks the
+  site only through the interface `SignIn` (`Idno\Legacy\LegacySignIn`: the current member, the signed-request flag, the account a name is, the password check, signing a member on and off, the events and messages, the template type, the
+  site's address, whether the request is secure through `Page::isSSL()`, the page-to-go-to decoding and the login page's own address), so it is built and unit-tested without the legacy application
+  (`Tests/Unit/Http/Controller/Session/SessionPagesTest`). `login()` does what `Login::getContent()` did: the GET's `fwd` is base64 and decoded; a signed-in member on the `default` type is forwarded to it through `RedirectTarget::sanitize()`
+  (the site's address when empty); the form's `fwd` is the site's address when it is the login page's own; the `api-token` only for a signed-in member, the exact `json` type and a secure request. `signIn()` does what `postContent()` did, in
+  order: the POST's `fwd` is NOT decoded (empty is the site's address, then sanitised); the throttle key of the account the name resolves to, else of the folded name; `attempt()` BEFORE the password; a refused attempt is the throttle message and
+  never reaches the password; a name nobody has fires `login/failure/nouser`, sets the status 401 (which the forward overwrites), spends a verification and gives the one message; a right password clears the count, fires `login/success` and
+  signs the member on through `Session::logUserOn()` (a new session id and form token); a wrong one gives the one message and fires `login/failure`. EVERY branch, success included, forwards to the login page (`session/login/?fwd=...`), which
+  sends a signed-in member on to the page they asked for. A login field that is not text (`email[]=bob`) is an empty value: a failed login, never an error. `logout()` fires `logout/success`, ends the session and starts another (`logUserOff()` then
+  `startNewSession()`), puts the "signed out" message in the NEW session unless the request is a signed one, and forwards to the `Referer` through `RedirectTarget::sanitize()`. Unchanged although the classes moved, held by the recorded answers
+  of `Tests/Characterisation/SignInAnswersTest`, `SignInWalledAnswersTest` and `SignInBlockedAnswersTest` (`fixtures/answers/sign-in/`, `sign-in-walled/`, `sign-in-blocked/`): a login while signed in switches the account; an XHR login or
+  logout ends with an empty 200 and no `Location`; a blocked member's login is refused silently. Deliberate differences, each a `CHANGED` case of the answers class with an assertion of the new answer, and in both upgrade documents: `GET`
+  and `HEAD` of the logout, `PUT` and `DELETE` of either address and a malformed `Host` are the legacy router's 404 page (the logout answered an empty 200 to a GET, the redirect home or the 403 to the others); an XHR GET of the login page gets
+  the headers of the same request that is not XHR; an XHR logout is sent the caching lines of every XHR POST (the legacy logout's new session replaced them with the session's one line); a signed request's JSON `{"location": ...}` is `application/json`; a login field that is not text is a failed login (it was the 500 page of a PHP error).
+
 - THE FEED READER IS REMOVED. Following a FEED (a site's RSS, Atom or h-feed, to read its items in the site) never worked on a supported PHP, and nothing linked it: `Idno\Core\Reader::parseFeed()` and `getFeedDetails()` called
   `\DOMDocument::loadHTML()` statically, which is an `\Error` on PHP 8 (`@` does not stop it), so `/following/add/` and `/following/confirm/` answered the 500 page before any record was made and `/following/refresh/` read a collection nothing
   wrote to (`Subscription`, `Feed` and `FeedItem` redeclared the private property `$collection` that `Entity` keeps, so a save went to `entities` and a read to `reader`). It is deleted, not repaired: `Idno\Core\Reader` (and
@@ -5697,7 +5719,7 @@ no installer writes one.
   is empty, and its finders run through `Invitation::unrestricted()` (the registration page, which a visitor uses, reaches them through `validate()`), and an invitation stored by an earlier Idno with the access of any post becomes an administrators' one the first time `allForEmail()` or `Invitation::all()` reads it (a finder called directly, in code that does not call `canRead()`, may return it until then; the home stream no longer lists it, because a request may ask it for registered content types only (`LegacyHomeStream::types()`: any other class is dropped, as a friendly name that names no type adds none). An invitation has published status and empty search text, so before that rule a wildcard search (`q=%`) with `types[]` naming its class listed it). An invitation has no title, description or address, and is never federated; the administrators' `remove_invitation` removes an `Invitation` only. `Invitation::validate()` (and `getByEmailAndCode()`)
   require a string email and code, read every invitation for the address and compare each code with `hash_equals()`; the code is never a condition of
   the lookup. Pinned by `Tests/Characterisation/InvitationAccessTest`.
-- Logging in (`Idno\Pages\Session\Login`). ONE failure message for an unknown login name and a wrong password: "Oops! That
+- Logging in (`Idno\Http\Controller\Session\SessionPages::signIn()`). ONE failure message for an unknown login name and a wrong password: "Oops! That
   username or password isn't right. Please try again." (JSON login too); the legacy events still fire as before (`login/failure`,
   `login/failure/nouser`). For a login name nobody has, `Passwords::spendVerification()` does one bcrypt against a fixed cost-12
   hash of nobody's password (an empty password costs nothing, as for a member), so an unknown name costs what a wrong password costs
@@ -5706,7 +5728,7 @@ no installer writes one.
 - Login throttling: `Idno\Security\LoginThrottle` (a public container service, built when first fetched; the login page fetches it
   through `Idno::container()`; it takes a key string and nothing of the request) on `symfony/rate-limiter`'s FIXED WINDOW policy with
   `CacheStorage` over the site's ONE cache pool (`Psr\Cache\CacheItemPoolInterface`; see "The cache"): 5 attempts (`LIMIT`) per 300
-  seconds (`WINDOW_SECONDS`) for each ACCOUNT. `Login::postContent()` resolves the name typed FIRST (handle, then email: the
+  seconds (`WINDOW_SECONDS`) for each ACCOUNT. `SessionPages::signIn()` resolves the name typed FIRST (handle, then email: the
   database's own comparison, which on MySQL and MariaDB ignores case and accents, so `bén` and `BEN` are one handle) and counts
   under `LoginThrottle::keyForAccount($uuid)`: the handle and the email address of one account share a count, however they are
   spelled. A name no account has is counted under `keyForUnknownName($name)`: trimmed, NFKC-normalised (when `Normalizer` exists)
@@ -5764,7 +5786,7 @@ no installer writes one.
   requests have no session fingerprint and are unaffected (the API key is the credential, and changing the password does not change
   it); the queue worker and `logUserOn()` in a test work as before. Tests: `Tests/Characterisation/PasswordChangeEndsOtherSessionsTest`,
   `Tests/Kernel/UserPasswordSaveTest`.
-- Logging out (`Idno\Pages\Session\Logout`, form token required, POST only): the redirect goes through `RedirectTarget::sanitize()`
+- Logging out (`SessionPages::logout()`, form token required, POST only: any other method is the 404 page): the redirect goes through `RedirectTarget::sanitize()`
   (the `Referer`, same-origin only, else the site's home page). `logUserOff()` destroys the session, then `Session::startNewSession()`
   begins another (a new id, nothing of the old session's data, user or form token: the token is replaced and the session seeded
   again) and the "You've signed out" message is added to THAT session, so the page the visitor lands on shows it once. A logout by a
@@ -5829,7 +5851,7 @@ no installer writes one.
   (`templates/jsonp/shell.tpl.php`) is a script that other pages can load. The session cookie is `SameSite=Lax`, so a browser sends it with a script
   request only from a page of the same site (a sibling subdomain, say), not from another site; but a script from a same-site page, or a cookie
   with another policy, is enough to be careful. The rule stays: never put a secret in the template variables
-  of a page unless the template type is exactly `json`. `Idno\Pages\Session\Login` gives a
+  of a page unless the template type is exactly `json`. `SessionPages::login()` gives a
   signed-in API client its API key that way (`api-token`, JSON over HTTPS only).
   `Tests/Pages/Session/LoginApiKeyTest.php` checks this. The form token is a secret too, and is never a template variable of a page
   nor a value of one (`FormToken::scrub()` in both shells; `SettingsRedactor` calls a key naming `csrf` or `xsrf` a secret, so the diagnostics

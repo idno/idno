@@ -289,7 +289,7 @@ final class RoutedPagesTest extends PrivateSiteTestCase
 
     public function testALegacyPageIsServedWithTheOneEntryTheRouterChose(): void
     {
-        $login = $this->raw($this->server(), 'GET', '/session/login');
+        $login = $this->raw($this->server(), 'GET', '/_test/legacy-plain');
         $this->assertSame(200, $login['status']);
         $this->assertNotContains(ControllerPage::class, self::pages($login));
         $none = $this->raw($this->server(), 'GET', '/no/such/page/here');

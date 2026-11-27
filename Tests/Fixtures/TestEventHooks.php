@@ -86,6 +86,7 @@ final class TestEventHooks
         //   subclass  the shell, then a plugin's hijackRoute() of the same pattern for a subclass of the shell
         //   plugin    a plugin's addRoute() for a path no shell was ever registered for
         //   mdclaim   a plugin's hijackRoute() of the permalink route of the Markdown fixture, for a Markdown permalink of its own
+        //   login-hijack  a plugin's hijackRoute() of the login page's address, for ClaimingPage
         //   homepage-hijack  a plugin's hijackRoute() of the root for a subclass of the home page's shell (ThirdPartyHomepage)
         //   homepage-route   a plugin's addRoute() of a path of its own for the same subclass
         //   feeds     a plugin's addRoute() of the feed, search and tag paths whose core pages are deleted, for ClaimingPage
@@ -114,6 +115,7 @@ final class TestEventHooks
                     'subclass' => $routes->hijackRoute('/_test/claimable/?', SubclassedPage::class),
                     'plugin' => $routes->addRoute('/_test/unclaimed/?', ClaimingPage::class),
                     'mdclaim' => $routes->hijackRoute('/_test/markdown/([^/]+)/?', SubclassedPage::class),
+                    'login-hijack' => $routes->hijackRoute('/session/login', ClaimingPage::class),
                     'homepage-hijack' => $routes->hijackRoute('/', ThirdPartyHomepage::class),
                     'homepage-route' => $routes->addRoute('/third-party-home/?', ThirdPartyHomepage::class),
                     'broad' => $routes->addRoute('/(.*)', ClaimingPage::class),

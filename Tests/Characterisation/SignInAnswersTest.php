@@ -25,6 +25,43 @@ final class SignInAnswersTest extends SignInSiteCase
 
     protected const GROUP = 'sign-in';
 
+    private const METHOD_WHY = 'a method the page does not take is the legacy router\'s 404 page, as for every page that moved to a controller (the legacy page answered an empty page, or the redirect home of a page with no handler, or the 403 of a missing token)';
+
+    private const HOST_WHY = 'a request with a malformed Host is served by the legacy router, which has no page for the address now: its 404 page (the legacy page drew the answer for the request)';
+
+    private const XHR_WHY = 'an XHR GET gets the headers of the same request that is not XHR';
+
+    private const JSON_WHY = 'the JSON {"location": ...} that tells a signed request where to go is application/json (the legacy page sent it as text/html)';
+
+    /**
+     * The cases the pages that replaced the legacy ones answer differently ON PURPOSE, with why: the recordings are the legacy pages' and are kept as they
+     * were, and the test of each asserts the answer of the page that serves it now.
+     */
+    private const CHANGED = [
+        'login-visitor-xhr' => self::XHR_WHY,
+        'login-visitor-malformed-host' => self::HOST_WHY,
+        'login-post-array-email' => 'a login field that is not text (`email[]=bob`) is an empty value: the ordinary failed login, where the legacy page was the 500 page of a PHP error',
+        'logout-get-visitor' => self::METHOD_WHY,
+        'logout-get-bob' => self::METHOD_WHY,
+        'logout-get-bob-json' => self::METHOD_WHY,
+        'logout-head-visitor' => self::METHOD_WHY,
+        'logout-head-bob' => self::METHOD_WHY,
+        'login-put-visitor' => self::METHOD_WHY,
+        'login-put-bob-with-token' => self::METHOD_WHY,
+        'login-delete-visitor' => self::METHOD_WHY,
+        'login-delete-bob-with-token' => self::METHOD_WHY,
+        'logout-put-visitor' => self::METHOD_WHY,
+        'logout-put-bob-with-token' => self::METHOD_WHY,
+        'logout-delete-visitor' => self::METHOD_WHY,
+        'logout-delete-bob-with-token' => self::METHOD_WHY,
+        'login-post-signed' => self::JSON_WHY,
+        'login-post-signed-json' => self::JSON_WHY,
+        'logout-post-signed-no-cookie' => self::JSON_WHY,
+        'logout-post-signed-with-cookie' => self::JSON_WHY,
+        'logout-post-signed-other-cookie' => self::JSON_WHY,
+        'logout-post-xhr' => 'an XHR logout is sent the caching lines of every XHR POST, as the XHR login is (the legacy logout\'s new session replaced them with the session\'s one line)',
+    ];
+
     public static function tearDownAfterClass(): void
     {
         try {
@@ -265,6 +302,118 @@ final class SignInAnswersTest extends SignInSiteCase
             // the session still stands after all of them
             $this->answer('login-put-delete-bob-session', $this->site()->request('GET', '/currentUser?_t=json', $owner), $s);
         });
+    }
+
+    /** The recorded answer of a case, as a list of its lines up to the blank line that ends the headers, and its body. @return array{string, string} */
+    private function recorded(string $case): array
+    {
+        [$headers, $body] = explode("\n\n", (string) file_get_contents(self::recordedAnswersDirectory() . '/' . self::GROUP . '/' . $case . '.txt'), 2);
+
+        return [$headers, $body];
+    }
+
+    private function assertNotFoundPage(SiteResponse $answer, string $case): void
+    {
+        $this->assertSame(404, $answer->status, $case);
+        $this->assertStringContainsString("This page can't be found", html_entity_decode($answer->body, ENT_QUOTES), $case);
+        $this->assertNull($answer->header('Location'), $case);
+    }
+
+    /**
+     * Catches: the login form of an XHR request answered with the legacy router's lines for it (two `Cache-Control` lines, a 1997 `Expires`, a JSON type)
+     * where every page a controller serves gets the lines of the same request that is not XHR; and the body changing with it.
+     */
+    public function testAnXhrGetOfTheLoginPageGetsTheHeadersOfTheSameRequestThatIsNotXhr(): void
+    {
+        $answer = $this->site()->request('GET', '/session/login', ['X-Requested-With' => 'XMLHttpRequest']);
+        $plain = $this->site()->request('GET', '/session/login');
+        [$answeredHeaders, $answeredBody] = explode("\n\n", self::normalise(self::withoutLastModified($answer), $this->baseUrl()), 2);
+        [$plainHeaders] = explode("\n\n", self::normalise(self::withoutLastModified($plain), $this->baseUrl()), 2);
+        $this->assertSame($plainHeaders, $answeredHeaders);
+        $this->assertSame($this->recorded('login-visitor-xhr')[1], $answeredBody, 'the body is what it was');
+        $this->assertCount(1, $answer->lines('cache-control'));
+    }
+
+    /**
+     * Catches: the XHR logout losing the caching lines every XHR POST has (both `Cache-Control` lines, as the XHR login sends them): the answer is the
+     * recording but for the second `Cache-Control` line.
+     */
+    public function testAnXhrLogoutIsSentTheCachingLinesOfEveryXhrPost(): void
+    {
+        $cookie = $this->bobsSession();
+        $token = $this->tokenWith(['Cookie' => $cookie]);
+        $out = $this->site()->request('POST', '/session/logout', ['Cookie' => $cookie, 'X-Requested-With' => 'XMLHttpRequest'], ['__bTk' => $token]);
+        $this->assertSame(['no-store, no-cache, must-revalidate', 'post-check=0, pre-check=0'], $out->lines('cache-control'));
+        [$headers, $body] = $this->recorded('logout-post-xhr');
+        $answered = self::normalise(self::withoutLastModified($this->scrub($token)($out)), $this->baseUrl());
+        $this->assertSame(str_replace("cache-control: no-store, no-cache, must-revalidate\n", "cache-control: no-store, no-cache, must-revalidate\ncache-control: post-check=0, pre-check=0\n", $headers) . "\n\n" . $body, $answered);
+    }
+
+    /**
+     * Catches: a method the two pages do not take (a GET or HEAD of the logout, a PUT or DELETE of either) or a request with a malformed Host being given
+     * a page of its own again: the answer is the site's 404 page, as for every address no page takes.
+     */
+    public function testOtherMethodsAndAMalformedHostAreTheRoutersNotFoundPage(): void
+    {
+        $bob = ['Cookie' => $this->bobsSession()];
+        $token = $this->tokenWith($bob);
+        $x = ['body' => 'x'];
+        $this->assertNotFoundPage($this->site()->request('GET', '/session/login', ['Host' => 'bad host!']), 'login-visitor-malformed-host');
+        foreach (['/session/login', '/session/logout'] as $path) {
+            foreach (['PUT', 'DELETE'] as $method) {
+                $this->assertNotFoundPage($this->site()->request($method, $path, [], $x), $method . ' ' . $path);
+                $this->assertNotFoundPage($this->site()->request($method, $path . '?__bTk=' . $token, $bob, $x), $method . ' ' . $path . ' with a token');
+            }
+        }
+        $this->assertNotFoundPage($this->site()->request('GET', '/session/logout'), 'logout-get-visitor');
+        $this->assertNotFoundPage($this->site()->request('GET', '/session/logout', $bob), 'logout-get-bob');
+        $this->assertNotFoundPage($this->site()->request('GET', '/session/logout?_t=json', $bob), 'logout-get-bob-json');
+        $this->assertSame(404, $this->site()->request('HEAD', '/session/logout')->status, 'logout-head-visitor');
+        $this->assertSame(404, $this->site()->request('HEAD', '/session/logout', $bob)->status, 'logout-head-bob');
+        // and none of them signed Bob out
+        $this->assertSame('Bob Member', $this->site()->request('GET', '/currentUser?_t=json', $bob)->json()['user']['displayName']);
+    }
+
+    /**
+     * Catches: the JSON `{"location": ...}` that tells a signed request where to go being sent as `text/html` again (any other site's script could read
+     * the answer as the page it is): it is `application/json`, and the answer is the recording but for that line.
+     */
+    public function testASignedRequestIsToldWhereToGoAsJson(): void
+    {
+        $this->clearTheThrottle();
+        $scrub = $this->scrubViewers();
+        $cookie = $this->bobsSession();
+        $cases = [
+            'login-post-signed' => $this->site()->request('POST', '/session/login', self::signedHeadersFor('bob', self::KEY_BOB, '/session/login'), ['email' => 'bob', 'password' => self::PASSWORD]),
+            'login-post-signed-json' => $this->site()->request('POST', '/session/login?_t=json', self::signedHeadersFor('bob', self::KEY_BOB, '/session/login?_t=json'), ['email' => 'bob', 'password' => self::PASSWORD]),
+            'logout-post-signed-no-cookie' => $this->site()->request('POST', '/session/logout', self::signedHeadersFor('bob', self::KEY_BOB, '/session/logout')),
+            'logout-post-signed-with-cookie' => $this->site()->request('POST', '/session/logout', ['Cookie' => $cookie] + self::signedHeadersFor('bob', self::KEY_BOB, '/session/logout')),
+            'logout-post-signed-other-cookie' => $this->site()->request('POST', '/session/logout', ['Cookie' => $this->bobsSession()] + self::signedHeadersFor('ada', self::KEY_ADA, '/session/logout')),
+        ];
+        foreach ($cases as $case => $answer) {
+            $this->assertSame('application/json', $answer->header('Content-Type'), $case);
+            [$headers, $body] = $this->recorded($case);
+            $this->assertSame(str_replace('content-type: text/html; charset=UTF-8', 'content-type: application/json', $headers) . "\n\n" . $body, self::normalise($scrub($answer), $this->baseUrl()), $case . ': the recording but for the type');
+        }
+        $this->clearTheThrottle();
+    }
+
+    /**
+     * Catches: a login field that is not text (`email[]=bob`) being an error again (the legacy page was the 500 page of a PHP error, and on a site
+     * without `pedantic_mode` a login attempt as "Array"): it is an empty value, so a failed login like any other that signs nobody in.
+     */
+    public function testALoginFieldThatIsNotTextIsAFailedLogin(): void
+    {
+        $this->clearTheThrottle();
+        [$cookie, $token] = $this->visitorSession();
+        foreach (['email' => ['bob'], 'password' => ['x']] as $field => $value) {
+            $fields = ['__bTk' => $token, 'email' => 'bob', 'password' => self::PASSWORD, $field => $value];
+            $login = $this->site()->request('POST', '/session/login', ['Cookie' => $cookie], $fields);
+            $this->assertSame(302, $login->status, $field);
+            $this->assertStringContainsString("That username or password isn't right", html_entity_decode($this->follow($login, $cookie)->body, ENT_QUOTES), $field);
+            $this->assertSame(404, $this->site()->request('GET', '/currentUser?_t=json', ['Cookie' => self::sessionCookieOrNull($login) ?? $cookie])->status, $field . ': nobody is signed in');
+        }
+        $this->clearTheThrottle();
     }
 
     /** Fails a login for each name, in one browser session, using up the message each leaves (so the counts are all that carry over). @param list<string> $names */

@@ -198,6 +198,22 @@ final class RouteOverrideTest extends PrivateSiteTestCase
         $this->assertSame('controller', $this->raw($base, 'GET', '/_test/unclaimed')['body'], 'a path nobody claimed is still the controller\'s');
     }
 
+    /**
+     * Catches: the login page a controller serves shadowing the page a single sign-on plugin put at `/session/login` with `hijackRoute()`, in any spelling
+     * of the address (a site that replaced its login page would show the password form again, or both).
+     */
+    public function testAPluginsLoginPageIsServedForEverySpelling(): void
+    {
+        $base = $this->server('login-hijack');
+
+        foreach (['/session/login', '/session/login/', '//session/login', '//session/login/'] as $target) {
+            $response = $this->raw($base, 'GET', $target);
+            $this->assertSame('claimed', $response['body'], $target);
+            $this->assertSame([ClaimingPage::class], $response['pages'], $target);
+        }
+        $this->assertSame([ClaimingPage::class], $this->raw($base, 'OPTIONS', '/session/login')['pages'], 'OPTIONS: the plugin\'s page');
+    }
+
     public function testAClaimedPathIsServedByTheLegacyPageForEveryMethod(): void
     {
         foreach (['1', 'identical'] as $mode) {

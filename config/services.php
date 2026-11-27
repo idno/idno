@@ -413,6 +413,9 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
     // The member's drafts and following pages, over the legacy finders and session
     $services->set(\Idno\Legacy\LegacyMemberLists::class);
     $services->alias(\Idno\Http\Controller\Member\MemberLists::class, \Idno\Legacy\LegacyMemberLists::class);
+    // The login page and the logout, over the legacy session and finders
+    $services->set(\Idno\Legacy\LegacySignIn::class);
+    $services->alias(\Idno\Http\Controller\Session\SignIn::class, \Idno\Legacy\LegacySignIn::class);
     // The stored files, over the legacy file store and session: the file page's service takes the interface
     $services->set(\Idno\Legacy\LegacyStoredFiles::class);
     $services->alias(\Idno\Http\Controller\File\StoredFiles::class, \Idno\Legacy\LegacyStoredFiles::class);

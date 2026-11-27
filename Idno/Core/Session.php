@@ -180,8 +180,8 @@ namespace Idno\Core {
             $this->seedSession();
 
             // Session login / logout
-            Idno::site()->routes()->addRoute('/session/login', '\Idno\Pages\Session\Login', true);
-            Idno::site()->routes()->addRoute('/session/logout', '\Idno\Pages\Session\Logout');
+            Idno::site()->routes()->addRoute('/session/login', \Idno\Legacy\ControllerRoute::class, true);
+            Idno::site()->routes()->addRoute('/session/logout', \Idno\Legacy\ControllerRoute::class);
             Idno::site()->routes()->addRoute('/currentUser/?', '\Idno\Pages\Session\CurrentUser');
 
             // Update the session on save if we're saving the current user

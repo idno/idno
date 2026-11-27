@@ -271,7 +271,6 @@ namespace Tests\Pages {
                 '/'                              => 'Idno\Pages\Homepage',
                 '/profile/testuser'              => 'Idno\Pages\User\View',
                 '/admin/'                        => 'Idno\Pages\Admin\Home',
-                '/session/login'                 => 'Idno\Pages\Session\Login',
                 '/view/abc123'                   => 'Idno\Pages\Entity\View',
                 '/entry/edit/abc123'             => 'IdnoPlugins\Text\Pages\Edit',
                 "/$year/café-notes"              => 'Idno\Pages\Entity\View',
@@ -285,6 +284,7 @@ namespace Tests\Pages {
                 "/$year/café-notes/annotations/abc123/delete" => 'Idno\Legacy\Placeholder\AnnotationDelete',
                 "/$year/café-notes/annotation/delete"         => 'Idno\Legacy\Placeholder\AnnotationDelete',
                 '/s/abc123'                                   => 'Idno\Legacy\ControllerRoute',
+                '/session/login'                              => 'Idno\Legacy\ControllerRoute',
             ];
             foreach ($placeholders as $path => $class) {
                 $this->assertSame($class, \Idno\Core\PageHandler::chosenFor(Idno::site()->routes(), $path), "$path should be held by $class.");
