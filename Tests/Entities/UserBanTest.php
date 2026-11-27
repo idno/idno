@@ -12,6 +12,7 @@ namespace Tests\Entities {
     class UserBanTest extends \Tests\BrowserTestCase
     {
 
+        // A ban is stored with its reason, who gave it and when, and lifting it clears all of it.
         public function testBanAndUnban()
         {
             $admin = static::member('banadmin', true);

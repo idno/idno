@@ -66,6 +66,7 @@ namespace IdnoPlugins\Moderation\Tests {
             }
         }
 
+        // Every moderation page drawn in the modern look has no markup of the default look, which that look has no styles for.
         public function testTheMenuItemsTheReportFormAndTheQueue()
         {
             $status = new \IdnoPlugins\Status\Status();

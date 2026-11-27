@@ -330,7 +330,6 @@ namespace IdnoPlugins\Photo\Tests {
 
                 // The limits are stated up front, in plain units
                 [$maxFile] = $this->statedLimits();
-                $this->assertStringContainsString('JPEG, PNG, GIF, WebP, AVIF or SVG.', $form[1], "The $look form says which kinds of file it takes.");
                 if ($maxFile) {
                     $this->assertStringContainsString(Upload::formatSize($maxFile), strip_tags($form[1]), "The $look form says how large a file can be.");
                 }

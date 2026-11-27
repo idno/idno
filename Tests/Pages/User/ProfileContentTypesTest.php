@@ -140,6 +140,8 @@ namespace Tests\Pages\User {
         }
 
         /**
+         * A profile links to the address of each kind of post the member has published, in both looks.
+         *
          * @dataProvider lookProvider
          */
         public function testLinksAreDrawn($look)

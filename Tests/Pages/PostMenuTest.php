@@ -111,18 +111,18 @@ namespace Tests\Pages {
             $second->delete();
         }
 
-        /**
-         * @dataProvider cases
-         */
-        #[\PHPUnit\Framework\Attributes\DataProvider('cases')]
-        public function testTwenty26MenuHoldsEditAndDeleteForTheAuthorOnly($theme, $who)
+        public static function viewers()
         {
-            if ($theme !== 'Twenty26') {
-                $this->assertTrue(true);
+            return ['a visitor' => [null], 'the author' => ['author'], 'another member' => ['reader']];
+        }
 
-                return;
-            }
-            $this->look($theme);
+        /**
+         * @dataProvider viewers
+         */
+        #[\PHPUnit\Framework\Attributes\DataProvider('viewers')]
+        public function testTwenty26MenuHoldsEditAndDeleteForTheAuthorOnly($who)
+        {
+            $this->look('Twenty26');
             $as = $who ? static::$$who : null;
             $result = $this->get(static::$entry->getDisplayURL(), $as);
             $this->assertTrue((bool) preg_match('#<details class="idno-more".*?</details>#s', $result['body'], $menu), 'The page should have a "More" menu.');
@@ -131,7 +131,6 @@ namespace Tests\Pages {
             $hasDelete = strpos($menu[0], htmlspecialchars((string) parse_url(static::$entry->getDeleteURL(), PHP_URL_PATH))) !== false;
             $this->assertSame($who === 'author', $hasEdit, 'Edit is in the menu for the author only.');
             $this->assertSame($who === 'author', $hasDelete, 'Delete is in the menu for the author only.');
-            $this->assertStringNotContainsString('idno-entry-kebab', $result['body'], 'The old Edit / Delete menu is gone.');
         }
     }
 

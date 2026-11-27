@@ -64,6 +64,7 @@ namespace Tests\Core {
             $this->assertSame([], UrlValidator::safeAddresses($url));
         }
 
+        // The SSRF rule: loopback, private, link-local, shared and IPv4-mapped addresses are not public ones.
         public function testIsPublicIp()
         {
             $this->assertTrue(UrlValidator::isPublicIp('93.184.216.34'));

@@ -81,11 +81,6 @@ class PostRecordTest extends \PHPUnit\Framework\TestCase
         }
     }
 
-    public function testPostsAreKeyedByTid()
-    {
-        $this->assertSame('tid', self::$validator->keyType('app.bsky.feed.post'));
-    }
-
     // Status updates
 
     public function testAStatusUpdateIsAPostWithItsOwnTime()

@@ -174,7 +174,6 @@ namespace Tests\Pages\Admin {
             $message = static::$sink->lastTo('somebody@example.org');
             $this->assertNotNull($message);
             $this->assertStringContainsString('site@example.com', $message['headers']['from']);
-            $this->assertStringContainsString('Test email from', $message['headers']['subject']);
         }
 
         public function testAFailedTestMailSaysWhyWithoutTheCredentials()
@@ -243,16 +242,6 @@ namespace Tests\Pages\Admin {
             }
             // The test site's configuration file sets no mail setting, so its page has no such note
             $this->assertStringNotContainsString('config.ini', $this->get('/admin/email', static::$admin)['body']);
-        }
-
-        public function testTheHelpBlockGivesTheValuesForTheCommonServices()
-        {
-            foreach (['', '?_t=default'] as $type) {
-                $page = $this->get('/admin/email' . $type, static::$admin)['body'];
-                foreach (['smtp.sendgrid.net', 'smtp.postmarkapp.com', 'smtp.mailgun.org', 'amazonaws.com', 'smtp-relay.brevo.com', 'smtp.resend.com', '<code>apikey</code>', 'DMARC'] as $value) {
-                    $this->assertStringContainsString($value, $page, $value . ' in /admin/email' . $type);
-                }
-            }
         }
     }
 

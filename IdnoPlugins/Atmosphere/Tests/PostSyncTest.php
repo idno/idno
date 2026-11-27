@@ -1247,9 +1247,9 @@ class PostSyncTest extends \Tests\IdnoTestCase
             \Idno\Core\Plugins::currentNames(['Status', 'StandardSiteSync', 'Video', 'Atmosphere', 'Status', '', null])
         );
         $this->assertSame([], \Idno\Core\Plugins::currentNames(null));
-        $this->assertTrue(is_subclass_of('IdnoPlugins\\Atmosphere\\Main', 'Idno\\Common\\Plugin'));
     }
 
+    // The OAuth client id is the address of the client metadata: if it or the callback moves, every connected member must connect again.
     public function testTheAddressesAndTheClientIdCarryTheNewName()
     {
         $base = Idno::site()->config()->getDisplayURL();

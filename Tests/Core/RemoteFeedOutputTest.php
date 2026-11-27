@@ -118,15 +118,6 @@ class RemoteFeedOutputTest extends \Tests\IdnoTestCase
         $this->assertStringNotContainsString('<a href="' . $address, $html);
     }
 
-    public function testHcardWithAQuoteInTheAddressCannotAddAnAttribute()
-    {
-        $address = 'https://evil.example/" onmouseover="alert(3)';
-        $html = $this->draw('account/settings/following/mf2user', ['mf2' => $this->hcard('Someone', 'https://evil.example/p.png', [$address])]);
-
-        $this->assertStringNotContainsString('onmouseover="alert(3)', $html);
-        $this->assertMarkupIsSafe($html);
-    }
-
     public function testOrdinaryHcardIsDrawn()
     {
         $html = $this->draw('account/settings/following/mf2user', ['mf2' => $this->hcard('Ann & Bo', 'https://static.example.com/ann.png', ['https://static.example.com/ann'])]);

@@ -186,6 +186,7 @@ namespace IdnoPlugins\Event\Tests {
             $this->assertStringNotContainsString('javascript:', $html);
         }
 
+        // A plain RSVP is described to feeds with its markup kept and the event's address escaped.
         public function testOrdinaryDescription()
         {
             $rsvp = new RSVP();

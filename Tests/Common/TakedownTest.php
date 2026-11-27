@@ -58,6 +58,7 @@ namespace Tests\Common {
             return [$entry, $marker];
         }
 
+        // Taking a post down unpublishes it, and putting it back restores the status it had, also after it was taken down twice.
         public function testModerateAndUnmoderate()
         {
             $entry = $this->post(static::$author);
@@ -218,6 +219,7 @@ namespace Tests\Common {
             $this->swapUser($old);
         }
 
+        // The author of a post that was taken down cannot edit it; an administrator who is not its author can.
         public function testCanEdit()
         {
             [$entry] = $this->takenDown();

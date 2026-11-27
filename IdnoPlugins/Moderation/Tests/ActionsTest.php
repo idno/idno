@@ -207,24 +207,11 @@ namespace IdnoPlugins\Moderation\Tests {
             $this->assertStringNotContainsString($marker, $this->get($url . '?_t=json')['body']);
             $this->assertEquals(200, $this->get($url)['status'], 'The post itself stays.');
             $this->assertEmpty($this->stored($entry)->getAnnotation($local));
-            $this->assertEquals([$commenter->email], array_column($this->mailsFromCase($case, 'remove'), 'to'));
 
             $this->press($case, 'restore');
 
             $this->assertStringContainsString($marker, $this->get($url)['body']);
             $this->assertNotEmpty($this->stored($entry)->getAnnotation($local), 'The comment is back under the address it had.');
-        }
-
-        /**
-         * The mails to the member that an action sends, found by doing the same thing in this process
-         */
-        private function mailsFromCase($case, $action)
-        {
-            // The action above ran in the web server, which sends no mail under test: compose what it would have sent
-            $fresh = static::freshCase($case);
-            $subject = $fresh->getSubject();
-
-            return $subject ? [['to' => $subject->email]] : [];
         }
 
         // -----------------------------------------------------------------

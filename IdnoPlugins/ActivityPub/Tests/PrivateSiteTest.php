@@ -115,6 +115,7 @@ class PrivateSiteTest extends \Tests\BrowserTestCase
         $this->fail('Control: webfinger finds the member on a public site.');
     }
 
+    // The one rule everything else asks: a site federates until it is made private.
     public function testFederates()
     {
         $this->assertTrue(Main::federates());
