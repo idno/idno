@@ -45,10 +45,14 @@ final class RedirectTargetTest extends TestCase
         yield 'ftp' => ['ftp://site.example/', $s, $s];
         yield 'no scheme' => ['site.example/x', $s, $s];
         yield 'a query only' => ['?a=b', $s, $s];
-        // What the rule answers today, kept as it is (see the class's docblock): the scheme is not compared, and
-        // user information in front of the site's own host is accepted.
-        yield 'http on an https site' => ['http://site.example/x', $s, 'http://site.example/x'];
-        yield 'user information before the site host' => ['https://user@site.example/x', $s, 'https://user@site.example/x'];
+        // A redirect from an https site to http would take a signed-in visitor off the encrypted connection; and an
+        // address with user information before the site's own host is a link made to look like the site's.
+        yield 'http on an https site' => ['http://site.example/x', $s, $s];
+        yield 'user information before the site host' => ['https://user@site.example/x', $s, $s];
+        yield 'user name and password before the site host' => ['https://user:secret@site.example/x', $s, $s];
+        yield 'an empty user name before the site host' => ['https://@site.example/x', $s, $s];
+        yield 'http on an http site is kept' => ['http://site.example/x', 'http://site.example/', 'http://site.example/x'];
+        yield 'https on an http site is kept' => ['https://site.example/x', 'http://site.example/', 'https://site.example/x'];
     }
 
     /**

@@ -19,9 +19,9 @@ namespace Idno\Http;
  *   `https://site.example.evil.test/` and `https://site.example@evil.test/` are refused) and whose port is the site's
  *   (both none, or the same): kept as given; anything else is the site's address.
  *
- * Two answers that are kept as they were and may be changed on purpose: the scheme is not compared with the site's (an
- * `http://` address of the site's host is kept on an https site), and user information in front of the site's own host
- * (`https://user@site.example/`) is kept.
+ * Two more refusals: an `http://` address when the site's own address is https (the redirect would leave the encrypted
+ * connection), and an address with user information in front of the host (`https://user@site.example/`, a form that
+ * makes a link look like the site's). An `https://` address on a site whose address is http is kept.
  */
 final class RedirectTarget
 {
@@ -50,6 +50,12 @@ final class RedirectTarget
             return $siteUrl;
         }
         if (strtolower($target['host']) !== strtolower($site['host'])) {
+            return $siteUrl;
+        }
+        if (isset($target['user']) || isset($target['pass'])) {
+            return $siteUrl;
+        }
+        if (isset($site['scheme']) && strtolower($site['scheme']) === 'https' && strtolower($target['scheme']) !== 'https') {
             return $siteUrl;
         }
         if (($target['port'] ?? null) !== ($site['port'] ?? null)) {

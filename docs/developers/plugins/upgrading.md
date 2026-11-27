@@ -248,7 +248,7 @@ The bundled StaticPages plugin works this way: `IdnoPlugins\StaticPages\Pages\Ho
 
 ## The static helpers of `Idno\Pages\Session\Login`
 
-`Login::sanitizeRedirectUrl($url)` is deprecated: call `Idno\Http\RedirectTarget::sanitize($url, $siteUrl)`, which takes the site's address as its second argument (`Idno::site()->config()->getDisplayURL()`) and needs no legacy application. `Login::throttleAttempt($key)` and `Login::throttleReset($key)` are deprecated: call `attempt($key)` and `reset($key)` of the `Idno\Security\LoginAttempts` service. `Login::throttleKeyFor($user)` is unchanged. They still work and give the same answers.
+`Login::sanitizeRedirectUrl($url)` is deprecated: call `Idno\Http\RedirectTarget::sanitize($url, $siteUrl)`, which takes the site's address as its second argument (`Idno::site()->config()->getDisplayURL()`) and needs no legacy application. `Login::throttleAttempt($key)` and `Login::throttleReset($key)` are deprecated: call `attempt($key)` and `reset($key)` of the `Idno\Security\LoginAttempts` service. `Login::throttleKeyFor($user)` is unchanged. They still work and give the same answers, with one change to the redirect rule: `RedirectTarget::sanitize()` (and so `Login::sanitizeRedirectUrl()`) now answers the site's address for an `http://` address when the site's own address is `https://`, and for an address with user information before the host (`https://user@site.example/`); both used to be kept. An `https://` address on a site whose address is `http://` is still kept.
 
 ## Where file sessions are kept
 

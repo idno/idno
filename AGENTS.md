@@ -5773,9 +5773,9 @@ no installer writes one.
   the old id is dead. Tests: `LoginFlowTest`.
 - Redirect targets taken from user input must go through
   `\Idno\Http\RedirectTarget::sanitize($url, $siteUrl)` (same-origin only; a static helper with no legacy dependency, the rule
-  `Login::sanitizeRedirectUrl()` held, which stays as a deprecated delegate for third-party plugins). The scheme is not compared
-  with the site's (an `http://` address of the site's host is kept on an https site) and user information in front of the site's
-  own host (`https://user@site.example/`) is kept: both pinned in `Tests/Unit/Http/RedirectTargetTest` as they are today
+  `Login::sanitizeRedirectUrl()` held, which stays as a deprecated delegate for third-party plugins). An `http://` address
+  is refused (the site's address is answered) when the site's own address is https, and so is any address with user information in
+  front of the host (`https://user@site.example/`); an `https://` address on an http site is kept: pinned in `Tests/Unit/Http/RedirectTargetTest`
 - Error page: an exception thrown while a page is being served goes to
   `Page::exception()`, which draws `templates/default/pages/500.html.twig`. The page shows
   the exception's message, and the whole exception (message and stack trace) when `debug`
