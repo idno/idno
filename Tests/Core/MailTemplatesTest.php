@@ -242,6 +242,17 @@ namespace Tests\Core {
             $this->assertSame("> one two\n> three\n>\n> four", Email::wrapText("one two three\n\nfour", 11, '> '));
             $this->assertSame('https://press.example/admin/', Email::siteUrl('/admin/'));
         }
+
+        /**
+         * An address kept from an earlier request (a reported post's) is mailed with the
+         * site's own scheme; a post whose address is on another site keeps its address.
+         */
+        public function testAnAddressOfThisSiteGetsTheConfiguredSchemeAndAnyOtherIsLeftAlone()
+        {
+            $this->assertSame('https://press.example/2026/a-post?x=1#annotation-2', Email::onSiteUrl('http://press.example/2026/a-post?x=1#annotation-2'));
+            $this->assertSame('http://press.example.elsewhere.example/2026/a-post', Email::onSiteUrl('http://press.example.elsewhere.example/2026/a-post'));
+            $this->assertSame('http://other.example/a-post', Email::onSiteUrl('http://other.example/a-post'));
+        }
     }
 
 }

@@ -25,6 +25,25 @@ Thanks to [Chris Aldich](http://stream.boffosocko.com/2015/upgrading-withknown-o
     * Previous releases of Idno (<0.9.5) used a now deprecated mongo driver. If you are running your site on Mongo, you will first need to make sure that you have installed the new [PHP MongoDB driver](https://secure.php.net/manual/en/set.mongodb.php).
     * Additionally, the 0.9.9 release changed the default database engine, so you'll need to specify ```database = 'MongoDB'``` in your config.ini
 
+## Links in email use the configured address
+
+Every link in a mail the site sends (password resets, invitations, the moderation mails, the
+export and import mails) is on the address the site is configured with: the `url` setting of
+`config.ini`, with the scheme written there. The request that had the mail sent does not
+change it, so a site configured as `https://` mails `https://` links even when the request
+arrived over plain HTTP, or when the mail is sent by the queue, which has no request.
+
+- **Set `url` in `config.ini`** (`url = 'https://example.com/'`, with the slash at the end),
+  with `https://` if the site has a certificate. The installer does not write this setting,
+  so a site has it only if somebody added it. A site with no `url` uses the address it
+  detects from each request, in mails too, as before: there a mail still takes the scheme
+  of the request that had it sent, and a mail from the queue says `http://`.
+- **Redirect plain HTTP to HTTPS** in the web server. Pages still follow the scheme of the
+  request they are served on.
+- A plugin that sends mail builds its links with `\Idno\Core\Email::siteUrl($path)`, and
+  passes an address it got elsewhere (a post's `getURL()`, say) through
+  `\Idno\Core\Email::onSiteUrl($url)`. `Config::getDisplayURL()` is for pages.
+
 ## Queries: a field value that is an array
 
 For plugin authors. In the search array of `Entity::get()`, `getOne()`, `getFromX()`, `countFromX()` and the database's

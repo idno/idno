@@ -99,7 +99,8 @@ namespace IdnoPlugins\Moderation {
                         : $language->_('The moderators of %s have put back a post of yours that had been removed.', [$site]);
                     $mail['quote'] = $case ? static::excerpt($case) : '';
                     if ($case && $case->getTargetURL() !== '') {
-                        $mail['link'] = ['url' => $case->getTargetURL(), 'label' => $language->_('See it')];
+                        // The case holds the address as the request that reported it built it
+                        $mail['link'] = ['url' => \Idno\Core\Email::onSiteUrl($case->getTargetURL()), 'label' => $language->_('See it')];
                     }
                     break;
 

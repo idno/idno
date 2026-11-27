@@ -381,6 +381,29 @@ namespace Idno\Core {
         }
 
         /**
+         * An address that was built somewhere else (the address of a post, kept when
+         * something was reported, say), as a mail gives it: an address of this site gets the
+         * scheme the site is configured with, because it may have been built during a
+         * request with another one. An address that is not on this site is returned as it is.
+         *
+         * @param  string $url
+         * @return string
+         */
+        static function onSiteUrl($url)
+        {
+            $url = (string) $url;
+            $site = static::siteUrl();
+            if (!preg_match('#^https?:(//.+)$#i', $site, $configured) || !preg_match('#^https?:(//.+)$#i', $url, $given)) {
+                return $url;
+            }
+            if (stripos($given[1], $configured[1]) !== 0) {
+                return $url;
+            }
+
+            return $site . substr($given[1], strlen($configured[1]));
+        }
+
+        /**
          * The name of the site for a mail: its title, or its host name when it has none
          *
          * @return string
