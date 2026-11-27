@@ -53,6 +53,7 @@ x-powered-by: https://idno.co
     {
     "@context": "http://schema.org",
     "@type": "Person",
+    "name": "Ada Admin",
     "image": "{site}/gfx/users/default-04.png",
     "url": "{site}/profile/ada"
 }    

@@ -54,6 +54,7 @@ x-powered-by: https://idno.co
     {
     "@context": "http://schema.org",
     "@type": "Person",
+    "name": "Robert Member",
     "image": "{site}/gfx/users/default-01.png",
     "url": "{site}/profile/bob",
     "sameAs": [

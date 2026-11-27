@@ -1250,7 +1250,7 @@ namespace Idno\Entities {
         }
 
         /**
-         * The member as schema.org structured data, which every page of the member and of their posts publishes: it never holds the account's email address,
+         * The member as schema.org structured data, which every page of the member and of their posts publishes: it holds the member's name and never the account's email address,
          * which is private (an address the member lists on their profile is a link there).
          */
         public function jsonLDSerialise(array $params = array())
@@ -1258,6 +1258,7 @@ namespace Idno\Entities {
             $json = [
                 '@context' => 'http://schema.org',
                 '@type' => 'Person',
+                'name' => $this->getName(),
                 'image' => $this->getIcon(),
                 'url' => $this->getURL(),
             ];
