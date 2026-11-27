@@ -98,6 +98,24 @@ namespace Tests\Pages\Admin {
             $this->assertFalse($last->canBeDemotedOrDeletedBy(static::$administrator->getUUID()));
         }
 
+        /**
+         * The page's forms name a member by address, and a post has an address too: asking
+         * the page to act on one must not be a server error (nor do anything to the post).
+         */
+        public function testAnActionOnSomethingThatIsNoMemberDoesNothing()
+        {
+            $post = $this->post(static::member('userswriter'));
+
+            foreach (['add_rights', 'remove_rights', 'delete'] as $action) {
+                $jar = $this->jar(static::$administrator);
+                $answer = $this->requestWithJar($jar, 'POST', '/admin/users', $this->tokenFields($jar, '/admin/users') + ['action' => $action, 'user' => $post->getUUID()]);
+                $this->assertSame(302, $answer['status'], $action . ' is answered as for a member who does not exist');
+            }
+            $kept = \Idno\Common\Entity::getByUUID($post->getUUID(), false);
+            $this->assertNotEmpty($kept, 'The post is still there');
+            $this->assertEmpty($kept->admin);
+        }
+
         public function testAMemberCannotUseTheUsersPage()
         {
             $member = static::member('usersmember');

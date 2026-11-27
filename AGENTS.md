@@ -703,7 +703,16 @@ person opens the link in the mail and registers (`Idno\Pages\Account\Register`).
   hex characters from `random_bytes()`, compared with `hash_equals()`), the role (`member` or
   `admin`), who made it, and when it expires (`Invitation::LIFETIME_DAYS`, 14, or the
   `invitation_lifetime_days` setting). There is one per address: inviting an address again
-  renews it with the role given last. Sending again keeps the link unless it had expired.
+  renews it with the role given last. Sending again keeps the link unless it had expired;
+  **a change of role always makes a new code** (`Invitation::setRole()`), so a link that was
+  mailed for one role never becomes a link for another. Sending again asks the blocked list
+  again, and the administrator who sends it again becomes the one who answers for it
+  (`setInviter()`).
+- **An administrator's invitation lasts while whoever made it is an administrator.**
+  `Invitation::check()` answers `invalid` for one whose `invited_by` is no longer an
+  administrator who can sign in (`issuerIsAdministrator()`: demoted, banned, deleted, or not
+  recorded), on the form's page and on its POST: the link is refused, not turned into a
+  member's. A member's invitation is not about rights and is not affected.
 - **Invitations are for administrators only**, like moderation records: an access value no
   group matches, `canRead()` / `canEdit()` true for administrators, an empty
   `jsonSerialize()`, a slug that says nothing. The registration page, which a visitor uses,
@@ -712,10 +721,27 @@ person opens the link in the mail and registers (`Idno\Pages\Account\Register`).
   registration form shows the address read-only and the account gets the invitation's
   address whatever the form sends; an account is an administrator only if the invitation
   says so. Inviting as administrator needs the `confirm_admin` checkbox.
-- **An invitation works once.** `Register::postContent()` calls `consume()` (re-read, then
-  delete) after everything else has passed and before the account is made; the entity layer
-  has no transactions, so this narrows the window rather than closing it, and the check that
-  no account has the address already catches the rest.
+- **An invitation works once, and is spent only by an account that was made.**
+  `Register::postContent()` makes the account inside `Invitation::redeem()`. The invitation
+  is claimed first, by `consume()`: one conditional delete (`DataConcierge::removeRecord()`:
+  on MySQL a `DELETE` and its row count, on MongoDB `deleteOne()` and its deleted count), which
+  says whether this call removed the record, so of several requests at once one is told yes
+  and only that one goes on to make an account. `Entity::delete()` and `deleteRecord()` say
+  yes for a record that is already gone: never claim anything with them. On MySQL the claim
+  and the account's save are one transaction (`DataConcierge::transaction()`, which
+  `MySQL::saveRecord()` joins), undone when the save fails; MongoDB has none here, so `redeem()`
+  saves the invitation again, with its code, when the account was not made. The claim comes
+  first because the other order would let an account, perhaps an administrator's, exist for a
+  request that then loses the invitation.
+- **The registration page keeps the link to itself.** The code and the address go into the
+  form through a copy of the template (`Register::drawForm()`), never as variables of the page,
+  which its `json` and `jsonp` forms print. The page sends `Referrer-Policy: same-origin` (not
+  `no-referrer`: the first-run form finds its way back by the Referer of its own POST). When it
+  draws its own answer to a POST (the form again, a refusal) the request ends there
+  (`Register::finish()`); `Page::post()` would otherwise add a redirect, which a server that
+  buffers the page turns into a 302.
+- **The user limit** (`Config::canAddUsers()`, the `users/add/check` event) is asked for every
+  registration, open or invited, on GET and POST (`Register::admission()`).
 - **A private site** (`walled_garden`) with registration closed: `/account/register`,
   `/account/password`, `/account/password/reset` and `/session/login` are public routes, and
   nothing else is. A visitor who may not register is told why on a page of its own
@@ -731,7 +757,8 @@ person opens the link in the mail and registers (`Idno\Pages\Account\Register`).
 - The invitation mail (`templates/email/account/invite`) is written with the mail parts, which
   escape everything a person typed (see "What a mail looks like").
 - `Tests/Pages/Account/InvitationFlowTest.php` (run again in the modern look by
-  `InvitationFlowModernLookTest`) checks all of this over HTTP on a private site.
+  `InvitationFlowModernLookTest`) and `InvitationSafeguardsTest.php` check all of this over
+  HTTP on a private site; both extend `InvitationTestCase`, which holds what they share.
 - A test of the modern look uses the `Tests\ModernLook` trait and is named for the look, not
   for the theme that draws it today: the trait alone names that theme.
 
@@ -1041,11 +1068,15 @@ something). What existing sites, hubs and plugins hold was kept, and must stay:
   `POST` to any delete page with a member's id (`deleteGatekeeper()`), is answered only for an administrator's browser session (`adminGatekeeper()`, which no API
   request passes), and never for one's own account. A member cannot delete their account
   there, and no API key can delete one: a credential for publishing does not reach account
-  changes. The administrators' Users page is the other place accounts are deleted.
+  changes. `deleteGatekeeper()` asks `User::canBeDemotedOrDeletedBy()`, the rule of the
+  administrators' Users page, which is the other place accounts are deleted.
 - The administrators' Users page (`Idno\Pages\Admin\Users`) takes rights away and deletes
   accounts only when `User::canBeDemotedOrDeletedBy()` allows it: never the administrator's
   own, and never those of the last administrator who can sign in (the rule bans follow,
   `canBeBannedBy()`). The page offers neither for oneself, but the handler must refuse too.
+  Anything new that deletes or demotes an account asks that one method. The page's actions
+  take a member only (`Users::userFromInput()`): `User::getByUUID()` finds any entity by its
+  address, and a post is answered as a member who does not exist.
   `Tests/Pages/Admin/UsersPageSafeguardsTest.php` checks this.
 - Going back after a form: `Page::forwardBack()` goes to the `Referer` only when it is an
   address of this site, and `Page::forwardToTarget($default)` reads a form's `forward-to`
