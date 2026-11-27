@@ -699,6 +699,28 @@ namespace Idno\Data {
         }
 
         /**
+         * Remove one record, and say whether this call removed it: deleteOne() removes a
+         * document atomically and counts what it removed, so of two requests at once one
+         * is told yes.
+         *
+         * @param  string $id
+         * @param  string $collection
+         * @return bool
+         */
+        function removeRecord($id, $collection = 'entities')
+        {
+            try {
+                $result = $this->database->$collection->deleteOne(array("_id" => new \MongoDB\BSON\ObjectId((string) $id)));
+
+                return $result->isAcknowledged() && $result->getDeletedCount() > 0;
+            } catch (\Exception $e) {
+                \Idno\Core\Idno::site()->logging()->error($e->getMessage());
+
+                return false;
+            }
+        }
+
+        /**
          * Removes all items from a collection
          *
          * @param  string $collection

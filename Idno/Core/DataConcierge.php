@@ -302,6 +302,45 @@ namespace Idno\Core {
         abstract function deleteRecord($id, $collection = 'entities');
 
         /**
+         * Remove one record, and say whether THIS call removed it: of several calls for the
+         * same record, at the same moment or one after another, exactly one is told yes.
+         * deleteRecord() says yes for a record that is already gone, so it cannot be used to
+         * claim something that must be used once (an invitation).
+         *
+         * This fallback, for a back end that has no single conditional delete, looks first
+         * and deletes after, and so only narrows the window. MySQL and MongoDB override it.
+         *
+         * @param  string $id
+         * @param  string $collection
+         * @return bool
+         */
+        function removeRecord($id, $collection = 'entities')
+        {
+            if (!$this->getRecord($id, $collection)) {
+                return false;
+            }
+
+            return (bool) $this->deleteRecord($id, $collection);
+        }
+
+        /**
+         * Do several changes as one: on a back end that has transactions (MySQL), everything
+         * $work changes is kept only if $work returns something other than false or null,
+         * and is undone if it returns one of those or throws. On a back end that has none
+         * (MongoDB as it is used here), $work is simply run, and its caller must put right
+         * what a failure leaves half done.
+         *
+         * Called inside another transaction() it joins that one.
+         *
+         * @param  callable $work
+         * @return mixed What $work returns
+         */
+        function transaction(callable $work)
+        {
+            return $work();
+        }
+
+        /**
          * Remove all entities from the database
          *
          * @param  string $collection

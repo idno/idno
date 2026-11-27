@@ -1020,7 +1020,8 @@ namespace Idno\Common {
          * answer to anybody else is the 403 page, which ends the request (a refusal written as
          * a redirect does not end a script's request). An account is not a post: it is deleted
          * only by an administrator's browser session (which a signed API request never is),
-         * and never one's own.
+         * and never one's own or that of the last administrator who can sign in
+         * (User::canBeDemotedOrDeletedBy(), the rule of the administrators' Users page).
          *
          * @param \Idno\Common\Entity $object
          */
@@ -1029,7 +1030,8 @@ namespace Idno\Common {
             $this->gatekeeper();
             if ($object instanceof \Idno\Entities\User) {
                 $this->adminGatekeeper();
-                if ($object->getUUID() === \Idno\Core\Idno::site()->session()->currentUserUUID()) {
+                // The rule of the Users page: not one's own, not the last administrator's
+                if (!$object->canBeDemotedOrDeletedBy(\Idno\Core\Idno::site()->session()->currentUserUUID())) {
                     $this->deniedContent();
                 }
             } else if (!$object->canEdit()) {

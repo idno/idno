@@ -250,7 +250,8 @@ namespace Idno\Entities {
          * @param  string $code
          * @return array 'invitation' (Invitation|null: set only when it can be used) and
          *               'problem': '' when it can be used, 'expired' when it is too old, 'invalid'
-         *               when there is no such invitation (never made, used, or withdrawn)
+         *               when there is no such invitation (never made, used, or withdrawn) or
+         *               it would make an administrator and whoever made it is no longer one
          */
         static function check($email, $code)
         {
@@ -269,6 +270,10 @@ namespace Idno\Entities {
             }
             if ($match->isExpired()) {
                 return ['invitation' => null, 'problem' => 'expired'];
+            }
+            // An administrator is made only on the word of somebody who is one now
+            if ($match->isForAdministrator() && !$match->issuerIsAdministrator()) {
+                return ['invitation' => null, 'problem' => 'invalid'];
             }
 
             return ['invitation' => $match, 'problem' => ''];
@@ -319,26 +324,113 @@ namespace Idno\Entities {
         }
 
         /**
-         * Use this invitation up. It is read again and deleted, so that of two requests with
-         * the same link only one is told yes (the database layer has no transactions: this
-         * narrows the window to the time between the read and the delete).
+         * Use this invitation up: one conditional delete, which says whether THIS call removed
+         * the record. Of several requests with the same link, at once or one after another,
+         * exactly one is told yes. (Entity::delete() says yes for a record that is already
+         * gone.) No delete events: an invitation is not content.
          *
-         * @return bool Was it still there to be used?
+         * Prefer redeem(), which also gives the invitation back when the account it was
+         * used for could not be made.
+         *
+         * @return bool Was it still there, and did this call use it?
          */
         function consume()
         {
             $id = $this->getID();
+            if (empty($id) || $this->isExpired()) {
+                return false;
+            }
+            static::invalidateCache($this->uuid);
 
-            return (bool) static::unrestricted(
-                function () use ($id) {
-                    $fresh = static::getByID($id);
-                    if (!($fresh instanceof Invitation) || $fresh->isExpired()) {
-                        return false;
+            return (bool) \Idno\Core\Idno::site()->db()->removeRecord($id, $this->getCollection());
+        }
+
+        /**
+         * Use this invitation for what $make does (making the account), exactly once.
+         *
+         * The invitation is claimed first, and only the request that claimed it runs $make:
+         * so an account, and with it an administrator's rights, never exists for a request
+         * that did not win the invitation. On a back end with transactions (MySQL) the claim
+         * and everything $make saves are one transaction, which is undone if $make returns
+         * nothing or throws; on one without (MongoDB) the invitation is saved again then,
+         * with the same code, role and expiry. Either way an invitation is spent only by an
+         * account that was made. (Without transactions, a process that dies between the
+         * claim and the save leaves the invitation spent and no account: the administrator
+         * invites again. The other order would leave an account nobody was asked about.)
+         *
+         * @param  callable $make Returns what was made, or false when it could not be
+         * @return mixed What $make returned; false when it made nothing (the invitation can
+         *               be used again); null when the invitation was no longer there to use
+         */
+        function redeem(callable $make)
+        {
+            $claimed = false;
+            try {
+                $result = \Idno\Core\Idno::site()->db()->transaction(
+                    function () use ($make, &$claimed) {
+                        if (!$this->consume()) {
+                            return null;
+                        }
+                        $claimed = true;
+
+                        return $make() ?: false;
                     }
+                );
+            } catch (\Throwable $e) {
+                if ($claimed) {
+                    $this->putBack();
+                }
+                throw $e;
+            }
+            if ($claimed && !$result) {
+                $this->putBack();
+            }
 
-                    return $fresh->delete();
+            return $result;
+        }
+
+        /**
+         * Make this invitation usable again after a claim whose account was not made, unless
+         * undoing the transaction has already put it back
+         */
+        protected function putBack()
+        {
+            $id = $this->getID();
+            static::unrestricted(
+                function () use ($id) {
+                    if (static::getByID($id) instanceof Invitation) {
+                        return;
+                    }
+                    // A new record with what this one held (MongoDB replaces a record by
+                    // its id only while it exists)
+                    $this->_id = null;
+                    $this->uuid = null;
+                    $this->save();
                 }
             );
+        }
+
+        /**
+         * Is whoever made this invitation an administrator now, and able to sign in? An
+         * invitation outlives a change of mind about the person who sent it; the rights it
+         * can hand on must not.
+         *
+         * @return bool
+         */
+        function issuerIsAdministrator()
+        {
+            $by = (string) $this->invited_by;
+            if ($by === '') {
+                return false;
+            }
+            $issuer = static::unrestricted(
+                function () use ($by) {
+                    return User::getByUUID($by, false);
+                }
+            );
+
+            // Not isAdmin(), which is about the request at hand (never true for an API request)
+            return $issuer instanceof User && !empty($issuer->admin) && !$issuer->isBanned();
         }
 
         /**
@@ -380,9 +472,33 @@ namespace Idno\Entities {
             return $this->role === self::ROLE_ADMIN ? self::ROLE_ADMIN : self::ROLE_MEMBER;
         }
 
+        /**
+         * Set what the invitation makes. Changing the role of an invitation that has been
+         * saved gives it a new code: the link that was mailed for one role (and may be in a
+         * mailbox, a log or a browser's history) never becomes a link for another.
+         *
+         * @param string $role ROLE_MEMBER or ROLE_ADMIN
+         */
         function setRole($role)
         {
-            $this->role = $role === self::ROLE_ADMIN ? self::ROLE_ADMIN : self::ROLE_MEMBER;
+            $role = $role === self::ROLE_ADMIN ? self::ROLE_ADMIN : self::ROLE_MEMBER;
+            if (!empty($this->_id) && $role !== $this->getRole()) {
+                $this->generateCode();
+            }
+            $this->role = $role;
+        }
+
+        /**
+         * Record the administrator who answers for this invitation: who made it, or sent it
+         * again
+         *
+         * @param User $inviter
+         */
+        function setInviter(User $inviter)
+        {
+            $this->inviter_name = $inviter->getTitle();
+            $this->invited_by = $inviter->getUUID();
+            $this->inviter_email = (string) $inviter->email;
         }
 
         function isForAdministrator()

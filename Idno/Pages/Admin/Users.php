@@ -40,24 +40,21 @@ namespace Idno\Pages\Admin {
 
             switch ($action) {
                 case 'add_rights':
-                    $uuid = $this->getInput('user');
-                    if ($user = User::getByUUID($uuid)) {
+                    if ($user = $this->userFromInput()) {
                         $user->setAdmin(true);
                         $user->save();
                         \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->esc_("%s was given administration rights.", [$user->getTitle()]));
                     }
                     break;
                 case 'remove_rights':
-                    $uuid = $this->getInput('user');
-                    if (($user = User::getByUUID($uuid)) && $this->mayDemoteOrDelete($user)) {
+                    if (($user = $this->userFromInput()) && $this->mayDemoteOrDelete($user)) {
                         $user->setAdmin(false);
                         $user->save();
                         \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->esc_("%s was stripped of their administration rights.", [$user->getTitle()]));
                     }
                     break;
                 case 'delete':
-                    $uuid = $this->getInput('user');
-                    if (($user = User::getByUUID($uuid)) && $this->mayDemoteOrDelete($user)) {
+                    if (($user = $this->userFromInput()) && $this->mayDemoteOrDelete($user)) {
                         if ($user->delete()) {
                             \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->esc_("%s was removed from your site.", [$user->getTitle()]));
                         }
@@ -75,8 +72,15 @@ namespace Idno\Pages\Admin {
                     break;
                 case 'resend_invitation':
                     if ($invitation = $this->invitationFromInput()) {
-                        // The same invitation, with its role: its time starts again
+                        // The address may have been blocked since it was invited
+                        if (\Idno\Core\Idno::site()->config()->emailIsBlocked((string) $invitation->email)) {
+                            \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->esc_("%s is blocked from this site, so the invitation was not sent again. You can withdraw it.", [$invitation->email]));
+                            break;
+                        }
+                        // The same invitation, with its role: its time starts again, and
+                        // the administrator who sends it again answers for it
                         $invitation->renew();
+                        $invitation->setInviter(\Idno\Core\Idno::site()->session()->currentUser());
                         $invitation->save();
                         if ($invitation->send()) {
                             \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->esc_("The invitation was sent to %s again.", [$invitation->email]));
@@ -230,6 +234,20 @@ namespace Idno\Pages\Admin {
         }
 
         /**
+         * The member a form names, if there is one. The lookup finds any entity by its
+         * address: a post is not a member, and is answered as a member who does not exist.
+         *
+         * @return User|null
+         */
+        protected function userFromInput()
+        {
+            $uuid = $this->getInput('user');
+            $user = is_string($uuid) ? User::getByUUID($uuid) : false;
+
+            return $user instanceof User ? $user : null;
+        }
+
+        /**
          * The invitation a form names, if there is one
          *
          * @return Invitation|null
@@ -302,7 +320,8 @@ namespace Idno\Pages\Admin {
                     $members[] = $email;
                     continue;
                 }
-                // One invitation per address: inviting again renews the one there is
+                // One invitation per address: inviting again renews the one there is, with
+                // a new link if the role changes (setRole())
                 $invitation = Invitation::getByEmail($email);
                 if (!$invitation) {
                     $invitation = new Invitation();
@@ -312,9 +331,7 @@ namespace Idno\Pages\Admin {
                 }
                 $invitation->renew();
                 $invitation->setRole($role);
-                $invitation->inviter_name = $inviter->getTitle();
-                $invitation->invited_by = $inviter->getUUID();
-                $invitation->inviter_email = (string) $inviter->email;
+                $invitation->setInviter($inviter);
                 $invitation->save();
                 if ($invitation->send()) {
                     $sent[] = $email;

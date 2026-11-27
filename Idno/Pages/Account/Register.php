@@ -34,6 +34,30 @@ namespace Idno\Pages\Account {
         }
 
         /**
+         * The address of an invitation link holds its code, and the form's page has that
+         * address: the browser must not pass it to another site in a Referer (a picture or
+         * a font the page loads from elsewhere, a link somebody follows). "same-origin"
+         * rather than "no-referrer", because the first-run form comes back to the page it
+         * was sent from, which it knows by the Referer of its own POST.
+         */
+        protected function keepAddressPrivate()
+        {
+            if (!headers_sent()) {
+                header('Referrer-Policy: same-origin');
+            }
+        }
+
+        /**
+         * The page has drawn its own answer: the request ends here. Page::post() would
+         * otherwise go on to redirect a POST that has not been redirected, which turns the
+         * answer into a 302 wherever the output has not left the server yet.
+         */
+        protected function finish()
+        {
+            exit;
+        }
+
+        /**
          * Work out whether this visitor may register, and with which invitation.
          *
          * @param  string $email
@@ -46,11 +70,13 @@ namespace Idno\Pages\Account {
             $config = \Idno\Core\Idno::site()->config();
             $open = !empty($config->open_registration);
 
+            // A site that can take no more members takes none, invited or not
+            if (!$config->canAddUsers()) {
+                return ['invitation' => null, 'problem' => 'closed'];
+            }
+
             // A code is always checked, also on a site anyone can join: it may make an administrator
             if (!empty($code) || !$open) {
-                if (!$config->canAddUsers()) {
-                    return ['invitation' => null, 'problem' => 'closed'];
-                }
                 if (empty($code) && !$open) {
                     return ['invitation' => null, 'problem' => 'closed'];
                 }
@@ -76,11 +102,13 @@ namespace Idno\Pages\Account {
             // shell for an address under /account/, which is for people who are signed in
             $t->messages = \Idno\Core\Idno::site()->session()->getAndFlushMessages();
             echo $t->draw('shell');
+            $this->finish();
         }
 
         function getContent()
         {
             $this->signedOutOnly();
+            $this->keepAddressPrivate();
             // Texts: a field sent as an array is an empty one
             $code       = $this->getTextInput('code');
             $email      = $this->getTextInput('email');
@@ -98,7 +126,9 @@ namespace Idno\Pages\Account {
             if (empty($onboarding)) {
                 $this->drawForm($admission['invitation'], ['email' => $email, 'code' => $code]);
             } else {
-                $t->body  = $t->__(
+                // Drawn with a copy of the template (see drawForm())
+                $form = clone $t;
+                $t->body  = $form->__(
                     array(
                     'email'    => $email,
                     'code'     => $code,
@@ -116,11 +146,17 @@ namespace Idno\Pages\Account {
          * @param Invitation|null $invitation The invitation being accepted, if any
          * @param array           $values     What goes into the fields: email, code, name, handle
          *                                    (never a password)
+         * @param bool            $end        Whether the request ends with the form (the
+         *                                    answer to a POST)
          */
-        protected function drawForm($invitation, array $values)
+        protected function drawForm($invitation, array $values, $end = false)
         {
             $t = \Idno\Core\Idno::site()->template();
-            $t->body  = $t->__(
+            // The form is drawn with a copy of the template: what goes into its fields (the
+            // invitation's code and address) must not become variables of the page, which
+            // its JSON and JSONP forms print, and JSONP is a script any site can load
+            $form = clone $t;
+            $t->body  = $form->__(
                 [
                     'email'    => $invitation ? (string) $invitation->email : (string) ($values['email'] ?? ''),
                     'code'     => (string) ($values['code'] ?? ''),
@@ -136,11 +172,15 @@ namespace Idno\Pages\Account {
             // shell for an address under /account/, which is for people who are signed in
             $t->messages = \Idno\Core\Idno::site()->session()->getAndFlushMessages();
             echo $t->draw('shell');
+            if ($end) {
+                $this->finish();
+            }
         }
 
         function postContent()
         {
             $this->signedOutOnly();
+            $this->keepAddressPrivate();
             // Texts: a field sent as an array is an empty one
             $name       = $this->getTextInput('name');
             $handle     = trim($this->getTextInput('handle'));
@@ -190,43 +230,55 @@ namespace Idno\Pages\Account {
                         ], true
                     )
                 ) {
-                    // An invitation is used once: whoever uses it up first gets the account
-                    if ($invitation && !$invitation->consume()) {
-                        $this->refuse('invalid');
-
-                        return;
-                    }
-
-                    $user         = new \Idno\Entities\User();
-                    $user->email  = $email;
-                    $user->handle = strtolower(trim($handle)); // Trim the handle and set it to lowercase
-                    $user->setPassword($password);
-                    if (empty($name)) {
-                        $name = $user->handle;
-                    }
-                    $user->setTitle($name);
-                    if (!\Idno\Entities\User::get()) {
-                        $user->setAdmin(true);
-                        $user->robot_state = '1';
-                        if ($site->config()->title == 'New Idno site') {
-                            if (!empty($set_name)) {
-                                $site->config()->title = $set_name;
-                            } else {
-                                $site->config()->title = $user->getTitle() . '\'s Idno';
+                    $make = function () use ($site, $invitation, $email, $handle, $password, $name, $set_name) {
+                        $made         = new \Idno\Entities\User();
+                        $made->email  = $email;
+                        $made->handle = strtolower(trim($handle)); // Trim the handle and set it to lowercase
+                        $made->setPassword($password);
+                        if (empty($name)) {
+                            $name = $made->handle;
+                        }
+                        $made->setTitle($name);
+                        if (!\Idno\Entities\User::get()) {
+                            $made->setAdmin(true);
+                            $made->robot_state = '1';
+                            if ($site->config()->title == 'New Idno site') {
+                                if (!empty($set_name)) {
+                                    $site->config()->title = $set_name;
+                                } else {
+                                    $site->config()->title = $made->getTitle() . '\'s Idno';
+                                }
+                                $site->config()->open_registration = false;
+                                $site->config()->from_email        = $made->email;
+                                $site->config()->save();
                             }
-                            $site->config()->open_registration = false;
-                            $site->config()->from_email        = $user->email;
-                            $site->config()->save();
+                            $site->events()->triggerEvent('site/firstadmin', array('user' => $made)); // Event hook for first admin
+                        } else {
+                            // The role comes from the invitation as it is stored, never from the request
+                            if ($invitation && $invitation->isForAdministrator()) {
+                                $made->setAdmin(true);
+                            }
+                            $site->events()->triggerEvent('site/newuser', array('user' => $made)); // Event hook for new user
                         }
-                        $site->events()->triggerEvent('site/firstadmin', array('user' => $user)); // Event hook for first admin
+
+                        return $made->save(true) ? $made : false;
+                    };
+                    if ($invitation) {
+                        // An invitation is used once: of several requests with it, the one
+                        // that claims it makes the account, and an account that could not
+                        // be saved leaves the invitation as it was (Invitation::redeem())
+                        $made = $invitation->redeem($make);
+                        if ($made === null) {
+                            $this->refuse('invalid');
+
+                            return;
+                        }
                     } else {
-                        // The role comes from the invitation as it is stored, never from the request
-                        if ($invitation && $invitation->isForAdministrator()) {
-                            $user->setAdmin(true);
-                        }
-                        $site->events()->triggerEvent('site/newuser', array('user' => $user)); // Event hook for new user
+                        $made = $make();
                     }
-                    $user->save(true);
+                    if ($made) {
+                        $user = $made;
+                    }
                 } else {
                     if (!empty($blocked)) {
                         $session->addErrorMessage($lang->_("An account can't be created with that email address."));
@@ -271,7 +323,7 @@ namespace Idno\Pages\Account {
                 $session->addMessageAtStart($lang->_("We couldn't register you."), 'alert-danger');
                 $this->setResponse(400);
                 http_response_code(400);
-                $this->drawForm($invitation, ['email' => $email, 'code' => $code, 'name' => $name, 'handle' => $handle]);
+                $this->drawForm($invitation, ['email' => $email, 'code' => $code, 'name' => $name, 'handle' => $handle], true);
             }
 
         }

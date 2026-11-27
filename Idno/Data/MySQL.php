@@ -333,8 +333,12 @@ namespace Idno\Data {
 
             $retval          = false;
             $benchmark_start = microtime(true);
+            // Inside transaction() the save is part of that transaction, which its caller ends
+            $own_transaction = !$client->inTransaction();
             try {
-                $client->beginTransaction();
+                if ($own_transaction) {
+                    $client->beginTransaction();
+                }
                 $statement = $client->prepare(
                     "insert into {$collection}
                                                     (`uuid`, `_id`, `siteid`, `entity_subtype`,`owner`, `contents`, `publish_status`, `created`)
@@ -388,11 +392,15 @@ namespace Idno\Data {
                         }
                     }
                 }
-                $client->commit();
+                if ($own_transaction) {
+                    $client->commit();
+                }
             } catch (\Exception $e) {
                 \Idno\Core\Idno::site()->logging()->error($e->getMessage());
                 $retval = false; // Nothing was stored, so the record must not be reported as saved
-                $client->rollback();
+                if ($own_transaction) {
+                    $client->rollback();
+                }
             }
 
             //\Idno\Core\Idno::site()->logging()->debug('saveRecord(): insert or update took ' . (microtime(true) - $benchmark_start) . 's');
@@ -900,6 +908,64 @@ namespace Idno\Data {
             }
 
             return false;
+        }
+
+        /**
+         * Remove one record, and say whether this call removed it: one DELETE, and the number
+         * of rows it removed. Of two requests at once the second waits for the first and then
+         * finds nothing to remove.
+         *
+         * @param  string $id
+         * @param  string $collection
+         * @return bool
+         */
+        function removeRecord($id, $collection = 'entities')
+        {
+            try {
+                $collection = $this->sanitiseCollection($collection);
+                $statement = $this->client->prepare("delete from {$collection} where _id = :id");
+
+                return $statement->execute(array(':id' => $id)) && $statement->rowCount() > 0;
+            } catch (\Exception $e) {
+                \Idno\Core\Idno::site()->logging()->error($e->getMessage());
+
+                return false;
+            }
+        }
+
+        /**
+         * Do several changes as one transaction: kept if $work returns something other than
+         * false or null, undone if it returns one of those or throws. Inside a transaction
+         * that is already open, $work joins it.
+         *
+         * @param  callable $work
+         * @return mixed What $work returns
+         */
+        function transaction(callable $work)
+        {
+            $client = $this->client;
+            /* @var \PDO $client */
+            if ($client->inTransaction()) {
+                return $work();
+            }
+            $client->beginTransaction();
+            try {
+                $result = $work();
+            } catch (\Throwable $e) {
+                if ($client->inTransaction()) {
+                    $client->rollBack();
+                }
+                throw $e;
+            }
+            if ($client->inTransaction()) {
+                if ($result === false || $result === null) {
+                    $client->rollBack();
+                } else {
+                    $client->commit();
+                }
+            }
+
+            return $result;
         }
 
         /**
