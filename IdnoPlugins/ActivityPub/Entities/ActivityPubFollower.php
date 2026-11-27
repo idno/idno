@@ -126,6 +126,32 @@ class ActivityPubFollower extends \Idno\Common\Entity
     }
 
     /**
+     * Remove every follower record of a local user (the user is gone).
+     *
+     * @param string $userUuid Local user's UUID
+     * @return int Number of records deleted
+     */
+    public static function removeForUser(string $userUuid): int
+    {
+        $count = 0;
+        $kept  = 0;
+        while ($followers = static::get([
+            'entity_subtype' => 'IdnoPlugins\\ActivityPub\\Entities\\ActivityPubFollower',
+            'user_uuid'      => $userUuid,
+        ], [], 100, $kept)) {
+            foreach ($followers as $follower) {
+                if ($follower->delete()) {
+                    $count++;
+                } else {
+                    $kept++; // refused by a listener: the next page begins after it, so this cannot loop for ever
+                }
+            }
+        }
+
+        return $count;
+    }
+
+    /**
      * Remove all follower records for a given remote actor.
      *
      * @param string $actorUri Remote actor's ActivityPub ID

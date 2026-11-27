@@ -20,6 +20,9 @@ final class LegacyProfiles implements Profiles
     public function byHandle(string $handle): ?User
     {
         $user = User::getByHandle($handle);
+        if ($user instanceof User && $user->isClosed() && !Idno::site()->session()->isAdmin()) {
+            return null; // an account that is being deleted: its profile is missing to everyone but an administrator
+        }
 
         return $user instanceof User ? $user : null;
     }

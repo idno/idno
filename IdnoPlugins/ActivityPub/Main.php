@@ -94,7 +94,7 @@ class Main extends Plugin
             $object = $eventdata['object'];
 
             // An import brings in history, not news: nothing it imports is federated
-            if (\Idno\Core\Idno::importInProgress()) return;
+            if (\Idno\Core\Idno::announcementsSuppressed()) return;
 
             // Skip non-content entities
             if ($object instanceof User) return;
@@ -129,7 +129,7 @@ class Main extends Plugin
             $object = $eventdata['object'];
 
             // An import brings in history, not news: nothing it imports is federated
-            if (\Idno\Core\Idno::importInProgress()) return;
+            if (\Idno\Core\Idno::announcementsSuppressed()) return;
 
             // A like, a reply or a webmention is no change of the post (the activity does not carry them): followers are not told of an Update
             if (!empty($eventdata['annotations_only'])) return;
@@ -164,6 +164,9 @@ class Main extends Plugin
             $eventdata = $event->data();
             $object = $eventdata['object'];
 
+            // The posts of an account that is being deleted are not announced one by one: its followers are sent one Delete of the actor
+            if (\Idno\Core\Idno::announcementsSuppressed()) return;
+
             if ($object instanceof User) return;
             if ($object instanceof ActivityPubFollower) return;
             if ($object instanceof \Idno\Entities\AsynchronousQueuedEvent) return;
@@ -180,6 +183,34 @@ class Main extends Plugin
             } catch (\Exception $e) {
                 \Idno\Core\Idno::site()->logging()->error('ActivityPub: Error building Delete activity: ' . $e->getMessage());
             }
+        });
+
+        // -------------------------------------------------------
+        // An account that is being deleted: tell the followers' servers once that the actor is gone
+        // (the account's posts are deleted without an activity each; see Delivery::announceActorDeleted())
+        // -------------------------------------------------------
+        \Idno\Core\Idno::site()->events()->addListener('account/closed', function (\Idno\Core\Event $event) {
+
+            $object = $event->data()['object'] ?? null;
+            if (!$object instanceof User) return;
+
+            try {
+                Delivery::announceActorDeleted($object);
+            } catch (\Throwable $e) {
+                \Idno\Core\Idno::site()->logging()->error('ActivityPub: Error telling followers an account was deleted: ' . get_class($e));
+            }
+        });
+
+        // A body that was signed when it was queued (the Delete of an actor): it needs no user, so it runs as nobody
+        \Idno\Core\Idno::site()->events()->addListener('activitypub/deliver-signed', function (\Idno\Core\Event $event) {
+
+            $data = $event->data();
+            if (empty($data['inbox']) || empty($data['body']) || empty($data['headers']) || !is_array($data['headers'])) {
+                \Idno\Core\Idno::site()->logging()->warning('ActivityPub: Incomplete signed delivery event data');
+                return;
+            }
+
+            Delivery::deliverSigned((string) $data['inbox'], (string) $data['body'], $data['headers']);
         });
 
         // -------------------------------------------------------

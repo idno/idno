@@ -1,4 +1,4 @@
-{% if is_user(user ?? null) %}{% set handle = user.getHandle() %}{% if handle %}{% set display_handle = handle|length > 18 ? handle|slice(0, 16) ~ '...' : handle %}{% set is_self = user.getUUID() == current_user().getUUID() %}
+{% if is_user(user ?? null) %}{% set handle = user.getHandle() %}{% if handle %}{% set display_handle = handle|length > 18 ? handle|slice(0, 16) ~ '...' : handle %}{% set is_self = user.getUUID() == current_user().getUUID() %}{% set closed = user.isClosed() %}
 
     <div class="idno-user-row idno-entities-{{ user.getEntityTypeName()|lower }}">
         <div class="idno-user-info">
@@ -24,11 +24,13 @@
                 {% endif %}
             </div>
             <div class="idno-user-meta-item">
-                {% if user.getEntityTypeName() == 'RemoteUser' %}<span>{{ t('Remote member') }}</span>{% elseif user.isAdmin() %}<strong>{{ t('Administrator') }}</strong>{% else %}<span>{{ t('Member') }}</span>{% endif %}
+                {% if closed %}<strong>{{ t('Being deleted') }}</strong>{% elseif user.getEntityTypeName() == 'RemoteUser' %}<span>{{ t('Remote member') }}</span>{% elseif user.isAdmin() %}<strong>{{ t('Administrator') }}</strong>{% else %}<span>{{ t('Member') }}</span>{% endif %}
             </div>
         </div>
         <div class="idno-user-actions">
-            {% if not is_self %}
+            {% if not is_self and closed %}
+                {{ action_link(site_url('admin/users'), t('Continue deleting'), {'user': user.getUUID(), 'action': 'delete'}, {'class': 'idno-user-action-link idno-user-action-danger', 'confirm': true, 'confirm-text': t('Are you sure? This will go on deleting this user and all their content.')}) }}
+            {% elseif not is_self %}
                 {% if user.getEntityTypeName() != 'RemoteUser' %}
                     {% if user.isAdmin() %}
                         {{ action_link(site_url('admin/users'), t('Remove admin'), {'user': user.getUUID(), 'action': 'remove_rights'}, {'class': 'idno-user-action-link'}) }}

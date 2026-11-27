@@ -47,7 +47,7 @@ namespace Idno\Core {
             }
 
             // An import brings in history, not news (Idno\Portability\ImportMode)
-            if (\Idno\Core\Idno::importInProgress()) {
+            if (\Idno\Core\Idno::announcementsSuppressed()) {
                 return true;
             }
 
@@ -101,7 +101,7 @@ namespace Idno\Core {
                 return;
             }
 
-            if (\Idno\Core\Idno::importInProgress() || defined('IDNO_NOMENTION')) {
+            if (\Idno\Core\Idno::announcementsSuppressed() || defined('IDNO_NOMENTION')) {
                 return;
             }
 

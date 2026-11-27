@@ -736,6 +736,18 @@ namespace Idno\Core {
         }
 
         /**
+         * Is this process doing something that other servers and syndication targets are not told about post by post? An import brings in history, not
+         * news; the removal of an account is announced once (the account's followers are sent one `Delete` of the actor when it is closed). Every place that
+         * would announce a post, or its deletion, asks this: importInProgress() and AccountContent::removalInProgress() are its two reasons.
+         *
+         * @return bool
+         */
+        public static function announcementsSuppressed(): bool
+        {
+            return self::importInProgress() || \Idno\Core\AccountContent::removalInProgress();
+        }
+
+        /**
          * Attempt to construct a component.
          * This allows for config configurable, and plugin extensible, system conponents, without the need for a lot of repeat typing.
          *

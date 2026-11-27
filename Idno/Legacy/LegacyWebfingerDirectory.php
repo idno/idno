@@ -20,7 +20,7 @@ final class LegacyWebfingerDirectory implements WebfingerDirectory
         }
         $handle = str_replace('@' . Idno::site()->config()->host, '', substr($resource, 5));
         $user = User::getByHandle($handle);
-        if (!$user instanceof User) {
+        if (!$user instanceof User || $user->isClosed()) {
             return null;
         }
         $links = Idno::site()->events()->triggerEvent('webfinger', ['object' => $user]);

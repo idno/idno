@@ -1191,6 +1191,9 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
         $site->config()->blocked_emails = [$bob->email];
         $out['user row, a blocked member'] = $draw('forms/components/usersearch/user', ['user' => $bob]);
         $site->config()->blocked_emails = [];
+        $closedBob = clone $bob;
+        $closedBob->account_closed = 1773000000;
+        $out['user row, an account that is being deleted'] = $draw('forms/components/usersearch/user', ['user' => $closedBob]);
         $site->session()->logUserOff();
 
         return $out;

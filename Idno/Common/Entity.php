@@ -921,7 +921,7 @@ namespace Idno\Common {
         function syndicate()
         {
             // An import brings in history, not news: nothing is syndicated for it
-            if (\Idno\Core\Idno::importInProgress()) {
+            if (\Idno\Core\Idno::announcementsSuppressed()) {
                 return;
             }
             if ($this->getActivityStreamsObjectType()) {
@@ -1230,6 +1230,25 @@ namespace Idno\Common {
         }
 
         /**
+         * Delete every stored file of this entity: its attachments and the other files it keeps (getAttachedFileIDs(): a photo's thumbnails). What delete()
+         * does once the record is gone. A file that is not there is not an error.
+         */
+        function deleteStoredFiles()
+        {
+            $ids = $this->getAttachedFileIDs();
+            foreach ($ids as $id) {
+                try {
+                    if ($file = \Idno\Entities\File::getByID((string) $id)) {
+                        $file->delete();
+                    }
+                } catch (\Throwable $e) {
+                    \Idno\Core\Idno::site()->logging()->warning('Could not delete a file of a deleted entity: ' . get_class($e));
+                }
+            }
+            $this->attachments = [];
+        }
+
+        /**
          * Delete a single attachment by its id
          * @param type $id
          */
@@ -1324,10 +1343,7 @@ namespace Idno\Common {
                     $this->deleteData();
                     \Idno\Core\Idno::site()->events()->triggerEvent('deleted', array('object' => $this));
 
-                    $attachments = $this->getAttachments();
-                    if (!empty($attachments)) {
-                        $this->deleteAttachments();
-                    }
+                    $this->deleteStoredFiles();
                     return $return;
                 }
             }
@@ -1966,6 +1982,12 @@ namespace Idno\Common {
 
             // Unpublished entities are for their owner and admins only, whatever their access setting
             if ($this->isHiddenByPublishStatus($user_id)) return false;
+
+            // What an account that is being deleted owns is for administrators alone (see User::isClosed())
+            if (!($this instanceof User) && !empty($this->owner) && User::uuidIsClosed($this->owner)) {
+                $viewer = $user_id ? User::getByUUID($user_id) : false;
+                if (!($viewer instanceof User && $viewer->isAdmin())) return false;
+            }
 
             $access = $this->getAccess();
 

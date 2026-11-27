@@ -452,7 +452,8 @@ class ActivityHandler
         if (strpos($actorId, $actorPrefix) === 0) {
             $handle = substr($actorId, strlen($actorPrefix));
             $handle = rtrim($handle, '/');
-            return User::getByHandle($handle);
+            $user = User::getByHandle($handle);
+            return $user && !$user->isClosed() ? $user : false; // an account that is being deleted takes no follow
         }
 
         // Fallback: try to find user by iterating (less efficient)

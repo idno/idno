@@ -53,7 +53,7 @@ namespace Idno\Core {
             Idno::site()->events()->addListener(
                 'published', function (Event $event) {
                     $eventdata = $event->data();
-                    if (Idno::importInProgress()) {
+                    if (Idno::announcementsSuppressed()) {
                         return; // An import brings in history, not news
                     }
                     if ($object = $eventdata['object']) {

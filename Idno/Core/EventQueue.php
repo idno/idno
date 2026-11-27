@@ -17,7 +17,7 @@ abstract class EventQueue extends \Idno\Common\Component
      * @param  string $queueName the named queue to put this event on (currently unused)
      * @param  string $eventName the name of the event, e.g. "webmention/send"
      * @param  array  $eventData the data sent to the event when it is triggered.
-     * @param  string|null $runAsUser the uuid of the user the event runs as (the logged-in user's when empty)
+     * @param  string|null|false $runAsUser the uuid of the user the event runs as (the logged-in user's when empty; false: nobody, whoever is logged in)
      * @return string|false an ID that can be used to query the job status; false when the event could not be queued
      */
     abstract function enqueue($queueName, $eventName, array $eventData, $runAsUser = null);

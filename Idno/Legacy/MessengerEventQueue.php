@@ -80,7 +80,7 @@ final class MessengerEventQueue extends EventQueue
      * @param  string|null  $queueName the legacy queue name (`default` when empty), kept in the message
      * @param  string       $eventName
      * @param  array<mixed> $eventData
-     * @param  string|null  $runAsUser the uuid of the user the event runs as; the logged-in user's when empty
+     * @param  string|null|false $runAsUser the uuid of the user the event runs as; the logged-in user's when empty; false for nobody, whoever is logged in
      * @return string|false an id (the transport's id of the message, or for an event run at once an opaque string), false when the message could not be sent
      */
     public function enqueue($queueName, $eventName, array $eventData, $runAsUser = null)
@@ -90,7 +90,7 @@ final class MessengerEventQueue extends EventQueue
         }
 
         $queueName = empty($queueName) ? 'default' : (string) $queueName;
-        $user = $runAsUser ?: ($this->currentUser)();
+        $user = $runAsUser === false ? null : ($runAsUser ?: ($this->currentUser)());
         $message = new QueuedEvent($queueName, (string) $eventName, $eventData, $user ? (string) $user : null);
         try {
             $envelope = ($this->bus)()->dispatch($message);

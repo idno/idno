@@ -93,6 +93,72 @@ class Delivery
     }
 
     /**
+     * Tell the servers of a local account's followers that the actor is gone: ONE Delete whose object is the actor, signed with the account's key and
+     * sent to each follower's inbox (a shared inbox once for each server). The deliveries are SIGNED HERE and queued as they are to be sent (the inbox, the
+     * body and the signed headers), so they need neither the account nor its key when a worker runs them: the account is deleted by then. Then the
+     * account's follower records are removed. Nothing is sent when the account has no key (it never federated) or no followers.
+     *
+     * A signature is dated when it is made, and the servers that receive it accept a date within twelve hours: a queue that is not worked for longer than
+     * that has these deliveries refused.
+     *
+     * @param User $user The account that is being deleted
+     * @return int How many deliveries were queued
+     */
+    public static function announceActorDeleted(User $user): int
+    {
+        $queued  = 0;
+        $inboxes = ActivityPubFollower::getUniqueInboxesForUser($user->getUUID());
+        if (!empty($inboxes) && !empty($user->privateKey)) {
+            $actorId  = $user->getActivityPubActorID();
+            $keyId    = $actorId . '#main-key';
+            $body     = json_encode(ActivityBuilder::buildActorDelete($user), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            foreach ($inboxes as $inbox) {
+                if ($body === false || !filter_var($inbox, FILTER_VALIDATE_URL)) {
+                    continue;
+                }
+                $headers = HTTPSignature::sign((string) $user->privateKey, $keyId, $inbox, $body);
+                if (empty($headers)) {
+                    continue;
+                }
+                if (\Idno\Core\Idno::site()->queue()->enqueue('default', 'activitypub/deliver-signed', ['inbox' => $inbox, 'body' => $body, 'headers' => $headers], false) !== false) {
+                    $queued++;
+                }
+            }
+        }
+        ActivityPubFollower::removeForUser($user->getUUID());
+
+        return $queued;
+    }
+
+    /**
+     * Send a body that has been signed already (see announceActorDeleted()) to an inbox. Whether the server took it (HTTP 2xx).
+     *
+     * @param string $inboxUrl
+     * @param string $body
+     * @param array  $headers The signed header lines
+     * @return bool
+     */
+    public static function deliverSigned(string $inboxUrl, string $body, array $headers): bool
+    {
+        if (!filter_var($inboxUrl, FILTER_VALIDATE_URL)) {
+            \Idno\Core\Idno::site()->logging()->warning('ActivityPub: Invalid inbox URL for delivery: ' . $inboxUrl);
+            return false;
+        }
+        try {
+            $response = Webservice::safeSend('post', $inboxUrl, $body, $headers);
+            $httpCode = $response['response'] ?? 0;
+            if ($httpCode >= 200 && $httpCode < 300) {
+                return true;
+            }
+            \Idno\Core\Idno::site()->logging()->warning('ActivityPub: Delivery to ' . $inboxUrl . ' returned HTTP ' . $httpCode);
+        } catch (\Exception $e) {
+            \Idno\Core\Idno::site()->logging()->error('ActivityPub: Exception during delivery to ' . $inboxUrl . ': ' . $e->getMessage());
+        }
+
+        return false;
+    }
+
+    /**
      * Deliver an activity to a single inbox immediately (synchronous).
      * Used for Accept responses to Follow requests where timely delivery matters.
      *

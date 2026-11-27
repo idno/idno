@@ -40,7 +40,8 @@ namespace Idno\Pages\Account {
             $this->reverseGatekeeper();
             $email_address = $this->getInput('email');
 
-            if ($user = User::getByEmail($email_address)) {
+            // (an account that is being deleted is sent no code: the answer is the same)
+            if (($user = User::getByEmail($email_address)) && !$user->isClosed()) {
 
                 if ($auth_code = $user->addPasswordRecoveryCode()) {
 

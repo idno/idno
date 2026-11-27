@@ -22,6 +22,11 @@ class Following extends \Idno\Common\Page
             return;
         }
 
+        if ($user->isClosed()) {
+            $this->goneContent(); // the account is being deleted: the actor is gone
+            return;
+        }
+
         $actorId = $user->getActivityPubActorID();
 
         $collection = [

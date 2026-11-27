@@ -675,6 +675,9 @@ namespace Idno\Core {
                 if (empty($user)) {
                     $user = \Idno\Entities\User::getByEmail($apiUsername);
                 }
+                if (!empty($user) && $user->isClosed()) {
+                    $user = null; // an account that is being deleted has no key: it is as if nobody has the name
+                }
                 if (!empty($user)) {
                     \Idno\Core\Idno::site()->logging()->debug("API auth found user by username: " . self::forLog($apiUsername) . " - " . $user->getName());
 
@@ -757,7 +760,7 @@ namespace Idno\Core {
 
         function logUserOn(\Idno\Entities\User $user)
         {
-            if (\Idno\Core\Idno::site()->config()->emailIsBlocked($user->email)) {
+            if (\Idno\Core\Idno::site()->config()->emailIsBlocked($user->email) || $user->isClosed()) {
                 $this->logUserOff();
 
                 return false;
@@ -800,7 +803,8 @@ namespace Idno\Core {
         {
             if ($user = User::getByUUID($user->getUUID(), false)) {
 
-                if (\Idno\Core\Idno::site()->config()->emailIsBlocked($user->email)) {
+                if (\Idno\Core\Idno::site()->config()->emailIsBlocked($user->email) || $user->isClosed()) {
+                    // (an address that has been blocked, or an account that is being deleted: neither is let in by any road, a login, a signature, a token, a queued event)
                     $this->logUserOff();
 
                     return false;
@@ -860,7 +864,7 @@ namespace Idno\Core {
         {
             if (!$this->currentUser() && !empty($_SESSION['user_uuid'])) {
                 if ($this->user = User::getByUUID($_SESSION['user_uuid'])) {
-                    if (\Idno\Core\Idno::site()->config()->emailIsBlocked($this->user->email)) {
+                    if (\Idno\Core\Idno::site()->config()->emailIsBlocked($this->user->email) || $this->user->isClosed()) {
                         $this->logUserOff();
                         $this->startNewSession(); // a session of the visitor's own, with a form token that later requests accept
                     } else if (!$this->checkPasswordFingerprint($this->user)) {

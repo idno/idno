@@ -336,6 +336,27 @@ class ActivityBuilder
     }
 
     /**
+     * The activity that tells other servers a local account is gone: a Delete whose object is the actor itself, which Mastodon and the other servers
+     * answer by removing what they hold of the actor (its posts included), so no Delete is sent for each post.
+     *
+     * @param User $actor The account that is being deleted
+     * @return array ActivityPub Delete activity
+     */
+    public static function buildActorDelete(User $actor): array
+    {
+        $actorId = $actor->getActivityPubActorID();
+
+        return [
+            '@context'  => 'https://www.w3.org/ns/activitystreams',
+            'id'        => $actorId . '#delete',
+            'type'      => 'Delete',
+            'actor'     => $actorId,
+            'to'        => [self::PUBLIC_AUDIENCE],
+            'object'    => $actorId,
+        ];
+    }
+
+    /**
      * Build an Accept activity in response to a Follow.
      *
      * @param array $followActivity The original Follow activity being accepted

@@ -101,7 +101,7 @@ class Main extends Plugin
             $object = $eventdata['object'];
 
             // An import brings in history, not news: nothing it imports is synced
-            if (\Idno\Core\Idno::importInProgress()) {
+            if (\Idno\Core\Idno::announcementsSuppressed()) {
                 return;
             }
 
@@ -140,7 +140,7 @@ class Main extends Plugin
             $object = $eventdata['object'];
 
             // An import brings in history, not news: nothing it imports is synced
-            if (\Idno\Core\Idno::importInProgress()) {
+            if (\Idno\Core\Idno::announcementsSuppressed()) {
                 return;
             }
 
@@ -180,6 +180,11 @@ class Main extends Plugin
 
             $eventdata = $event->data();
             $object = $eventdata['object'];
+
+            // The posts of an account that is being deleted are not removed from its PDS one by one
+            if (\Idno\Core\Idno::announcementsSuppressed()) {
+                return;
+            }
 
             if (!$this->shouldSync($object)) {
                 return;

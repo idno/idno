@@ -23,6 +23,11 @@ class Actor extends \Idno\Common\Page
             return;
         }
 
+        if ($user->isClosed()) {
+            $this->goneContent(); // the account is being deleted: the actor is gone
+            return;
+        }
+
         $person = ActivityBuilder::buildActor($user);
 
         header('Content-Type: application/activity+json');
