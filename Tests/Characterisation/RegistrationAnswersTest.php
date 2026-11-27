@@ -24,8 +24,9 @@ use Tests\Support\RecordedAnswers;
  * password over 72 bytes, a name holding markup shown escaped); the events a registration and each refusal trigger (`Tests\Fixtures\RegistrationEventHook`:
  * its mode makes a listener refuse the password, veto the registration or say the site is full); the user limit (`users/add/check`), which the form asks and
  * the POST does not; a private site (`walled_garden`); and the setting pinned closed by the boot configuration (`IDNO_OPEN_REGISTRATION`) over a stored open one.
- * The two GETs with an array for `email` or `code` are 500 pages only because the rig's and CI's sites run `pedantic_mode` (a notice for an array to string
- * conversion is an exception); the array handle, email, password and name POSTs fail on `trim()` whatever the mode.
+ * The GET with an array for `email` or `code` on an open site is a 500 page only because the rig's and CI's sites run `pedantic_mode` (a notice for an array
+ * to string conversion is an exception); the array handle, email, password and name POSTs fail on `trim()` whatever the mode. A code that is an array on a
+ * site that asks for an invitation is refused as a wrong one is (`CHANGED`).
  *
  * A site closed to new users with no invitation to give (`users/add/check` answering false: nothing in core listens to it) is not recorded: nothing
  * of core or the bundled plugins can make a site say so.
@@ -35,6 +36,20 @@ final class RegistrationAnswersTest extends SignInSiteCase
     use RecordedAnswers;
 
     protected const GROUP = 'registration';
+
+    /**
+     * Cases the page now answers differently on purpose: a code that is an array found an invitation on the email alone (the lookup
+     * read it as a list of values to match), so a site that asks for an invitation made an account for a visitor who had none. The
+     * recordings stay as the legacy page made them, and the tests assert the new answer: that of an invitation that does not exist.
+     */
+    private const CHANGED = [
+        'form-closed-array-code' => 'a code that is not text is no invitation: the form is refused as it is for a wrong code (it answered a 500 page, the notice for an array to string conversion)',
+        'register-post-closed-array-code' => 'a code that is not text is no invitation: no account is made and the browser is sent home with the message a wrong code gets',
+        'register-post-closed-array-code-then' => 'the page after the refusal, as for a wrong code',
+        'register-post-closed-array-code-after' => 'the home page after the refusal, as for a wrong code',
+        'register-post-closed-array-code-user' => 'nobody is signed in',
+        'register-post-closed-array-code-admin' => 'nobody is signed in',
+    ];
 
     private const NEW_PASSWORD = 'a-new-passphrase-77';
 
@@ -356,9 +371,29 @@ final class RegistrationAnswersTest extends SignInSiteCase
             $this->visit(['answer' => 'form-closed-valid-code-markdown'], '/account/register?_t=markdown&email=dana%40example.test&code=' . self::CODE_DANA);
             $this->visit(['answer' => 'form-closed-valid-code-slash'], '/account/register/?email=dana%40example.test&code=' . self::CODE_DANA);
             $this->visit(['answer' => 'form-closed-array-code'], '/account/register?email=dana%40example.test&code[]=x');
+            $wrong = $this->refusalOf('/account/register?email=dana%40example.test&code=ffffffffffffffffffffffffffffffff');
+            foreach (['code[]=x', 'code[$lt]=g', 'code[$gt]=0', 'code[$not]=zzz', 'email[$gt]=a&email[$lt]=z&code[$lt]=g', 'email[]=dana%40example.test&code[]=x'] as $query) {
+                $query = str_starts_with($query, 'email') ? $query : 'email=dana%40example.test&' . $query;
+                $this->assertSame($wrong, $this->refusalOf('/account/register?' . $query), $query . ' is refused as an invitation that does not exist is');
+            }
             $this->visit(['answer' => 'form-closed-bob-valid-code'], '/account/register?email=dana%40example.test&code=' . self::CODE_DANA, [], 'bob');
             $this->answer('form-closed-signed-valid-code', $this->site()->request('GET', '/account/register?email=dana%40example.test&code=' . self::CODE_DANA, self::signedHeadersFor('bob', self::KEY_BOB, '/account/register?email=dana%40example.test&code=' . self::CODE_DANA)), $this->scrubViewers());
         });
+    }
+
+    /**
+     * What a visitor is told for a request of the form: its status, where it sends the browser, and the page it lands on.
+     *
+     * @return array{int, string, string}
+     */
+    private function refusalOf(string $path): array
+    {
+        [$cookie, $token] = $this->visitorSession();
+        $answer = $this->site()->request('GET', $path, ['Cookie' => $cookie]);
+        $landed = $answer->header('Location') === null ? $answer : $this->follow($answer, $cookie);
+        $scrubbed = ($this->scrubWithNonce($token))($landed);
+
+        return [$answer->status, (string) $answer->header('Location'), $scrubbed->body];
     }
 
     /**
@@ -540,8 +575,14 @@ final class RegistrationAnswersTest extends SignInSiteCase
             $try(['answer' => 'register-post-closed-no-code-json', 'then' => 'register-post-closed-no-code-json-then', 'after' => 'register-post-closed-no-code-json-after'], self::dana(), ['path' => '/account/register?_t=json']);
             $try(['answer' => 'register-post-closed-array-code', 'then' => 'register-post-closed-array-code-then', 'after' => 'register-post-closed-array-code-after', 'user' => 'register-post-closed-array-code-user', 'admin' => 'register-post-closed-array-code-admin'], self::dana() + ['code' => ['x']]);
             $try(['answer' => 'register-post-closed-no-token', 'then' => 'register-post-closed-no-token-then', 'after' => 'register-post-closed-no-token-after'], self::dana() + ['code' => self::CODE_DANA], ['token' => false]);
-            // today's behaviour: an array in place of the code finds an invitation (a defect: the lookup reads it as a list of values)
-            $this->assertSame(['register-post-closed-array-code'], array_keys(array_filter($made)), 'the POSTs that make an account');
+            // an array in place of the code is no invitation: the answer is a wrong code's
+            $this->assertSame([], array_keys(array_filter($made)), 'the POSTs that make an account');
+            $wrongCode = $this->register(self::dana() + ['code' => 'ffffffffffffffffffffffffffffffff']);
+            foreach ([['x'], ['$lt' => 'g'], ['$gt' => '0'], ['$not' => 'zzz']] as $code) {
+                $arrayCode = $this->register(self::dana() + ['code' => $code]);
+                $this->assertSame($wrongCode->status, $arrayCode->status);
+                $this->assertSame($wrongCode->header('Location'), $arrayCode->header('Location'));
+            }
             $this->assertSame($before, $this->handles());
             $this->assertTrue($this->invitationFor('dana@example.test'), 'a refusal leaves the invitation');
 

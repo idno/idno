@@ -189,17 +189,50 @@ final class CriteriaTest extends TestCase
         $this->assertEquals([new NotEquals('n', '5')], $this->parse(['n' => ['$not' => '5']]));
     }
 
-    public function testUnknownOperatorIsDropped(): void
+    /**
+     * @return array<string, array{array<int|string, mixed>}>
+     */
+    public static function arrayValuesThatAreNotOperatorMaps(): array
     {
-        $this->assertSame([], $this->parse(['n' => ['$regex' => 'a', '$exists' => true]]));
-        $this->assertEquals([new LessThan('n', 2)], $this->parse(['n' => ['$regex' => 'a', '$lt' => 2]]));
+        return [
+            'unknown operators only' => [['n' => ['$regex' => 'a', '$exists' => true]]],
+            'unknown beside a known one' => [['n' => ['$regex' => 'a', '$lt' => 2]]],
+            'unknown after a known one' => [['n' => ['$lt' => 'g', '$ne' => 'x']]],
+            'plain list' => [['f' => ['a', 'b']]],
+            'list of one' => [['f' => ['x']]],
+            'empty array' => [['f' => []]],
+            'map of other keys' => [['f' => ['x' => 'y']]],
+            'a list beside an operator' => [['f' => ['$gt' => 'a', 0 => 'b']]],
+            'inside an or' => [['$or' => ['f' => ['a', 'b']]]],
+        ];
     }
 
-    public function testPlainListAndEmptyArrayAsAFieldValueAreDropped(): void
+    /**
+     * @dataProvider arrayValuesThatAreNotOperatorMaps
+     *
+     * @param array<int|string, mixed> $search
+     */
+    public function testAnArrayValueThatIsNotAMapOfKnownOperatorsIsRejected(array $search): void
     {
-        $this->assertSame([], $this->parse(['f' => ['a', 'b']]));
-        $this->assertSame([], $this->parse(['f' => []]));
-        $this->assertSame([], $this->parse(['f' => ['x' => 'y']]));
+        $this->expectException(\InvalidArgumentException::class);
+        $this->parse($search);
+    }
+
+    public function testTheRejectionNamesTheFieldAndNeverTheValues(): void
+    {
+        try {
+            $this->parse(['code' => ['secret-operand']]);
+            $this->fail('expected a rejection');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringContainsString('"code"', $e->getMessage());
+            $this->assertStringNotContainsString('secret-operand', $e->getMessage());
+        }
+    }
+
+    public function testARecognisedOperatorWithAnEmptyOperandIsStillDropped(): void
+    {
+        $this->assertSame([], $this->parse(['n' => ['$in' => []]]));
+        $this->assertSame([], $this->parse(['n' => ['$lt' => 0, '$not' => '']]));
     }
 
     public function testAssociativeOrParsesToAnyOfOfItsEntries(): void
@@ -346,7 +379,7 @@ final class CriteriaTest extends TestCase
             'lt gt' => [['n' => ['$gt' => 1, '$lt' => 9]]],
             'all four' => [['n' => ['$gt' => 1, '$lt' => 9, '$in' => [1], '$not' => 5]]],
             'not and not in cannot co-occur but in+not can' => [['n' => ['$in' => [1], '$not' => 5]]],
-            'dropped operands' => [['n' => ['$lt' => 0, '$in' => [], '$not' => ''], 'm' => ['$regex' => 'x'], 'l' => ['a', 'b'], 'k' => []]],
+            'dropped operands' => [['n' => ['$lt' => 0, '$in' => [], '$not' => '']]],
             'or' => [['$or' => ['slug' => 'a', 'owner' => 'x']]],
             'or with operators' => [['$or' => ['owner' => ['$in' => ['a', 'b']], 'n' => ['$gt' => 1, '$lt' => 9]]]],
             'or list' => [['$or' => [['slug' => 'a'], ['slug' => 'b']]]],

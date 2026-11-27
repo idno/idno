@@ -106,6 +106,9 @@ namespace Idno\Entities {
 
         public static function getBySourceURL($url)
         {
+            if (!is_string($url) || $url === '') {
+                return false;
+            }
             return static::getOne(['source_url' => $url]);
         }
 

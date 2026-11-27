@@ -785,6 +785,31 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
         }
     }
 
+    /**
+     * A value a request supplied where text was expected, an array that is not a map of known operators,
+     * matches nothing through the adapter and is logged once by shape: it never drops the field's condition.
+     */
+    public function testAnArrayThatIsNotAnOperatorMapMatchesNothingAndIsLogged(): void
+    {
+        $db = Idno::site()->db();
+        $marker = 'adapter-array-' . bin2hex(random_bytes(6));
+        $this->status('Has the field ' . $marker, $marker, 1_700_000_000);
+        $this->assertCount(1, $db->getObjects('', ['testmarker' => $marker]), 'positive control');
+
+        foreach ([['x'], [], ['$gt' => 'a', '$regex' => 'x'], ['$ne' => 'zzz']] as $value) {
+            $search = ['testmarker' => $value];
+            $this->captureLog();
+            $this->assertSame([], $db->getObjects('', $search));
+            $this->assertFalse($db->countObjects('', $search));
+            $this->assertFalse($db->getRecords([], $search, 10, 0));
+            $this->assertFalse($db->countRecords($search));
+            $log = $this->readLog();
+            $this->assertCount(4, $log, implode("\n", $log));
+            $this->assertStringNotContainsString('zzz', implode("\n", $log));
+        }
+        $this->assertSame([], Status::getFromX('', ['testmarker' => ['x']]));
+    }
+
     public function testTheLoggedShapeHasNoValuesAndIsBounded(): void
     {
         $this->assertSame('{a: _, b: {$in: […]}, c: {$not: {$in: []}}, $search: […]}', RepositoryDataConcierge::shape(['a' => 'x', 'b' => ['$in' => ['secret']], 'c' => ['$not' => ['$in' => []]], '$search' => ['term']]));

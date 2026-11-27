@@ -2230,6 +2230,13 @@ the tag pages and the small public endpoints are served through them (and the fi
       returns false and fires neither. The old backend on MySQL also overwrote the OTHER record when
       an existing record was re-saved with its uuid; that is refused now on every database;
     - DIFFERENCE (empty `access`/`entity_subtype` conditions): see the `Criteria` merge below;
+    - DIFFERENCE (an array that is not an operator map): a field value that is an array must be a map made only
+      of the operators `$not`, `$in`, `$lt` and `$gt`. A plain list (`['a', 'b']`), an empty array and an unknown
+      operator (`$regex`, `$ne`, `$exists`), alone or beside known ones, make the whole query unreadable, so it
+      matches nothing (below). The old backend dropped such a value and ran the rest of the query, so a request
+      that sent `code[]=x` for a value the code meant as text removed that condition from the lookup. A
+      recognised operator with an empty operand (`['$in' => []]`, `['$lt' => 0]`) is still dropped. The list
+      form of `$or` (a list of conditions) still contributes no alternative;
     - DIFFERENCE (unloadable classes): `getObjects()` leaves out a record whose class cannot be loaded instead of
       returning `false` in its place (`getFromX()` already filtered those out; counts still include it);
     - DIFFERENCE (publish-status override): `getObjects()` hides unpublished entities by
@@ -2306,7 +2313,8 @@ the tag pages and the small public endpoints are served through them (and the fi
       settings key ending in a space is refused (false, the previous document intact);
     - (unchanged, stated once) a whole float (`1.0`) reads back as the integer `1`, as before.
   - A search array `Criteria::fromLegacyArray()` rejects (an array operand, `'$not' => ['$in' =>
-    []]`, a non-array `$in`, ...) matches nothing (`getRecords()` false, `getObjects()` `[]`, the counts
+    []]`, a non-array `$in`, a field value that is a plain list, an empty array or has an operator it
+    does not know, ...) matches nothing (`getRecords()` false, `getObjects()` `[]`, the counts
     false) and is logged as ONE warning naming the method and the query's shape: keys and operator
     names only, never values, control characters replaced, at most 200 bytes
     (`RepositoryDataConcierge::shape()`).
@@ -2346,7 +2354,8 @@ the tag pages and the small public endpoints are served through them (and the fi
   - the `Criteria` is merged OVER those conditions: a top-level condition on `access` or
     `entity_subtype` REPLACES the repository's, so it can widen what a user reads. Pass one only
     when your code has already decided what the user may see. DIFFERENCE (empty conditions): a value that
-    parses to no condition (`[]`, `['$in' => []]`, an operator with an empty operand) is no
+    parses to no condition (`['$in' => []]`, an operator with an empty operand; an empty array `[]` is
+    refused: see the `db()` list above) is no
     condition, so the viewer's read groups (or the types) stay; legacy drops the filter entirely;
   - `find()`: with ignore-access on there is no access condition; the page is cut in the database,
     then records whose class does not exist and unpublished entities the user may not see (only owner
@@ -5633,6 +5642,22 @@ no installer writes one.
   itself still verifies (bcrypt), but does not upgrade. `RemoteUser::checkPassword()` is false as before. Tests: `Tests/Unit/Security/`,
   `Tests/Kernel/PasswordCompatibilityTest`.
 - A member's account email address is private: no serialiser of a member (`User::jsonSerialize()`, `jsonLDSerialise()`, the structured data every profile and permalink draws, the feeds, the ActivityPub actor) includes it, for any viewer; only the account's own settings page and the administrator's Users page show it. An address a member wants public is a `mailto:` link in their profile links (`profile.url`), shown as the h-card's `u-email`. The member as structured data (`jsonLDSerialise()`: `@context`, `@type` `Person`, `name`, `image`, `url`, and `sameAs` when the profile has an address) holds the member's name, as it did on the 1.x line, and never the email address (`Tests/Common/UserJsonLdTest`). `Tests/Characterisation/AccountEmailPrivateTest`, `AccountEmailInAnnotationTest` and `IdnoPlugins/ActivityPub/Tests/ActorEmailTest` check this.
+- A value a request supplied reaches a lookup as TEXT or the lookup finds nothing. PHP builds an array from `x[]=a` and `x[$gt]=a`, and a JSON body
+  from an object, so `getInput()` can give a page an array where it expects text; a finder that put it in a search array would have the array read as
+  operators (`$lt`, `$not`) or, when it held none, dropped from the query, removing the condition the lookup was meant to have (an invitation was
+  found on its address alone; the newest member answered for `email[]=x`). Two rules close it. (1) The finders that take a value a request can supply
+  answer their not-found value for anything but a non-empty string, before any query: `Entity::getByID()`, `getByUUID()`, `getBySlug()`,
+  `getByShortURL()`, `User::getByEmail()`, `getByHandle()`, `getByProfileURL()` and `UnfurledUrl::getBySourceURL()`, and the `Invitation` finders; a new
+  finder does the same. (2) The storage layer refuses what it cannot read: a field value that is an array but not a map of `$not`, `$in`, `$lt` and
+  `$gt` alone (a plain list, an empty array, an unknown operator alone or beside known ones) matches nothing (see the `db()` list), so a finder that
+  forgot rule 1 still cannot be bent into dropping its condition. `Tests/Common/FindersTakeTextOnlyTest` pins the finders and
+  `Tests/Characterisation/ArrayInputTest` the login, registration, password request and reset pages with each text field in each shape (a page that
+  fails on a value it cannot read answers a server error, which refuses the request too; the test lists them). Never pass a request's value as a
+  search array's value without it being text. `Idno\Entities\Invitation` is a credential, not content: its access is `INVITATION` (no access group
+  matches), `canRead()` and `canEdit()` are true for administrators only (so `/view/<id>` is a missing page for everyone else), `jsonSerialize()`
+  is empty, and the registration page looks it up through `Invitation::unrestricted()`. `Invitation::validate()` (and `getByEmailAndCode()`)
+  require a string email and code, read every invitation for the address and compare each code with `hash_equals()`; the code is never a condition of
+  the lookup. Pinned by `Tests/Characterisation/InvitationAccessTest`.
 - Logging in (`Idno\Pages\Session\Login`). ONE failure message for an unknown login name and a wrong password: "Oops! That
   username or password isn't right. Please try again." (JSON login too); the legacy events still fire as before (`login/failure`,
   `login/failure/nouser`). For a login name nobody has, `Passwords::spendVerification()` does one bcrypt against a fixed cost-12

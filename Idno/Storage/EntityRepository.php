@@ -25,7 +25,7 @@ use Psr\Log\NullLogger;
  *    `access` REPLACES the repository's (as legacy array_merge() does), so a caller can widen access.
  *    Only code that has already decided what the user may read may pass an `access` condition.
  *    DELIBERATE DIFFERENCE from legacy: a caller's `access` or `entity_subtype` value
- *    that parses to no condition (`[]`, `['$in' => []]`, an operator with an empty operand such as
+ *    that parses to no condition (`['$in' => []]`, an operator with an empty operand such as
  *    `['$lt' => 0]`) is no condition, so the viewer's read groups (or the requested types) stay in
  *    force. Legacy array_merge() replaces them with nothing, so getObjects()/countObjects() then do
  *    not filter on that field at all (for `access`: an access-filter bypass).

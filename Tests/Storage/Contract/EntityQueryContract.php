@@ -485,7 +485,6 @@ abstract class EntityQueryContract extends \Tests\IdnoTestCase
     {
         return [
             'an empty $in' => [['$in' => []]],
-            'an empty array' => [[]],
             'a dropped operand ($lt 0)' => [['$lt' => 0]],
         ];
     }

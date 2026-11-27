@@ -257,6 +257,10 @@ namespace Idno\Common {
 
         static function getByID($id)
         {
+            // Request input reaches this finder: a value that is not text (a list, a map of operators) finds nothing
+            if (!is_string($id) || $id === '') {
+                return false;
+            }
             try {
                 return static::getOneFromAll(array('_id' => \Idno\Core\Idno::site()->db()->processID($id)));
             } catch (\Exception $e) {
@@ -338,6 +342,9 @@ namespace Idno\Common {
 
         static function getByUUID($uuid, $cached = true)
         {
+            if (!is_string($uuid) || $uuid === '') {
+                return false;
+            }
             if (!empty(self::$entity_cache[$uuid]) && $cached) return self::$entity_cache[$uuid];
             $return = static::getOneFromAll(array('uuid' => $uuid));
             if ($return instanceof Entity) self::$entity_cache[$uuid] = $return;
@@ -1810,6 +1817,9 @@ namespace Idno\Common {
          */
         static function getByShortURL($url)
         {
+            if (!is_string($url)) {
+                return false;
+            }
             $url = str_replace(\Idno\Core\Idno::site()->config()->url . 's/', '', $url);
             if (empty($url)) {
                 return false;

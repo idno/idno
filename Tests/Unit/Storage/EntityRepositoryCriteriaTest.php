@@ -207,7 +207,6 @@ final class EntityRepositoryCriteriaTest extends TestCase
     {
         return [
             'an empty $in' => [['$in' => []]],
-            'an empty array' => [[]],
             'a dropped operand ($lt 0)' => [['$lt' => 0]],
         ];
     }

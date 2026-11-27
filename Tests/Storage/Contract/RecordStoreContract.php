@@ -617,15 +617,21 @@ abstract class RecordStoreContract extends TestCase
         $this->assertMatches(['n' => ['$not' => '5']], [$minus, $zero]);
     }
 
-    public function testUnknownOperatorIsIgnored(): void
+    public function testUnknownOperatorIsRefused(): void
     {
-        $withN = $this->put($this->r(['n' => 5]));
-        $without = $this->put($this->r(['other' => 1]));
+        $this->put($this->r(['n' => 5]));
+        $this->put($this->r(['other' => 1]));
 
-        // Surprising: an unsupported operator is dropped silently, leaving no
-        // condition on the field at all (even records without it match).
-        $this->assertMatches(['n' => ['$regex' => 'x']], [$withN, $without]);
-        $this->assertMatches(['n' => ['$exists' => true]], [$withN, $without]);
+        // A query that cannot be read is no query: it is refused before any store sees it (the adapters
+        // turn that into "matches nothing"), never answered with the condition dropped.
+        foreach ([['n' => ['$regex' => 'x']], ['n' => ['$exists' => true]]] as $search) {
+            try {
+                $this->criteria($search);
+                $this->fail('expected a refusal for ' . json_encode($search));
+            } catch (\InvalidArgumentException) {
+                $this->addToAssertionCount(1);
+            }
+        }
     }
 
     // ------------------------------------------------------------ combinations
@@ -1170,27 +1176,40 @@ abstract class RecordStoreContract extends TestCase
         $this->assertNotContains($lacks['_id'], $this->ids(['g' => ['$not' => 'zz']]));
     }
 
-    public function testPlainListAndEmptyArrayCriteriaAreIgnored(): void
+    public function testPlainListAndEmptyArrayCriteriaAreRefused(): void
     {
         $a = $this->put($this->r(['f' => 'a']));
-        $b = $this->put($this->r(['f' => 'b']));
-        $c = $this->put($this->r(['f' => 'c']));
+        $this->put($this->r(['f' => 'b']));
 
-        // An array with no operator is not "equals any of": it adds no condition.
-        $this->assertMatches(['f' => ['a', 'b']], [$a, $b, $c]);
-        $this->assertMatches(['f' => []], [$a, $b, $c]);
+        // An array with no operator is not "equals any of", and is not "no condition" either: it is refused.
+        foreach ([['f' => ['a', 'b']], ['f' => []]] as $search) {
+            try {
+                $this->criteria($search);
+                $this->fail('expected a refusal for ' . json_encode($search));
+            } catch (\InvalidArgumentException) {
+                $this->addToAssertionCount(1);
+            }
+        }
         // Positive control.
         $this->assertMatches(['f' => 'a'], [$a]);
     }
 
-    public function testKnownAndUnknownOperatorsMixed(): void
+    public function testKnownAndUnknownOperatorsMixedAreRefused(): void
     {
-        $three = $this->put($this->r(['n' => 3]));
+        $this->put($this->r(['n' => 3]));
         $seven = $this->put($this->r(['n' => 7]));
 
-        // The unknown operator is dropped, the known one applies.
-        $this->assertMatches(['n' => ['$regex' => 'x', '$gt' => '5']], [$seven]);
-        $this->assertMatches(['n' => ['$gt' => '5', '$regex' => 'x']], [$seven]);
+        // An unknown operator beside a known one is refused, in either order: a request that adds the
+        // operator it wants to a map must not get the rest of the map applied.
+        foreach ([['n' => ['$regex' => 'x', '$gt' => '5']], ['n' => ['$gt' => '5', '$regex' => 'x']]] as $search) {
+            try {
+                $this->criteria($search);
+                $this->fail('expected a refusal for ' . json_encode($search));
+            } catch (\InvalidArgumentException) {
+                $this->addToAssertionCount(1);
+            }
+        }
+        $this->assertMatches(['n' => ['$gt' => '5']], [$seven]);
     }
 
     // -------------------------------------------------------------- paging

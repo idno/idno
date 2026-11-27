@@ -26,6 +26,14 @@ final class PasswordResetAnswersTest extends SignInSiteCase
 
     protected const GROUP = 'password-reset';
 
+    /**
+     * Cases the page now answers differently on purpose: an address that is an array found the newest member (the lookup read it as no condition), issued
+     * that member a new recovery code and then failed to draw the mail; it is no address, so the answer is the one every unknown address gets.
+     */
+    private const CHANGED = [
+        'request-post-array' => 'an address that is not text finds no member: the redirect every address gets, with no code issued and no mail',
+    ];
+
     private const NEW_PASSWORD = 'a-new-passphrase-77';
 
     private const CODE_BOB = '0123456789abcdef0123456789abcd11';
@@ -317,8 +325,12 @@ final class PasswordResetAnswersTest extends SignInSiteCase
             $this->post(['answer' => 'request-post-missing', 'then' => 'request-post-missing-then', 'mail' => 'request-post-missing-mail'], '/account/password', []);
 
             $this->arm();
-            $this->post(['answer' => 'request-post-array'], '/account/password', ['email' => ['bob@example.com']]);
+            $answer = $this->post(['answer' => 'request-post-array'], '/account/password', ['email' => ['bob@example.com']]);
+            $this->assertSame(302, $answer->status);
+            $this->assertSame($this->baseUrl() . 'account/password/?sent=true', $answer->header('Location'));
             $this->recordMail('request-post-array-mail');
+            $this->assertSame(self::CODE_BOB, $this->recoveryOf('bob')['code'], 'no member was issued a new code');
+            $this->assertFalse($this->recoveryOf('carol')['hasCode'], 'no member was issued a new code');
 
             $this->arm();
             $this->post(['answer' => 'request-post-blocked', 'then' => 'request-post-blocked-then', 'mail' => 'request-post-blocked-mail'], '/account/password', ['email' => 'blocked@example.test']);

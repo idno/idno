@@ -31,6 +31,9 @@ use Idno\Storage\Criterion\Search;
  */
 final class Criteria
 {
+    /** The operators a field's value may hold, in the order they are read */
+    private const OPERATORS = ['$not', '$in', '$lt', '$gt'];
+
     public function __construct(private readonly AllOf $root)
     {
     }
@@ -49,9 +52,10 @@ final class Criteria
      * Per field, the legacy code looks at each of these operators in turn, in this fixed
      * order: $not (a NotIn when its value holds a non-empty $in, otherwise a NotEquals),
      * $in, $lt, $gt. An operator whose operand is empty (0, '0', '', [], null, false) is
-     * dropped, as is an unknown operator. A field whose value is not an array is an Equals
-     * (even a false or empty one). A plain list or an empty array as a field value adds
-     * nothing. After the operators, a key '$or' whose value is an array becomes an AnyOf of
+     * dropped. A field whose value is not an array is an Equals (even a false or empty one).
+     * A field whose value is an array must be a map of those four operators and nothing else:
+     * a plain list, an empty array and an unknown operator (alone or beside known ones) are
+     * rejected with an InvalidArgumentException, so the query matches nothing. After the operators, a key '$or' whose value is an array becomes an AnyOf of
      * what its entries produce (recursively, with the same rules: a nested '$or' key is a
      * nested AnyOf), and a key '$search' whose value is an array becomes a Search of its
      * element [0] (nothing when that is empty). A '$or' given as a LIST of conditions (the
@@ -97,16 +101,22 @@ final class Criteria
 
     /**
      * @param array<int|string, mixed> $params
+     * @param bool                     $alternatives the entries of an '$or'
      *
      * @return list<Criterion>
      */
-    private static function parse(array $params): array
+    private static function parse(array $params, bool $alternatives = false): array
     {
         $out = [];
         foreach ($params as $key => $value) {
             $field = (string) $key;
+            if ($alternatives && is_int($key) && is_array($value)) {
+                // The list form of '$or' (a list of conditions): it has no field to hold, and contributes
+                // no alternative, so an '$or' made only of them is an AnyOf with none, which matches nothing
+                continue;
+            }
             if (($key === '$or' || $key === '$search') && is_array($value)) {
-                foreach (['$not', '$in', '$lt', '$gt'] as $operator) {
+                foreach (self::OPERATORS as $operator) {
                     if (!empty($value[$operator])) {
                         throw new \InvalidArgumentException(sprintf('"%s" holds a "%s" operator: it cannot be both a field and a %s.', $key, $operator, $key));
                     }
@@ -115,6 +125,9 @@ final class Criteria
             if (!is_array($value)) {
                 $out[] = new Equals($field, self::scalar($value, $field));
                 continue;
+            }
+            if ($key !== '$or' && $key !== '$search') {
+                self::assertOperatorMap($value, $field);
             }
 
             if (!empty($value['$not'])) {
@@ -135,7 +148,7 @@ final class Criteria
                 $out[] = new GreaterThan($field, self::scalar($value['$gt'], $field));
             }
             if ($key === '$or') {
-                $out[] = new AnyOf(self::parse($value));
+                $out[] = new AnyOf(self::parse($value, true));
             }
             if ($key === '$search' && !empty($value[0])) {
                 $term = $value[0];
@@ -147,6 +160,27 @@ final class Criteria
         }
 
         return $out;
+    }
+
+    /**
+     * A field value that is an array must be a map made only of operators the parser knows: a plain list, an
+     * empty array, or a key it does not know (alone or beside known ones) is a query that cannot be
+     * answered, so that a value a request supplied can never drop or bend the condition it was meant for.
+     *
+     * @param array<int|string, mixed> $value
+     *
+     * @throws \InvalidArgumentException
+     */
+    private static function assertOperatorMap(array $value, string $field): void
+    {
+        if ($value === []) {
+            throw new \InvalidArgumentException(sprintf('The value for "%s" is an empty array: use an operator map or a scalar.', $field));
+        }
+        foreach (array_keys($value) as $operator) {
+            if (!in_array($operator, self::OPERATORS, true)) {
+                throw new \InvalidArgumentException(sprintf('The value for "%s" is an array that is not made only of the operators $not, $in, $lt and $gt.', $field));
+            }
+        }
     }
 
     private static function scalar(mixed $value, string $field): string|int|float|bool|null
