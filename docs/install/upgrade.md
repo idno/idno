@@ -48,6 +48,30 @@ the database back end supports. Any other array makes the query match nothing, o
 * A page that reads one text from the request should use `$this->getTextInput('name')`, which gives an empty string
   when the field was sent as an array (`name[]=x`).
 
+## The feed reader was removed
+
+The feed reader let a member follow a feed (RSS, Atom or a page with microformats) and read its items in the site,
+at `/following/` and `/stream/`. It has been removed. It could not work on PHP 8, which Idno has required for some
+time: asking it to follow a feed ended with the site's error page before anything was stored, and what it did store
+was saved in one place and looked for in another. Nothing needs doing on a site.
+
+* **What is gone:** the addresses `/following/`, `/following/add/`, `/following/confirm/`, `/following/refresh/` and
+  `/stream/`, which now answer "not found"; the classes `Idno\Core\Reader`, `Idno\Entities\Reader\Feed`,
+  `Idno\Entities\Reader\FeedItem`, `Idno\Entities\Reader\Subscription`, `Idno\Pages\Following\Home`, `Add`, `Confirm`
+  and `Refresh`, and `Idno\Pages\Stream\Home`; `Idno::site()->reader()`; and the templates `following/home`,
+  `following/add`, `following/confirm`, `stream/home`, `entity/FeedItem`, `entity/Subscription` and
+  `content/feed/end`.
+* **What stays:** following a person. The settings page at `/account/settings/following/`, its "Add as friend"
+  bookmarklet, the `follow` and `unfollow` events, and the WebSub subscription to the hub of a person you follow all
+  work as before. After following someone with the bookmarklet you are no longer offered a subscription to their feed
+  (that offer is what ended with the error page).
+* **No data is deleted.** The `reader` collection (the `reader`, `reader_search` and `reader_metadata` tables on
+  MySQL) is kept as it is, and so is any record the feed reader stored, wherever it is. Those records are no longer
+  shown anywhere, and their addresses answer as those of posts that do not exist.
+* **Plugins and themes:** a third-party plugin or theme that extends or names one of the classes above, calls
+  `Idno::site()->reader()`, or draws one of those templates will fail when that code runs. Disable it before you
+  upgrade, and enable it again once it no longer does. No bundled plugin or theme used any of it.
+
 ## Names that changed
 
 ### WebSub (formerly PubSubHubbub)

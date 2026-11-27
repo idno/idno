@@ -36,7 +36,6 @@ namespace Idno\Core {
         private $currentPage;
         private $idno_hub;
         private $helper_robot;
-        private $reader;
         private $cache;
         private $statistics;
         private $site_details;
@@ -124,7 +123,6 @@ namespace Idno\Core {
             $this->language     = new Language();
                 $this->language()->register(new GetTextTranslation()); // Register default gettext translations
             $this->syndication  = new Syndication();
-            $this->reader       = new Reader();
             $this->helper_robot = new HelperRobot();
             $this->queue        = $this->componentFactory($this->config->event_queue, "Idno\\Core\\EventQueue", "Idno\\Core\\", "Idno\\Core\\SynchronousQueue");
             $this->statistics   = $this->componentFactory($this->config->statistics_collector, "Idno\\Stats\\StatisticsCollector", "Idno\\Stats\\", "Idno\\Stats\\DummyStatisticsCollector");
@@ -472,16 +470,6 @@ namespace Idno\Core {
         function &actions() : ?Actions
         {
             return $this->actions;
-        }
-
-        /**
-         * Return the reader associated with this site
-         *
-         * @return \Idno\Core\Reader
-         */
-        function &reader() : ?Reader
-        {
-            return $this->reader;
         }
 
         /**

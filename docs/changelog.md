@@ -11,6 +11,8 @@ Unreleased
 These changes are on the `dev` branch and will be part of the next release.
 
 * PHP 8.3 or later is now required
+* Removed the feed reader (`/following/`, `/stream/`, `Idno\Core\Reader` and the `Idno\Entities\Reader` classes), which could not follow a feed on PHP 8. Following a person, its settings page and bookmarklet, and WebSub subscriptions are unchanged, and no data is deleted; see "The feed reader was removed" in the upgrade notes
+* Fixed following a person with the bookmarklet ending with the error page after the follow had been saved
 * The protocol that tells a hub about new posts is called WebSub throughout, as the W3C names it: in the settings, the documentation and the code, including in older entries of this list. Nothing changes for a site, its hub or its subscriptions; plugins that use the earlier class or event names keep working, and [the upgrade notes](install/upgrade.md) list the new names
 * New Portfolios plugin: members collect their own posts into named, ordered lists (draft or published) at `/profile/<handle>/portfolios`, add and remove posts from the "More" menu of a post, and show published portfolios from their profile
 * Every post has a "More" menu with "Copy link"; plugins add items to it through `content/menu/items`

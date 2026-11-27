@@ -107,6 +107,9 @@ Tests/                         Core unit tests
   table with the JSON document in `contents`, `<collection>_search` with the text for
   full-text search, and `<collection>_metadata` with one row per field (cut to 255
   bytes) for queries.
+- The `reader` collection (and its three tables) is kept and nothing uses it: it was the
+  feed reader's, which was removed (see "Following a person, and the feed reader that
+  was removed"). No upgrade drops it or deletes from it.
 - `warmup/schemas/mysql/mysql.sql` creates a new installation. The dated files beside it
   are upgrades: `MySQL::checkAndUpgradeSchema()` runs on every connection and applies,
   in order, each file newer than the `schema` row of the `versions` table. To change the
@@ -839,6 +842,36 @@ draft or published. On for new sites (`Config`); not federated; not a content ty
 | **WebSub** | `Idno\Core\WebSub` — tells the site's hub about new posts, subscribes to the hubs of followed members; callback at `/pubsub/callback/{subscriber}/{subscription}` (`Idno\Pages\WebSub\Callback`) |
 | **POSSE** | `Idno\Core\Syndication` — syndicate to external services |
 
+### Following a person, and the feed reader that was removed
+
+A member follows a person: `User::addFollowing()` / `removeFollowing()` (which trigger the
+`follow` and `unfollow` events), the settings page `/account/settings/following/` with its
+bookmarklet, and `/account/settings/following/bookmarklet` (`Idno\Pages\Account\Settings\Following\Bookmarklet`),
+which shows the h-cards of the page it is given and, on a POST, stores the person as a
+`RemoteUser` and follows them. `WebSub` hears `follow` and subscribes at the person's hub.
+`Tests/Pages/Account/FollowingPersonTest.php` walks all of it, the hub's confirmation at the
+callback included, against a person, a feed and a hub served by `Tests\LocalHttpServer`.
+
+The feed reader (following a FEED to read its items in the site) was removed in November
+2026: `Idno\Core\Reader`, `Idno::site()->reader()`, `Idno\Entities\Reader\Feed`, `FeedItem` and
+`Subscription`, the pages at `/following/`, `/following/add/`, `/following/confirm/`,
+`/following/refresh/` and `/stream/`, and their templates. It could not follow a feed on
+PHP 8 (`Reader::parseFeed()` and `getFeedDetails()` called `\DOMDocument::loadHTML()`
+statically, which is an `\Error` there), and its entities were saved to `entities` and read
+from `reader`. Those five addresses answer the site's 404 page. Don't bring it back as it
+was: a page that fetches an address a member types must use `Webservice::safeSend()`.
+
+- **No data was removed.** The `reader` collection and its tables stay, and so does any
+  record of a removed class, in `reader` or in `entities`. Such a record is no post:
+  `DataConcierge::rowToEntity()` gives `false` for a class that does not exist (as it does
+  for the records of a plugin that was taken away), `Entity::getFromX()` leaves those out of
+  what it returns, so listings, feeds and profiles are drawn without it, and `/view/<id>`
+  answers as it does for a post that does not exist.
+- The bookmarklet no longer offers to subscribe to the followed person's feed.
+- `simplepie/simplepie` stays: `Migration::importFeedXML()` (the Blogger import) uses it.
+- `Tests/Data/RecordOfMissingClassTest.php` checks, over HTTP, what a record of a class
+  that is not there does.
+
 ### WebSub, and the names it had
 
 The protocol is WebSub (the W3C's name), and nothing new is named after what it was called before:
@@ -1097,9 +1130,7 @@ something). What existing sites, hubs and plugins hold was kept, and must stay:
   `templates/default/entity/LinkPreviewCard.tpl.php`, which both looks use, checks them
   again and escapes every value of the preview. `Tests/Core/LinkPreviewCardTest.php`
   checks this.
-- Following and the error mail: a feed's title and addresses
-  (`templates/default/following/confirm.tpl.php`, `templates/default/entity/Subscription.tpl.php`),
-  an h-card's name, photo and address
+- Following and the error mail: an h-card's name, photo and address
   (`templates/default/account/settings/following/mf2user.tpl.php`) and the User-Agent,
   query string and referrer of a request (`templates/email/admin/oops.tpl.php`) come from
   other sites or from the request, and are stored or passed on as they were sent, so the
@@ -1411,3 +1442,10 @@ Idno allows code that has been generated using AI models. When new code is writt
 it should be tested using the existing test suite. New tests MUST always be written
 for new code, and existing tests MUST always pass. When there are architectural changes, 
 the existing tests MUST be updated, and appropriate edits MUST be made to AGENTS.md.
+
+Add tests sparingly: the suite is run on every change and each test costs time for ever. A
+test is for behaviour the site has now that could plausibly break, and its class is named
+for the thing it tests. Don't write a test that a removed feature is gone (that its addresses
+answer 404, that its classes do not exist), one that goes on looking for traces of it, or one
+that enforces a name or scans the files for an old one. When a feature is removed, delete the
+tests that exercised it.

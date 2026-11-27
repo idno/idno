@@ -20,6 +20,9 @@
  *     /advertise?endpoint=<url>            a page that names <url> as its webmention endpoint
  *     /actor                               a minimal ActivityPub actor document
  *     /actor?key=<base64url PEM>           the same, for the requested address, with that public key
+ *     /person                              the profile page of a person: an h-card, and a link to the feed /person/feed
+ *     /person/feed                         that person's RSS feed, which names itself and the WebSub hub /hub
+ *     /hub                                 a WebSub hub: 202 to anything
  *     /log                                 JSON list of the requests seen so far ("METHOD target")
  *     /reset                               forget the requests seen so far
  *     anything else                        200, body "landed <METHOD> <path>"
@@ -77,7 +80,9 @@ if (!$server) {
     exit(1);
 }
 
-echo substr(strrchr(stream_socket_get_name($server, false), ':'), 1) . "\n";
+$port = substr(strrchr(stream_socket_get_name($server, false), ':'), 1);
+$origin = ($tls ? 'https' : 'http') . '://127.0.0.1:' . $port;
+echo $port . "\n";
 
 $log = [];
 $stopAt = time() + 300;
@@ -152,6 +157,24 @@ while (time() < $stopAt) {
                 ];
             }
             $body = json_encode($actor);
+        } else if ($path === '/person') {
+            $headers = ['Content-Type: text/html'];
+            $body = '<html><head><title>Fixture Person</title>'
+                . '<link rel="alternate" type="application/rss+xml" href="' . $origin . '/person/feed">'
+                . '</head><body><div class="h-card"><a class="p-name u-url" href="' . $origin . '/person">Fixture Person</a>'
+                . '<span class="p-nickname">fixtureperson</span>'
+                . '<img class="u-photo" src="' . $origin . '/person/photo.png" alt="">'
+                . '<a class="u-email" href="mailto:fixtureperson@example.com">Email</a></div></body></html>';
+        } else if ($path === '/person/feed') {
+            $headers = ['Content-Type: application/rss+xml'];
+            $body = '<?xml version="1.0"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel>'
+                . '<title>Fixture Person</title><link>' . $origin . '/person</link>'
+                . '<atom:link href="' . $origin . '/person/feed" rel="self" type="application/rss+xml" />'
+                . '<atom:link href="' . $origin . '/hub" rel="hub" />'
+                . '</channel></rss>';
+        } else if ($path === '/hub') {
+            $status = '202 Accepted';
+            $body = 'accepted';
         }
     }
 

@@ -108,7 +108,7 @@ namespace Idno\Core {
                                 if (!$pending) {
                                     $pending = new \stdClass();
                                 }
-                                if (!is_array($pending->subscribe)) {
+                                if (!isset($pending->subscribe) || !is_array($pending->subscribe)) {
                                     $pending->subscribe = array();
                                 }
 
