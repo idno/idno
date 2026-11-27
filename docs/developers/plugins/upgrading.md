@@ -248,7 +248,7 @@ The bundled StaticPages plugin works this way: `IdnoPlugins\StaticPages\Pages\Ho
 
 ## Where file sessions are kept
 
-A site whose sessions are PHP files (an SQLite site always) and whose PHP names no `session.save_path` now keeps them in `var/sessions/` (or `IDNO_SESSION_DIR`, or a private directory under the system's temporary directory), created for the web server's user only, with PHP's garbage collection on (`session.gc_probability` 1, `session.gc_divisor` 1000). A plugin that read or counted session files in the system's temporary directory must ask `session_save_path()` instead. Code that reads and writes `$_SESSION`, and a session handler a plugin supplies (`sessions_storage`), work as before: a handler is never given a directory. Members of an affected site are signed out once by the upgrade. See `docs/install/upgrade.md`.
+A site whose sessions are PHP files (an SQLite site always) and whose PHP names no `session.save_path` now keeps them in `var/sessions/` (or `IDNO_SESSION_DIR`, or a private directory under the system's temporary directory), created for the web server's user only, with PHP's garbage collection on (`session.gc_probability` 1, `session.gc_divisor` 1000). A plugin that read or counted session files in the system's temporary directory must ask `session_save_path()` instead. Code that reads and writes `$_SESSION`, and a session handler a plugin supplies (`sessions_storage`), work as before: a handler is never given a directory. Only a web request makes the directory: a script that boots `Idno/start.php` from the command line keeps PHP's own `session.save_path` for its session, as before. Members of an affected site are signed out once by the upgrade. See `docs/install/upgrade.md`.
 
 ## Installation and onboarding
 

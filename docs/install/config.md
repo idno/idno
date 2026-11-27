@@ -68,9 +68,9 @@ time. The old `cache` setting (a cache class name) is gone: it is ignored, with 
 Where PHP keeps the session files of a site whose sessions are files (every SQLite site, and a MySQL site with
 `sessions_database` off). Optional. Without it, a web request uses the directory PHP's own `session.save_path` names (the
 host's, collected by the host), and where PHP names none Idno keeps the files in a private directory of its own: the
-environment variable `IDNO_SESSION_DIR` when set, else `var/sessions/` (when `var/` is writable), else a private directory
+environment variable `IDNO_SESSION_DIR` when set (an absolute path, outside the document root; a relative one is refused and said in the log), else `var/sessions/` (when `var/` is writable), else a private directory
 under the system's temporary directory. Idno creates it readable by the web server's user only, because a session file's
-name is the session's id, and switches PHP's garbage collection on for it. The command line never makes it. It is read
+name is the session's id (a directory that user owns but others can read is made private), and switches PHP's garbage collection on for it. Only a web request makes it: a script run from the command line (the console, the queue worker, a script that loads `Idno/start.php`) never does. A directory that exists but cannot be used (another owner, a link) is said in one log line an hour, naming `var/sessions` or `IDNO_SESSION_DIR` and the fix, and the next directory is used. It is read
 from `config.ini` or `config.json`, never from the stored settings.
 
 **smtp_host, smtp_port, smtp_username, smtp_password, smtp_secure, from_email**<br>

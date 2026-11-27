@@ -48,12 +48,14 @@ final class NativeSession
      */
     public function start(?string $name, ?string $savePath = null, ?array $collection = null): void
     {
-        if ($savePath !== null) {
-            session_save_path($savePath);
-        }
-        if ($collection !== null) {
-            ini_set('session.gc_probability', (string) $collection['probability']);
-            ini_set('session.gc_divisor', (string) $collection['divisor']);
+        if (!$this->isActive()) { // PHP warns when the save path or the odds are set under an open session
+            if ($savePath !== null) {
+                session_save_path($savePath);
+            }
+            if ($collection !== null) {
+                ini_set('session.gc_probability', (string) $collection['probability']);
+                ini_set('session.gc_divisor', (string) $collection['divisor']);
+            }
         }
         if (!$this->isActive()) {
             if ($name !== null) {

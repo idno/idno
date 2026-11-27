@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Security;
 
-use Idno\Kernel\CacheDirResolver;
 use Idno\Security\SessionDirectory;
 use PHPUnit\Framework\TestCase;
 use Tests\Support\WebServer;
@@ -86,31 +85,30 @@ final class SessionDirectoryTest extends TestCase
         $this->assertSame(0, fileperms((string) $chosen['path']) & 0077);
     }
 
-    public function testItIsCreatedForTheOwnerOnly(): void
-    {
-        $this->choose();
-
-        $this->assertSame(0700, fileperms($this->root . '/project/var/sessions') & 0777);
-    }
-
-    // A directory group or others can list gives every session id away: it is refused, and the next candidate taken.
-    public function testADirectoryOthersCanListIsRefused(): void
+    // A directory the owner made readable by others gives every session id away: it is tightened to 0700 and used, not refused (that moved every session to another directory on every request).
+    public function testAnOwnedDirectoryOthersCanListIsTightenedAndUsed(): void
     {
         mkdir($this->root . '/project/var/sessions', 0755);
         chmod($this->root . '/project/var/sessions', 0755);
 
         $chosen = $this->choose();
 
-        $this->assertNotSame($this->root . '/project/var/sessions', $chosen['path']);
-        $this->assertStringStartsWith($this->root . '/tmp/idno-sessions-', (string) $chosen['path'], 'the next candidate');
+        $this->assertSame($this->root . '/project/var/sessions', $chosen['path']);
+        $this->assertTrue($chosen['own']);
+        $this->assertNull($chosen['problem']);
+        clearstatcache();
+        $this->assertSame(0, fileperms($this->root . '/project/var/sessions') & 0077);
+    }
 
-        // with every candidate refused there is no path, and the problem names the settings, never a directory
-        chmod($this->root . '/tmp', 0755);
-        mkdir($this->root . '/override', 0755);
-        chmod($this->root . '/override', 0755);
-        $tmp = $this->root . '/tmp';
+    // With every candidate unusable there is no path, and the problem names the settings, never a directory.
+    public function testWithNoCandidateUsableThereIsNoPathAndTheProblemNamesTheSettings(): void
+    {
+        mkdir($this->root . '/elsewhere', 0700);
         $hash = substr(hash('sha256', (string) realpath($this->root . '/project')), 0, 12);
-        chmod($tmp . '/idno-sessions-' . $hash, 0755); // made by the first call above
+        symlink($this->root . '/elsewhere', $this->root . '/override');
+        symlink($this->root . '/elsewhere', $this->root . '/project/var/sessions');
+        symlink($this->root . '/elsewhere', $this->root . '/tmp/idno-sessions-' . $hash);
+
         $none = $this->choose(null, '', $this->root . '/override');
 
         $this->assertNull($none['path']);
@@ -118,6 +116,44 @@ final class SessionDirectoryTest extends TestCase
         $this->assertStringContainsString('session_path', (string) $none['problem']);
         $this->assertStringContainsString('IDNO_SESSION_DIR', (string) $none['problem']);
         $this->assertStringNotContainsString($this->root, (string) $none['problem']);
+    }
+
+    // A relative override resolves against whatever the process's working directory is (different under php -S, FPM and the command line): refused, and said.
+    public function testARelativeOverrideIsRefusedAndSaid(): void
+    {
+        $chosen = $this->choose(null, '', 'relative-sessions');
+
+        $this->assertSame($this->root . '/project/var/sessions', $chosen['path'], 'the next candidate');
+        $this->assertStringContainsString('IDNO_SESSION_DIR', (string) $chosen['problem']);
+        $this->assertStringNotContainsString($this->root, (string) $chosen['problem']);
+        $this->assertDirectoryDoesNotExist('relative-sessions');
+    }
+
+    // An explicit override that cannot be used must not be replaced in silence: the operator believes sessions are there.
+    public function testAnUnusableOverrideIsSaidAndTheNextCandidateTaken(): void
+    {
+        mkdir($this->root . '/elsewhere', 0700);
+        symlink($this->root . '/elsewhere', $this->root . '/override');
+
+        $chosen = $this->choose(null, '', $this->root . '/override');
+
+        $this->assertSame($this->root . '/project/var/sessions', $chosen['path']);
+        $this->assertStringContainsString('IDNO_SESSION_DIR', (string) $chosen['problem']);
+        $this->assertStringNotContainsString($this->root, (string) $chosen['problem']);
+    }
+
+    // A var/sessions that exists but cannot be used (here a link; elsewhere another owner) is said by its project-relative name with the fix, then the temporary directory is taken.
+    public function testAnUnusableVarSessionsIsSaidWithTheFix(): void
+    {
+        mkdir($this->root . '/elsewhere', 0700);
+        symlink($this->root . '/elsewhere', $this->root . '/project/var/sessions');
+
+        $chosen = $this->choose();
+
+        $this->assertStringStartsWith($this->root . '/tmp/idno-sessions-', (string) $chosen['path']);
+        $this->assertStringContainsString('var/sessions', (string) $chosen['problem']);
+        $this->assertStringContainsString('chown', (string) $chosen['problem']);
+        $this->assertStringNotContainsString($this->root, (string) $chosen['problem']);
     }
 
     public function testALinkIsRefused(): void
@@ -147,15 +183,5 @@ final class SessionDirectoryTest extends TestCase
     {
         // a project with no var/ at all has no project candidate
         return SessionDirectory::choose(null, '', null, $project, $this->root . '/tmp')['path'];
-    }
-
-    // The shared rule the cache pool uses is not tightened by this: a directory the owner made 0755 is still a usable cache.
-    public function testTheCacheDirectoryRuleIsUnchanged(): void
-    {
-        $directory = $this->root . '/cache';
-        mkdir($directory, 0755);
-        chmod($directory, 0755);
-
-        $this->assertTrue(CacheDirResolver::usableAndPrivate($directory, requireOwner: true));
     }
 }

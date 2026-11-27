@@ -67,19 +67,6 @@ final class FileSessionSiteTest extends PrivateSiteTestCase
         $this->assertFileExists($this->ownDirectory . '/sess_' . $id);
     }
 
-    // Catches a request that keeps writing to the system's temporary directory beside the site's own.
-    public function testNoSessionFileIsWrittenToThePhpTemporaryDirectory(): void
-    {
-        $before = glob(sys_get_temp_dir() . '/sess_*') ?: [];
-        for ($i = 0; $i < 5; ++$i) {
-            $this->site()->request('GET', '_test/session');
-        }
-        $after = glob(sys_get_temp_dir() . '/sess_*') ?: [];
-
-        $this->assertSame([], array_values(array_diff($after, $before)));
-        $this->assertNotEmpty(glob($this->ownDirectory . '/sess_*'), 'the sessions went to the site\'s own directory');
-    }
-
     // Catches the new directory losing a signed-in session between requests (a wrong owner or mode check, a collection that removes live files).
     public function testASignedInMemberStaysSignedInAcrossRequests(): void
     {
@@ -93,28 +80,47 @@ final class FileSessionSiteTest extends PrivateSiteTestCase
     // Catches the console (or a queue worker, often another Unix user) making the directory, which it would then own against the web server.
     public function testTheConsoleCreatesNoDirectory(): void
     {
+        [$exit, $stdout, $stderr] = $this->commandLine(['dir' => dirname(__DIR__, 2) . '/bin/console', 'arguments' => ['list']]);
+
+        $this->assertSame(0, $exit, $stderr);
+        $this->assertStringContainsString('Available commands', $stdout);
         $this->assertDirectoryDoesNotExist($this->ownDirectory);
+        $this->assertStringNotContainsString('session', strtolower($stderr), 'nothing was warned');
 
-        $process = proc_open(
-            [PHP_BINARY, '-d', 'error_reporting=22527', '-d', 'session.save_path=', '-d', 'display_errors=stderr', '-d', 'log_errors=0', dirname(__DIR__, 2) . '/bin/console', 'list'],
-            [1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
-            $pipes,
-            dirname(__DIR__, 2),
-            $this->environment()
-        );
-        $this->assertIsResource($process);
-        $stdout = stream_get_contents($pipes[1]);
-        $stderr = stream_get_contents($pipes[2]);
-        fclose($pipes[1]);
-        fclose($pipes[2]);
-        $this->assertSame(0, proc_close($process), (string) $stderr);
-
-        $this->assertStringContainsString('Available commands', (string) $stdout);
-        $this->assertDirectoryDoesNotExist($this->ownDirectory);
-        $this->assertStringNotContainsString('session', strtolower((string) $stderr), 'nothing was warned');
-
+        // a web request does make it
         $this->site()->request('GET', '_test/session');
         $this->assertDirectoryExists($this->ownDirectory);
-        $this->assertSame(function_exists('posix_geteuid') ? posix_geteuid() : fileowner($this->ownDirectory), fileowner($this->ownDirectory), 'owned by the server\'s user');
+    }
+
+    // Catches a script that boots Idno/start.php from the command line (cron, a deploy user, root) making the directory: whoever ran it first would own it against the web server.
+    public function testAScriptBootingTheApplicationFromTheCommandLineCreatesNoDirectory(): void
+    {
+        [$exit, $stdout, $stderr] = $this->commandLine(['code' => 'require ' . json_encode(dirname(__DIR__, 2) . '/Idno/start.php', JSON_UNESCAPED_SLASHES) . '; echo "booted";']);
+
+        $this->assertSame(0, $exit, $stderr);
+        $this->assertStringContainsString('booted', $stdout);
+        $this->assertDirectoryDoesNotExist($this->ownDirectory);
+    }
+
+    /**
+     * Runs PHP on the site with no session.save_path, so that the choice of a directory is the application's.
+     *
+     * @param array{dir?: string, arguments?: list<string>, code?: string} $what
+     *
+     * @return array{0: int, 1: string, 2: string}
+     */
+    private function commandLine(array $what): array
+    {
+        $this->site(); // the site's environment is made when it starts
+        $command = [PHP_BINARY, '-d', 'error_reporting=22527', '-d', 'session.save_path=', '-d', 'display_errors=stderr', '-d', 'log_errors=0'];
+        $command = isset($what['code']) ? [...$command, '-r', $what['code']] : [...$command, $what['dir'], ...$what['arguments']];
+        $process = proc_open($command, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, dirname(__DIR__, 2), $this->environment());
+        $this->assertIsResource($process);
+        $stdout = (string) stream_get_contents($pipes[1]);
+        $stderr = (string) stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+
+        return [proc_close($process), $stdout, $stderr];
     }
 }

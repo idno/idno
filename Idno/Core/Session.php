@@ -100,10 +100,30 @@ namespace Idno\Core {
             );
             if ($chosen['problem'] !== null && !self::$sessionDirectoryWarned) {
                 self::$sessionDirectoryWarned = true;
-                Idno::site()->logging()->warning($chosen['problem']);
+                if ($this->shouldSaySessionDirectoryProblem($chosen['problem'], $override)) {
+                    Idno::site()->logging()->warning($chosen['problem']);
+                }
             }
 
             return $chosen;
+        }
+
+        /**
+         * A web request is a process of its own as far as a static is concerned, so "once" needs a memory that outlives it: a marker file in the
+         * temporary directory, one for each project, setting and problem, which lets the line out once an hour. Where the marker cannot be
+         * written the line is said every time (never silently dropped).
+         */
+        private function shouldSaySessionDirectoryProblem(string $problem, mixed $override): bool
+        {
+            $marker = sys_get_temp_dir() . '/idno-session-directory-' . substr(hash('sha256', Idno::container()->getParameter('kernel.project_dir') . "\0" . (is_string($override) ? $override : '') . "\0" . $problem), 0, 16);
+            $age    = is_file($marker) ? time() - (int) @filemtime($marker) : null;
+            if ($age !== null && $age >= 0 && $age < 3600) {
+                return false;
+            }
+
+            @touch($marker);
+
+            return true;
         }
 
         function init()
@@ -149,8 +169,8 @@ namespace Idno\Core {
             // Fallback to files if no other session storage handler has been defined: PHP's own, in the configured directory
             $savePath   = $sessions_handled ? null : Idno::site()->config()->session_path;
             $collection = null;
-            if (!$sessions_handled && !defined('IDNO_CONSOLE') && $this->native()->storesFiles()) {
-                // Files, on a web request: a directory of the site's own unless the boot configuration or PHP names one
+            if (!$sessions_handled && !defined('IDNO_CONSOLE') && !in_array(PHP_SAPI, ['cli', 'phpdbg'], true) && $this->native()->storesFiles()) {
+                // Files, on a web request (never the command line: whoever ran first would own the directory against the web server): a directory of the site's own unless the boot configuration or PHP names one
                 $chosen = $this->sessionDirectory();
                 if ($chosen['path'] !== null) {
                     $savePath = $chosen['path'];
