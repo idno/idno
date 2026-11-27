@@ -60,7 +60,10 @@ final class LegacyHomeStream implements HomeStream
 
     public function types(?string $friendly, string|array|null $query, string|array|null $requested): array
     {
-        $types = $requested;
+        // A request names classes only among the site's content types: any other class (an invitation, a follower) is no
+        // kind of post to list, and is dropped as a friendly name that names no type adds none
+        $registered = ContentType::getRegisteredClasses();
+        $types = $requested === null ? null : array_values(array_filter((array) $requested, static fn ($type): bool => is_string($type) && in_array($type, $registered, true)));
         $friendlyTypes = [];
         if (!empty($friendly)) { // the friendly content-specific URL
             if ($friendlyTypes = explode('/', $friendly)) {
@@ -86,8 +89,6 @@ final class LegacyHomeStream implements HomeStream
 
         if (empty($types)) {
             $types = ContentType::getRegisteredClasses();
-        } else {
-            $types = (array) $types;
         }
 
         return ['types' => $types, 'friendly' => $friendlyTypes];

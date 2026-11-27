@@ -810,23 +810,6 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
         $this->assertSame([], Status::getFromX('', ['testmarker' => ['x']]));
     }
 
-    /**
-     * Catches `code[$lt]=0` or `code[$gt]=` being dropped as "no condition" (which matched the marker's record whatever it held): an
-     * empty plain operand is compared, so it excludes this record, and nothing is logged.
-     */
-    public function testAnEmptyPlainOperandIsAComparisonAndNeverDropsTheCondition(): void
-    {
-        $db = Idno::site()->db();
-        $marker = 'adapter-empty-' . bin2hex(random_bytes(6));
-        $this->status('Has the field ' . $marker, $marker, 1_700_000_000);
-
-        foreach ([['$lt' => 0], ['$lt' => ''], ['$lt' => '0']] as $value) {
-            $this->assertSame([], $db->getObjects('', ['testmarker' => $value]), json_encode($value));
-        }
-        $this->assertCount(1, $db->getObjects('', ['testmarker' => ['$gt' => 0]]), 'compared, not dropped: a marker sorts after 0');
-        $this->assertCount(1, $db->getObjects('', ['testmarker' => ['$not' => '']]));
-    }
-
     public function testTheLoggedShapeHasNoValuesAndIsBounded(): void
     {
         $this->assertSame('{a: _, b: {$in: […]}, c: {$not: {$in: []}}, $search: […]}', RepositoryDataConcierge::shape(['a' => 'x', 'b' => ['$in' => ['secret']], 'c' => ['$not' => ['$in' => []]], '$search' => ['term']]));

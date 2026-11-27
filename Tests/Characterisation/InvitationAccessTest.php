@@ -135,6 +135,7 @@ final class InvitationAccessTest extends PrivateSiteTestCase
      * administrators' list, the registration lookup) a finder still returns it: that is the one listing left open, in code that
      * calls the finder itself.
      */
+    // Catches a visitor listing an old (PUBLIC, published) invitation through the home stream: a wildcard search with the class asked for by name.
     public function testAnInvitationStoredWithPublicAccessIsInNoListingForAVisitor(): void
     {
         $this->seed();
@@ -149,9 +150,8 @@ final class InvitationAccessTest extends PrivateSiteTestCase
 
         return true;
         PHP));
-        $listed = $this->site()->request('GET', '/?q=dana&_t=json&types[]=' . rawurlencode('Idno\\Entities\\Invitation'));
-        $this->assertStringNotContainsString(self::CODE, $listed->body);
-        $this->assertStringNotContainsString('dana@example.test', $listed->body);
+        $listed = $this->site()->request('GET', '/?q=%25&_t=json&types[]=' . rawurlencode('Idno\\Entities\\Invitation'));
+        $this->assertSame([0, []], [$listed->json()['count'], $listed->json()['items']], 'the stream lists no invitation');
         $this->assertSame(
             [1, 0],
             $this->runInSite('$before = count(\Idno\Entities\Invitation::get([], [], 10)); \Idno\Entities\Invitation::all(); return [$before, count(\Idno\Entities\Invitation::get([], [], 10))];')
