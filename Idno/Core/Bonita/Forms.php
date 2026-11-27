@@ -53,6 +53,16 @@ namespace Idno\Core\Bonita {
             }
             $time = $_REQUEST['__bTs'];
             $token = $_REQUEST['__bTk'];
+            // A token is a time and two texts. A field sent as an array (__bTs[]=1) is none
+            if (!is_numeric($time) || !is_string($token)
+                || (empty($action) && isset($_REQUEST['__bTa']) && !is_string($_REQUEST['__bTa']))
+            ) {
+                if ($haltExecutionOnBadRequest) {
+                    exit;
+                }
+
+                return false;
+            }
             if (empty($action)) {
                 if (!empty($_REQUEST['__bTa'])) {
                     $action = $_REQUEST['__bTa'];

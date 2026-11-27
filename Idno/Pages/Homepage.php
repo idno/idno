@@ -20,7 +20,7 @@ namespace Idno\Pages {
         function getContent()
         {
 
-            $query          = $this->getInput('q');
+            $query          = $this->getTextInput('q'); // A text: q[]=x is no query
             $offset         = (int)$this->getInput('offset');
             $types          = $this->getInput('types');
             $friendly_types = array();
@@ -75,10 +75,10 @@ namespace Idno\Pages {
                 $search = \Idno\Core\Idno::site()->db()->createSearchArray($query);
             }
 
+            // The kinds of post to list are class names: texts. types[][x]=y is none
+            $types = array_values(array_filter((array) $types, "is_string"));
             if (empty($types)) {
                 $types = \Idno\Common\ContentType::getRegisteredClasses();
-            } else {
-                $types = (array) $types;
             }
 
             $search['publish_status'] = 'published';

@@ -19,7 +19,7 @@ namespace Idno\Pages\Service\Queues {
                 throw new \RuntimeException("You are not running an asynchronous message queue, so garbage collection is unnecessary.");
             }
 
-            $queue = $this->getInput('queue', 'default');
+            $queue = $this->getTextInput('queue', 'default');
 
             \Idno\Core\Idno::site()->logging()->debug("Garbage Collecting event queue $queue");
 

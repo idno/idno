@@ -16,8 +16,9 @@ namespace Idno\Pages\Account\Password {
         {
 
             $this->reverseGatekeeper();
-            $code  = $this->getInput('code');
-            $email = $this->getInput('email');
+            // Texts: a field sent as an array is an empty one
+            $code  = $this->getTextInput('code');
+            $email = $this->getTextInput('email');
 
             if (!empty($code) && !empty($email)) {
                 if ($user = \Idno\Entities\User::getByEmail($email)) {
@@ -47,10 +48,11 @@ namespace Idno\Pages\Account\Password {
         {
 
             $this->reverseGatekeeper();
-            $code      = $this->getInput('code');
-            $email     = $this->getInput('email');
-            $password  = trim($this->getInput('password'));
-            $password2 = trim($this->getInput('password2'));
+            // Texts: a field sent as an array is an empty one
+            $code      = $this->getTextInput('code');
+            $email     = $this->getTextInput('email');
+            $password  = trim($this->getTextInput('password'));
+            $password2 = trim($this->getTextInput('password2'));
 
             if (\Idno\Entities\User::checkNewPasswordStrength($password) && $password == $password2) {
                 if (!empty($code) && !empty($email)) {

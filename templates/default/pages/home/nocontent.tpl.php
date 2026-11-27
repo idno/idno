@@ -1,4 +1,4 @@
-<?php if (\Idno\Core\Idno::site()->currentPage()->getInput('q')) {
+<?php if (\Idno\Core\Idno::site()->currentPage()->getTextInput('q')) {
     // Search term
     ?>
     <div class="row" style="margin-top: 5em">

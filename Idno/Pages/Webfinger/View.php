@@ -20,7 +20,7 @@ namespace Idno\Pages\Webfinger {
                 $this->noContent();
             }
 
-            $acct = $this->getInput('resource');
+            $acct = $this->getTextInput('resource'); // A text: resource[]=x names nobody
             if (!empty($acct)) {
                 if (substr($acct, 0, 5) == 'acct:' && strlen($acct) > 8) {
                     $handle = str_replace('@' . \Idno\Core\Idno::site()->config()->host, '', substr($acct, 5));

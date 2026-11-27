@@ -52,7 +52,7 @@ namespace Themes\Twenty26 {
             // The home feed and its content-type views (/content/...). A search, and a tag page,
             // which the site answers with a search, are drawn by the same page with a query.
             if ($page instanceof \Idno\Pages\Homepage) {
-                return trim((string) $page->getInput('q')) !== '' ? 'search' : 'home';
+                return trim($page->getTextInput('q')) !== '' ? 'search' : 'home';
             }
 
             // A member's profile and its sub-pages: current only on the viewer's own profile.

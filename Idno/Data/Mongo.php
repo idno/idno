@@ -258,7 +258,7 @@ namespace Idno\Data {
          */
         function getRecordByUUID($uuid, $collection = 'entities')
         {
-            $raw = $this->database->$collection->findOne(array("uuid" => $uuid));
+            $raw = $this->database->$collection->findOne(self::guardQuery(array("uuid" => $uuid)));
 
             return $this->unsanitizeFields($raw);
         }
@@ -446,6 +446,116 @@ namespace Idno\Data {
             return false;
         }
 
+        /// A condition no record meets: what an array that is no condition becomes
+        const MATCH_NOTHING = ['$in' => []];
+
+        /// The operators a field value may be a map of
+        const OPERATORS = ['$eq', '$ne', '$gt', '$gte', '$lt', '$lte', '$in', '$nin', '$not', '$exists', '$type', '$regex', '$options', '$all', '$size'];
+
+        /// The operators that hold a list of queries
+        const QUERY_LISTS = ['$or', '$and', '$nor'];
+
+        /**
+         * Make a query safe to hand to the database: a field value that is an array is kept
+         * only when it is a map made only of query operators (OPERATORS), each with an operand
+         * of the right shape. Any other array (a plain list, an empty array, a map with a key
+         * that is no operator, an array where a plain value belongs) becomes a condition that
+         * nothing meets. It is never handed on, where MongoDB would read it as a condition of
+         * its sender's choosing, and never left out.
+         *
+         * Plain values and objects (ids, dates, regular expressions) are left as they are, and
+         * so is any top-level operator other than $or, $and and $nor, whose queries are read
+         * the same way.
+         *
+         * @param  mixed $query
+         * @return array
+         */
+        static function guardQuery($query)
+        {
+            if (!is_array($query)) {
+                return ['_id' => self::MATCH_NOTHING];
+            }
+            foreach ($query as $field => $value) {
+                if (!is_array($value)) {
+                    continue;
+                }
+                if (in_array($field, self::QUERY_LISTS, true)) {
+                    if (array_is_list($value)) {
+                        $query[$field] = array_map([self::class, 'guardQuery'], $value);
+                    }
+                    continue;
+                }
+                if (is_string($field) && substr($field, 0, 1) === '$') {
+                    continue;
+                }
+                $query[$field] = self::isOperatorMap($value) ? self::listOperands($value) : self::MATCH_NOTHING;
+            }
+
+            return $query;
+        }
+
+        /**
+         * The operands of $in, $nin and $all as lists: a PHP array with gaps in its keys (what
+         * is left of a list after unset() or array_filter()) would reach MongoDB as a document,
+         * which it refuses there.
+         *
+         * @param  array $map A map that isOperatorMap() accepts
+         * @return array
+         */
+        protected static function listOperands(array $map)
+        {
+            foreach ($map as $operator => $operand) {
+                if (in_array($operator, ['$in', '$nin', '$all'], true)) {
+                    $map[$operator] = array_values($operand);
+                } else if ($operator === '$not' && is_array($operand)) {
+                    $map[$operator] = self::listOperands($operand);
+                }
+            }
+
+            return $map;
+        }
+
+        /**
+         * Is this field value a map made only of query operators, each with an operand of the
+         * right shape? $in, $nin and $all take an array of values that are no arrays; $not an
+         * object (a regular expression) or such a map; every other operator a value that is no
+         * array.
+         *
+         * @param  mixed $value
+         * @return bool
+         */
+        static function isOperatorMap($value)
+        {
+            if (!is_array($value) || empty($value)) {
+                return false;
+            }
+            $plain = function ($operand) {
+                return !is_array($operand);
+            };
+            foreach ($value as $operator => $operand) {
+                if (!in_array($operator, self::OPERATORS, true)) {
+                    return false;
+                }
+                switch ($operator) {
+                    case '$in':
+                    case '$nin':
+                    case '$all':
+                        $usable = is_array($operand) && count(array_filter($operand, $plain)) === count($operand);
+                        break;
+                    case '$not':
+                        $usable = is_object($operand) || self::isOperatorMap($operand);
+                        break;
+                    default:
+                        $usable = $plain($operand);
+                }
+                if (!$usable) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
         /**
          * Retrieves a set of records from the database with given parameters, in
          * reverse chronological order
@@ -480,7 +590,7 @@ namespace Idno\Data {
                 }
 
                 $result = $this->database->$collection
-                    ->find($parameters, $options);
+                    ->find(self::guardQuery($parameters), $options);
 
                 $iterator = iterator_to_array($result);
                 if ($result && count($iterator)) {
@@ -570,7 +680,7 @@ namespace Idno\Data {
          */
         function countRecords($parameters, $collection = 'entities')
         {
-            if ($result = $this->database->$collection->countDocuments($parameters)) {
+            if ($result = $this->database->$collection->countDocuments(self::guardQuery($parameters))) {
                 return (int)$result;
             }
 
@@ -636,7 +746,11 @@ namespace Idno\Data {
          */
         function createSearchArray($query)
         {
-            $regexObj = new \MongoDB\BSON\Regex($query, "i");
+            if (!is_scalar($query)) {
+                // Only text can be searched for
+                return array('_id' => self::MATCH_NOTHING);
+            }
+            $regexObj = new \MongoDB\BSON\Regex((string) $query, "i");
 
             return array('$or' => array(array('body' => $regexObj), array('title' => $regexObj), array('tags' => $regexObj), array('description' => $regexObj)));
         }

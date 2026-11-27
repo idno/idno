@@ -538,9 +538,65 @@ namespace Idno\Data {
             return false;
         }
 
+        /// A condition no record meets: what an array that is no condition becomes
+        const MATCH_NOTHING = '(1 = 0)';
+
+        /// The operators a field value may be a map of
+        const OPERATORS = ['$not', '$in', '$lt', '$gt'];
+
+        /**
+         * Is this field value a map made only of the operators this back end knows, each with
+         * an operand it can use?
+         *
+         * $in takes an array of plain values (its keys are not read); $not a plain value or a
+         * map holding only $in; $lt and $gt a plain value. Anything else (a plain list, an
+         * empty array, a key that is no operator beside ones that are, an array where a plain
+         * value belongs) is not, and build_where_from_array() makes the query match nothing
+         * for it.
+         *
+         * @param  mixed $value
+         * @return bool
+         */
+        static function isOperatorMap($value)
+        {
+            if (!is_array($value) || empty($value)) {
+                return false;
+            }
+            $plain = function ($operand) {
+                return is_scalar($operand);
+            };
+            $list = function ($operand) use ($plain) {
+                return is_array($operand) && count(array_filter($operand, $plain)) === count($operand);
+            };
+            foreach ($value as $operator => $operand) {
+                if (!in_array($operator, self::OPERATORS, true)) {
+                    return false;
+                }
+                switch ($operator) {
+                    case '$in':
+                        $usable = $list($operand);
+                        break;
+                    case '$not':
+                        $usable = $plain($operand)
+                            || (is_array($operand) && array_keys($operand) === ['$in'] && $list($operand['$in']));
+                        break;
+                    default:
+                        $usable = $plain($operand);
+                }
+                if (!$usable) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
         /**
          * Recursive function that takes an array of parameters and returns an array of clauses suitable
-         * for compiling into an SQL query
+         * for compiling into an SQL query.
+         *
+         * A field value is a plain value (the field equals it) or a map of operators (see
+         * isOperatorMap()). Any other array matches nothing: it is never left out of the query.
          *
          * @param $params
          * @param $where
@@ -576,131 +632,104 @@ namespace Idno\Data {
                             $variables[":name{$metadata_joins}"]  = $key;
                             $variables[":value{$metadata_joins}"] = $value;
                         }
-                    } else {
-                        if (!empty($value['$not'])) {
-                            if (!empty($value['$not']['$in'])) {
-
-                                if (in_array($key, $this->getSchemaFields())) {
-                                    $notstring = "`{$collection}`.`$key` not in (";
-                                    $i         = 0;
-                                    foreach ($value['$not']['$in'] as $val) {
-                                        if ($i > 0) {
-                                            $notstring .= ', ';
-                                        }
-                                        $notstring .= ":nonmdvalue{$non_md_variables}";
-                                        $variables[":nonmdvalue{$non_md_variables}"] = $val;
-                                        $non_md_variables++;
-                                        $i++;
-                                    }
-                                    $notstring .= ")";
+                    } else if ($key === '$or') {
+                        // The alternatives: a map of fields, each read as above. With none there is nothing to match
+                        $alternatives = empty($value) ? '' : $this->build_where_from_array($value, $variables, $metadata_joins, $non_md_variables, 'or', $collection);
+                        $subwhere[]   = $alternatives === '' ? self::MATCH_NOTHING : "(" . $alternatives . ")";
+                    } else if ($key === '$search') {
+                        // The search query is always in $value position [0] for now
+                        $val = array_key_exists(0, $value) ? $value[0] : '';
+                        if (!is_string($val)) {
+                            // Only text can be searched for
+                            $subwhere[] = self::MATCH_NOTHING;
+                        } else if ($val !== '' && $val !== '0') {
+                            if (strlen($val) > 5 && !Idno::site()->config()->bypass_fulltext_search) {
+                                if (Idno::site()->config()->boolean_search) {
+                                    $boolean = 'in boolean mode';
                                 } else {
-                                    $metadata_joins++;
-                                    $notstring                           = "(md{$metadata_joins}.`name` = :name{$metadata_joins} and md{$metadata_joins}.`value` not in (";
-                                    $variables[":name{$metadata_joins}"] = $key;
-                                    $i                                   = 0;
+                                    $boolean = '';
+                                }
+                                $subwhere[]                                  = "match (srch.`search`) against (:nonmdvalue{$non_md_variables} {$boolean})";
+                                $variables[":nonmdvalue{$non_md_variables}"] = $val;
+                            } else {
+                                $subwhere[]                                  = "srch.`search` like :nonmdvalue{$non_md_variables}";
+                                $variables[":nonmdvalue{$non_md_variables}"] = '%' . $val . '%';
+                            }
+                            $non_md_variables++;
+                        }
+                    } else if (!self::isOperatorMap($value)) {
+                        // An array that is not a map of the operators below, each with an operand it can
+                        // use, is no condition. Leaving it out would make the query match more than its
+                        // caller asked for, so it matches nothing instead.
+                        $subwhere[] = self::MATCH_NOTHING;
+                    } else {
+                        $in_schema = in_array($key, $this->getSchemaFields());
+                        if (array_key_exists('$not', $value)) {
+                            if (is_array($value['$not'])) {
+                                // Not in a list. Nothing is in an empty list, so that is no restriction
+                                if (!empty($value['$not']['$in'])) {
+                                    $placeholders = [];
                                     foreach ($value['$not']['$in'] as $val) {
-                                        if ($i > 0) {
-                                            $notstring .= ', ';
-                                        }
-                                        $notstring .= ":nonmdvalue{$non_md_variables}";
+                                        $placeholders[]                              = ":nonmdvalue{$non_md_variables}";
                                         $variables[":nonmdvalue{$non_md_variables}"] = $val;
                                         $non_md_variables++;
-                                        $i++;
                                     }
-                                    $notstring .= "))";
+                                    if ($in_schema) {
+                                        $subwhere[] = "`{$collection}`.`$key` not in (" . implode(', ', $placeholders) . ")";
+                                    } else {
+                                        $metadata_joins++;
+                                        $subwhere[]                          = "(md{$metadata_joins}.`name` = :name{$metadata_joins} and md{$metadata_joins}.`value` not in (" . implode(', ', $placeholders) . "))";
+                                        $variables[":name{$metadata_joins}"] = $key;
+                                    }
                                 }
                             } else {
-                                if (in_array($key, $this->getSchemaFields())) {
-                                    $notstring                                   = "`{$collection}`.`$key` != :nonmdvalue{$non_md_variables}";
+                                if ($in_schema) {
+                                    $subwhere[]                                  = "`{$collection}`.`$key` != :nonmdvalue{$non_md_variables}";
                                     $variables[":nonmdvalue{$non_md_variables}"] = $value['$not'];
                                     $non_md_variables++;
                                 } else {
                                     $metadata_joins++;
-                                    $notstring                                   = "(md{$metadata_joins}.`name`    = :name{$metadata_joins} and md{$metadata_joins}.`value` != :nonmdvalue{$non_md_variables})";
+                                    $subwhere[]                                  = "(md{$metadata_joins}.`name`    = :name{$metadata_joins} and md{$metadata_joins}.`value` != :nonmdvalue{$non_md_variables})";
                                     $variables[":name{$metadata_joins}"]         = $key;
                                     $variables[":nonmdvalue{$non_md_variables}"] = $value['$not'];
                                     $non_md_variables++;
                                 }
                             }
-                            $subwhere[] = $notstring;
                         }
-                        if (!empty($value['$in'])) {
-                            if (in_array($key, $this->getSchemaFields())) {
-                                $instring = "`{$collection}`.`$key` in (";
-                                $i        = 0;
+                        if (array_key_exists('$in', $value)) {
+                            if (empty($value['$in'])) {
+                                // Nothing is in an empty list
+                                $subwhere[] = self::MATCH_NOTHING;
+                            } else {
+                                $placeholders = [];
                                 foreach ($value['$in'] as $val) {
-                                    if ($i > 0) {
-                                        $instring .= ', ';
-                                    }
-                                    $instring .= ":nonmdvalue{$non_md_variables}";
+                                    $placeholders[]                              = ":nonmdvalue{$non_md_variables}";
                                     $variables[":nonmdvalue{$non_md_variables}"] = $val;
                                     $non_md_variables++;
-                                    $i++;
                                 }
-                                $instring .= ")";
-                            } else {
-                                $metadata_joins++;
-                                $instring                            = "(md{$metadata_joins}.`name` = :name{$metadata_joins} and md{$metadata_joins}.`value` in (";
-                                $variables[":name{$metadata_joins}"] = $key;
-                                $i                                   = 0;
-                                foreach ($value['$in'] as $val) {
-                                    if ($i > 0) {
-                                        $instring .= ', ';
-                                    }
-                                    $instring .= ":nonmdvalue{$non_md_variables}";
-                                    $variables[":nonmdvalue{$non_md_variables}"] = $val;
-                                    $non_md_variables++;
-                                    $i++;
-                                }
-                                $instring .= "))";
-                            }
-                            $subwhere[] = $instring;
-                        }
-                        if (!empty($value['$lt'])) {
-                            $val = $value['$lt'];
-                            if (in_array($key, $this->getSchemaFields())) {
-                                $subwhere[] = "(`{$collection}`.`{$key}` < :nonmdvalue{$non_md_variables})";
-                                $variables[":nonmdvalue{$non_md_variables}"] = $val;
-                                $non_md_variables++;
-                            } else {
-                                $metadata_joins++;
-                                $subwhere[]                           = "(md{$metadata_joins}.`name` = :name{$metadata_joins} and md{$metadata_joins}.`value` < :value{$metadata_joins} )";
-                                $variables[":name{$metadata_joins}"]  = $key;
-                                $variables[":value{$metadata_joins}"] = $val;
-                            }
-                        }
-                        if (!empty($value['$gt'])) {
-                            $val = $value['$gt'];
-                            if (in_array($key, $this->getSchemaFields())) {
-                                $subwhere[] = "(`{$collection}`.`{$key}` > :nonmdvalue{$non_md_variables})";
-                                $variables[":nonmdvalue{$non_md_variables}"] = $val;
-                                $non_md_variables++;
-                            } else {
-                                $metadata_joins++;
-                                $subwhere[]                           = "(md{$metadata_joins}.`name` = :name{$metadata_joins} and md{$metadata_joins}.`value` > :value{$metadata_joins} )";
-                                $variables[":name{$metadata_joins}"]  = $key;
-                                $variables[":value{$metadata_joins}"] = $val;
-                            }
-                        }
-                        if ($key === '$or') {
-                            $subwhere[] = "(" . $this->build_where_from_array($value, $variables, $metadata_joins, $non_md_variables, 'or', $collection) . ")";
-                        }
-                        if ($key === '$search') {
-                            if (!empty($value[0])) {
-                                $val = $value[0]; // The search query is always in $value position [0] for now
-                                if (strlen($val) > 5 && !Idno::site()->config()->bypass_fulltext_search) {
-                                    if (Idno::site()->config()->boolean_search) {
-                                        $boolean = 'in boolean mode';
-                                    } else {
-                                        $boolean = '';
-                                    }
-                                    $subwhere[]                                  = "match (srch.`search`) against (:nonmdvalue{$non_md_variables} {$boolean})";
-                                    $variables[":nonmdvalue{$non_md_variables}"] = $val;
+                                if ($in_schema) {
+                                    $subwhere[] = "`{$collection}`.`$key` in (" . implode(', ', $placeholders) . ")";
                                 } else {
-                                    $subwhere[]                                  = "srch.`search` like :nonmdvalue{$non_md_variables}";
-                                    $variables[":nonmdvalue{$non_md_variables}"] = '%' . $val . '%';
+                                    $metadata_joins++;
+                                    $subwhere[]                          = "(md{$metadata_joins}.`name` = :name{$metadata_joins} and md{$metadata_joins}.`value` in (" . implode(', ', $placeholders) . "))";
+                                    $variables[":name{$metadata_joins}"] = $key;
                                 }
+                            }
+                        }
+                        foreach (['$lt' => '<', '$gt' => '>'] as $operator => $comparison) {
+                            if (!array_key_exists($operator, $value)) {
+                                continue;
+                            }
+                            $val = $value[$operator];
+                            if ($in_schema) {
+                                $subwhere[] = "(`{$collection}`.`{$key}` {$comparison} :nonmdvalue{$non_md_variables})";
+                                $variables[":nonmdvalue{$non_md_variables}"] = $val;
                                 $non_md_variables++;
+                            } else {
+                                $metadata_joins++;
+                                $subwhere[]                           = "(md{$metadata_joins}.`name` = :name{$metadata_joins} and md{$metadata_joins}.`value` {$comparison} :value{$metadata_joins} )";
+                                $variables[":name{$metadata_joins}"]  = $key;
+                                $variables[":value{$metadata_joins}"] = $val;
                             }
                         }
                     }

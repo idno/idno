@@ -96,6 +96,9 @@ namespace Idno\Entities {
 
         public static function getBySourceURL($url)
         {
+            if (!static::isLookupValue($url)) {
+                return false;
+            }
             return static::getOne(['source_url' => $url]);
         }
 

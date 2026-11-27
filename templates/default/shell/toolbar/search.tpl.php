@@ -17,7 +17,7 @@ if (!empty($vars['content'])) {
         <input type="search" class="search-query form-control" name="q" placeholder="<?php echo \Idno\Core\Idno::site()->language()->_('Search'); ?>" tabindex="2" value="<?php
 
         if (!empty($currentPage)) {
-            if ($q = $currentPage->getInput('q')) {
+            if ($q = $currentPage->getTextInput('q')) {
                 echo htmlspecialchars($q);
             }
         }
