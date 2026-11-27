@@ -926,7 +926,7 @@ something). What existing sites, hubs and plugins hold was kept, and must stay:
   a listener for an earlier name to the event's name of today, triggers that event when the earlier name is
   triggered (plugins do, and so does an event that was queued before the upgrade), and keeps a listener that is
   added under both names once. Rename an event by adding it there, never by triggering two events.
-- `docs/install/upgrade.md` ("Names that changed") is the one place that tells the history and lists the
+- `docs/developers/plugins/changes.md` ("Names that changed") is the one place that tells the history and lists the
   deprecated names. `Tests/Core/WebSubCompatibilityTest.php` checks that the earlier class names, event name
   and the callback address still work, and `Tests/Pages/WebSub/CallbackTest.php` asks the callback over HTTP.
 
@@ -1472,11 +1472,24 @@ All content is published as HTML, with Microformats2 markup. Any new content typ
 that are publicly accessible should  include appropriate microformats classes: 
 h-entry, h-card, h-event as appropriate.
 
+## Where a note about a change goes
+
+- `docs/install/upgrade.md` is instructions for somebody who is upgrading a site: only what they must do, or
+  what they will see their site do differently and need to know before or during the upgrade (a floor of PHP
+  or of the database, a command to run, a feature that is gone, members who must connect again).
+- A change that needs nothing done is one line in `docs/changelog.md`, under "Unreleased".
+- What the author of a plugin or theme must change is in `docs/developers/plugins/changes.md`.
+- Rules for contributors, and how the code is built, are in this file.
+
 ## Agents code
 
 Idno allows code that has been generated using AI models. When new code is written, 
-it should be tested using the existing test suite. New tests MUST always be written
-for new code, and existing tests MUST always pass. When there are architectural changes, 
+it should be tested using the existing test suite. Every new test names, in its name or a
+one-line comment, the bug or behaviour it would catch that someone using or extending the
+site would notice; if you cannot name one, do not write the test. No test scans for a name or
+pins wording, and no test asserts that deleted code is absent; a guard that scans code for a
+forbidden call or shape is fine. Add tests where functional coverage is missing; existing
+tests MUST always pass. When there are architectural changes, 
 the existing tests MUST be updated, and appropriate edits MUST be made to AGENTS.md.
 
 Add tests sparingly: the suite is run on every change and each test costs time for ever. A
