@@ -44,7 +44,7 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         'Config' => ['BootConfig.php'],
         // FrontController: static methods only, used by index.php before the container exists. Client/: the
         // HTTP client factory and the bounded body reader, static helpers (the clients are wired below).
-        'Http' => ['Client', 'FrontController.php', 'Page/AddedHeaders.php', 'Page/ConditionalRequest.php', 'Page/DrawnPage.php', 'Page/HttpDate.php', 'Page/SitePage.php', 'Page/PageContext.php', 'Page/PageError.php', 'Page/PageNotModified.php', 'Page/PageRedirect.php', 'Page/RoutedByLegacyTable.php', 'Controller/File/ByteRange.php', 'Controller/File/FileCaching.php', 'Controller/File/FileLookup.php', 'Controller/File/FileOutcome.php', 'Controller/File/FileStream.php', 'Controller/File/ServedFile.php', 'Controller/WebSub/PendingList.php', 'Webmention/ReceivedWebmention.php', 'Webmention/TargetHosts.php', 'Webmention/WebmentionTarget.php'],
+        'Http' => ['Client', 'FrontController.php', 'Page/AddedHeaders.php', 'Page/ConditionalRequest.php', 'Page/DrawnPage.php', 'Page/HttpDate.php', 'Page/SitePage.php', 'Page/PageContext.php', 'Page/PageError.php', 'Page/PageNotModified.php', 'Page/PageRedirect.php', 'Page/RoutedByLegacyTable.php', 'RedirectTarget.php', 'Controller/File/ByteRange.php', 'Controller/File/FileCaching.php', 'Controller/File/FileLookup.php', 'Controller/File/FileOutcome.php', 'Controller/File/FileStream.php', 'Controller/File/ServedFile.php', 'Controller/WebSub/PendingList.php', 'Webmention/ReceivedWebmention.php', 'Webmention/TargetHosts.php', 'Webmention/WebmentionTarget.php'],
         // Takes the kernel (so cannot be a container service); functions.php is not a class.
         'Console' => ['Application.php', 'functions.php'],
         // Value and helper classes (a query tree and its nodes, an entity query, the record index
@@ -368,6 +368,9 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
     // Failed logins are counted on the site's one cache pool, which is built when first fetched (it needs the legacy
     // application), so the throttle is built then too: the login page fetches it.
     $services->set(\Idno\Security\LoginThrottle::class)->args([service(\Psr\Cache\CacheItemPoolInterface::class)])->public();
+
+    // The sign-in attempt rule over the throttle: public, because the legacy login page's facade fetches it.
+    $services->set(\Idno\Security\LoginAttempts::class)->public();
 
     // Symfony Security knows who is making each request (config/packages/security.php): the legacy application authenticates
     // the request while the kernel boots, the source reads the result from the legacy session (nothing when this kernel did not

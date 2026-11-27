@@ -108,22 +108,6 @@ namespace Idno\Pages\Session {
             }
         }
 
-        /**
-         * The login throttle (Idno\Security\LoginThrottle): a throttle that cannot be built is not a reason to refuse a login.
-         *
-         * @return \Idno\Security\LoginThrottle|null
-         */
-        private static function throttle()
-        {
-            try {
-                return \Idno\Core\Idno::container()->get(\Idno\Security\LoginThrottle::class);
-            } catch (\Throwable $e) {
-                \Idno\Core\Idno::site()->logging()->warning('The login throttle is unavailable: ' . get_class($e));
-
-                return null;
-            }
-        }
-
         private static function passwords()
         {
             return \Idno\Core\Idno::container()->get(\Idno\Security\Passwords::class);
@@ -143,80 +127,37 @@ namespace Idno\Pages\Session {
         /**
          * Reserves an attempt for the key; true when it may go on.
          *
+         * @deprecated Use \Idno\Security\LoginAttempts::attempt().
          * @param  string $key
          * @return bool
          */
         public static function throttleAttempt($key)
         {
-            try {
-                $throttle = self::throttle();
-
-                return $throttle === null || $throttle->attempt($key);
-            } catch (\Throwable $e) {
-                return true;
-            }
+            return \Idno\Core\Idno::container()->get(\Idno\Security\LoginAttempts::class)->attempt((string)$key);
         }
 
         /**
          * Clears the count of a key (a successful login, a password reset).
          *
+         * @deprecated Use \Idno\Security\LoginAttempts::reset().
          * @param string $key
          */
         public static function throttleReset($key)
         {
-            try {
-                self::throttle()?->reset($key);
-            } catch (\Throwable $e) {
-                \Idno\Core\Idno::site()->logging()->warning('The count of failed logins could not be reset: ' . get_class($e));
-            }
+            \Idno\Core\Idno::container()->get(\Idno\Security\LoginAttempts::class)->reset((string)$key);
         }
 
         /**
          * Validates that a redirect URL is local to this site.
          * Returns the site's home URL if the redirect is external.
          *
+         * @deprecated Use \Idno\Http\RedirectTarget::sanitize().
          * @param  string $url
          * @return string
          */
         public static function sanitizeRedirectUrl($url)
         {
-            $siteUrl = \Idno\Core\Idno::site()->config()->getDisplayURL();
-            $url     = trim((string) $url);
-
-            if ($url === '') {
-                return $siteUrl;
-            }
-
-            // Browsers treat backslashes as slashes and strip control characters,
-            // so neither can be trusted in a redirect target
-            if (strpos($url, '\\') !== false || preg_match('/[\x00-\x1F\x7F]/', $url)) {
-                return $siteUrl;
-            }
-
-            // Allow site-relative paths, but not protocol-relative URLs (//example.com)
-            if ($url[0] === '/') {
-                return (strlen($url) > 1 && $url[1] === '/') ? $siteUrl : $url;
-            }
-
-            // Otherwise it must be an absolute http(s) URL on this site's own host.
-            // Compare parsed hosts rather than string prefixes, so that
-            // https://example.com.evil.test and https://example.com@evil.test are rejected.
-            $target = parse_url($url);
-            $site   = parse_url($siteUrl);
-            if (empty($target['scheme']) || empty($target['host']) || empty($site['host'])) {
-                return $siteUrl;
-            }
-            if (!in_array(strtolower($target['scheme']), ['http', 'https'], true)) {
-                return $siteUrl;
-            }
-            if (strtolower($target['host']) !== strtolower($site['host'])) {
-                return $siteUrl;
-            }
-            if (($target['port'] ?? null) !== ($site['port'] ?? null)) {
-                return $siteUrl;
-            }
-
-            return $url;
+            return \Idno\Http\RedirectTarget::sanitize((string) $url, \Idno\Core\Idno::site()->config()->getDisplayURL());
         }
 
     }

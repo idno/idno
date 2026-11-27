@@ -143,6 +143,6 @@ final class LegacyPermalinks implements Permalinks
 
     public function referrer(PageContext $page): string
     {
-        return \Idno\Pages\Session\Login::sanitizeRedirectUrl($page->request()->headers->get('Referer') ?? '');
+        return \Idno\Http\RedirectTarget::sanitize($page->request()->headers->get('Referer') ?? '', \Idno\Core\Idno::site()->config()->getDisplayURL());
     }
 }
