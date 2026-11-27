@@ -39,13 +39,13 @@ final class NativeSession
 
     /**
      * Starts the session: the save path when given (only for a site whose sessions no handler stores), the garbage collection's odds when
-     * given (`['probability' => int, 'divisor' => int]`), the cookie's name, the `nocache` limiter (the lines that keep every page out of
+     * given (`['probability' => int, 'divisor' => int]`), the cookie's name (none: PHP's own default), the `nocache` limiter (the lines that keep every page out of
      * shared caches are the site's own, whatever a host's php.ini says) and `session_start()`. A session a handler has started itself is
      * left as it is. Notes whether the request carried this session's cookie.
      *
      * @param array{probability: int, divisor: int}|null $collection
      */
-    public function start(string $name, ?string $savePath = null, ?array $collection = null): void
+    public function start(?string $name, ?string $savePath = null, ?array $collection = null): void
     {
         if ($savePath !== null) {
             session_save_path($savePath);
@@ -55,7 +55,9 @@ final class NativeSession
             ini_set('session.gc_divisor', (string) $collection['divisor']);
         }
         if (!$this->isActive()) {
-            session_name($name);
+            if ($name !== null) {
+                session_name($name); // none: PHP's own default name
+            }
             session_cache_limiter('nocache');
             session_start();
         }
@@ -64,7 +66,7 @@ final class NativeSession
     }
 
     /**
-     * Whether the request carried the cookie of the session start() began (a session that already existed), and not none or one for a
+     * Whether the request carried the cookie of the session start() began (a session that already existed; false again once startNew() begins another), and not none or one for a
      * session that does not exist.
      */
     public function carriedCookie(): bool
@@ -130,8 +132,11 @@ final class NativeSession
     public function startNew(): bool
     {
         session_id(session_create_id());
+        $started = @session_start();
+        // a session begun here was carried by no request
+        $this->carriedCookie = false;
 
-        return @session_start();
+        return $started;
     }
 
     /**

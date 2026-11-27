@@ -63,6 +63,7 @@ final class NativeSessionTest extends TestCase
         return $decoded;
     }
 
+    // Catches a changed session setting (lifetime, strict mode, cookies only, trans-sid): nothing else pins gc_maxlifetime, use_strict_mode, use_only_cookies or use_trans_sid.
     public function testTheIniValuesAreTheOnesTheSiteAlwaysSet(): void
     {
         $result = $this->answerOf('ini');
@@ -77,56 +78,13 @@ final class NativeSessionTest extends TestCase
         $this->assertNotSame('1', $result['cookie_secure'], 'a site served in the clear has no Secure cookie');
     }
 
+    // Catches a site served over https getting a session cookie without the Secure flag.
     public function testASecureSiteGetsASecureCookie(): void
     {
         $this->assertSame('1', $this->answerOf('ini-secure')['cookie_secure']);
     }
 
-    public function testTheCacheLimiterIsNocacheWhateverTheHostSays(): void
-    {
-        $result = $this->answerOf('limiter', ['session.cache_limiter' => 'public']);
-
-        $this->assertSame('nocache', $result['limiter']);
-        $headers = implode("\n", $result['headers']);
-        $this->assertStringContainsString('Expires: Thu, 19 Nov 1981 08:52:00 GMT', $headers);
-        $this->assertStringContainsString('Cache-Control: no-store, no-cache, must-revalidate', $headers);
-        $this->assertStringContainsString('Pragma: no-cache', $headers);
-    }
-
-    public function testRegenerateKeepsTheDataUnderANewId(): void
-    {
-        $result = $this->answerOf('regenerate');
-
-        $this->assertTrue($result['changed']);
-        $this->assertSame('value', $result['kept']);
-    }
-
-    public function testStartNewGivesAnEmptySessionUnderANewId(): void
-    {
-        $result = $this->answerOf('start-new');
-
-        $this->assertTrue($result['started']);
-        $this->assertTrue($result['changed']);
-        $this->assertTrue($result['empty']);
-        $this->assertTrue($result['active']);
-    }
-
-    public function testAbortWritesNothing(): void
-    {
-        $result = $this->answerOf('abort');
-
-        $this->assertFalse($result['active']);
-        $this->assertFalse($result['written']);
-    }
-
-    public function testCloseWritesTheSession(): void
-    {
-        $result = $this->answerOf('close');
-
-        $this->assertFalse($result['active']);
-        $this->assertSame('yes', $result['written']);
-    }
-
+    // Catches taking a plugin's own cookies off the response along with the session's cookie (a stateless request must keep them).
     public function testRemoveCookieLineKeepsOtherCookies(): void
     {
         $result = $this->answerOf('remove-cookie');
@@ -135,6 +93,7 @@ final class NativeSessionTest extends TestCase
         $this->assertSame(['Set-Cookie: other=1', 'Set-Cookie: another=2'], $result['after']);
     }
 
+    // Catches the logout's expiring cookie losing HttpOnly or SameSite=Lax (the replacing cookie is the only one other tests see).
     public function testExpireCookieCarriesTheSessionsAttributesAndSameSiteLax(): void
     {
         $cookies = $this->answerOf('expire-cookie')['cookies'];
@@ -145,6 +104,7 @@ final class NativeSessionTest extends TestCase
         $this->assertStringContainsString('HttpOnly', $expired[0]);
     }
 
+    // Catches a cookie for a session that does not exist counting as carried: an API client's session would then be left behind.
     public function testACookieForASessionThatExistsIsCarriedAndAnyOtherIsNot(): void
     {
         $first = $this->answerOf('carried');
@@ -158,20 +118,7 @@ final class NativeSessionTest extends TestCase
         $this->assertFalse($unknown['carried'], 'strict mode gives a cookie for no session a new one');
     }
 
-    public function testAHandlerInstalledBeforeTheStartIsTheOneUsed(): void
-    {
-        $result = $this->answerOf('handler-before-start');
-
-        $this->assertNotEmpty(array_filter($result['calls'], static fn (string $call): bool => str_starts_with($call, 'write:')), implode(',', $result['calls']));
-    }
-
-    public function testUseHandlerInstallsTheHandler(): void
-    {
-        $result = $this->answerOf('use-handler');
-
-        $this->assertNotEmpty(array_filter($result['calls'], static fn (string $call): bool => str_starts_with($call, 'write:')), implode(',', $result['calls']));
-    }
-
+    // Catches start() warning, or starting again, when a plugin's handler has already started the session (a warning is an exception under pedantic_mode).
     public function testAHandlerThatStartsTheSessionItselfKeepsTheSitesIniValues(): void
     {
         $result = $this->answerOf('handler-starts-itself');

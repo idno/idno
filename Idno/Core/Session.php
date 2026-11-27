@@ -82,7 +82,7 @@ namespace Idno\Core {
         function init()
         {
             // The ini values are set before any handler is installed, so that a handler a plugin supplies sees them
-            $this->native()->configure(new \Idno\Security\SessionSettings((string) Idno::site()->config()->sessionname, (bool) \Idno\Common\Page::isSSL()));
+            $this->native()->configure(new \Idno\Security\SessionSettings((bool) \Idno\Common\Page::isSSL()));
 
             $sessions_handled = false;
 
@@ -121,7 +121,7 @@ namespace Idno\Core {
 
             // Fallback to files if no other session storage handler has been defined: PHP's own, in the configured directory
             $this->native()->start(
-                Idno::site()->config()->sessionname,
+                Idno::site()->config()->sessionname === null ? null : (string) Idno::site()->config()->sessionname,
                 $sessions_handled ? null : Idno::site()->config()->session_path
             );
             $this->sessionStartedHere = !$this->native()->carriedCookie();

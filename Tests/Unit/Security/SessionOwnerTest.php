@@ -7,21 +7,28 @@ namespace Tests\Unit\Security;
 use PHPUnit\Framework\TestCase;
 
 /**
- * PHP's session has ONE owner, Idno\Security\NativeSession: no other file of the application calls a session function of PHP or sets
- * a `session.` ini value. Found by tokens, so a method of the same name (Idno\Core\Session::destroy(), say), a string and a comment are
- * not mistaken for a call.
+ * PHP's session has ONE owner, Idno\Security\NativeSession: no other file of the application calls a session function of PHP (all but
+ * `session_status()`, which the form token's storage asks) or sets a `session.` ini value with `ini_set()` or `ini_alter()`, and none imports
+ * one with `use function`. Found by tokens, so a method of the same name (Idno\Core\Session::destroy(), say), a string and a comment are
+ * not mistaken for a call. It scans `Idno/`, `IdnoPlugins/`, `ConsolePlugins/`, `Themes/`, `templates/`, `index.php`, `bin/console`,
+ * `idno.php` and `known.php`, so it checks the plugins and themes that are on disk.
+ *
+ * What it does NOT see: a function reached by name at run time (`call_user_func('session_start')`, `$f = 'session_destroy'; $f()`,
+ * `array_map('session_…', …)`), an `ini_set()` whose name is built (`"session.$x"`, a variable), `setcookie()` or `header('Set-Cookie: …')`
+ * for the session's cookie, and any read of `$_COOKIE`: it guards the calls the code writes out, not every way PHP's session can be reached.
  */
 final class SessionOwnerTest extends TestCase
 {
     private const FUNCTIONS = [
         'session_start', 'session_regenerate_id', 'session_destroy', 'session_abort', 'session_write_close', 'session_commit', 'session_reset',
         'session_unset', 'session_create_id', 'session_id', 'session_name', 'session_set_save_handler', 'session_save_path', 'session_cache_limiter',
-        'session_set_cookie_params', 'session_gc',
+        'session_set_cookie_params', 'session_gc', 'session_get_cookie_params', 'session_encode', 'session_decode', 'session_module_name',
+        'session_register_shutdown', 'session_cache_expire',
     ];
 
     private const OWNER = 'Idno/Security/NativeSession.php';
 
-    private const DIRECTORIES = ['Idno', 'IdnoPlugins', 'ConsolePlugins'];
+    private const DIRECTORIES = ['Idno', 'IdnoPlugins', 'ConsolePlugins', 'Themes', 'templates'];
 
     private const FILES = ['index.php', 'bin/console', 'idno.php', 'known.php'];
 
@@ -39,11 +46,17 @@ final class SessionOwnerTest extends TestCase
                 continue;
             }
             $name = strtolower(ltrim($token[1], '\\'));
+            $imported = self::neighbour($tokens, $i, -1);
+            $keyword = $imported !== null ? self::neighbour($tokens, $imported[2], -1) : null;
+            if ($imported !== null && $imported[0] === T_FUNCTION && $keyword !== null && $keyword[0] === T_USE && in_array($name, self::FUNCTIONS, true)) {
+                $found[] = $file . ':' . $token[2] . ' use function ' . $token[1];
+                continue;
+            }
             if ($token[0] === T_NAME_FULLY_QUALIFIED && substr_count($token[1], '\\') > 1) {
                 continue; // Foo\session_start() is another function
             }
             $isSession = in_array($name, self::FUNCTIONS, true);
-            if (!$isSession && $name !== 'ini_set') {
+            if (!$isSession && $name !== 'ini_set' && $name !== 'ini_alter') {
                 continue;
             }
             $before = self::neighbour($tokens, $i, -1);
@@ -97,6 +110,9 @@ session_start();
 \session_destroy();
 $a = ini_set('session.use_strict_mode', true);
 $b = ini_set("session.name", 'x');
+ini_alter('session.save_path', '/x');
+use function session_start as begin;
+use function strlen;
 $this->session_start();
 Session::session_id();
 function session_name() {}
@@ -108,7 +124,10 @@ PHP;
         $found = self::callsIn($source);
 
         $this->assertSame(
-            ['source:3 session_start()', 'source:4 \session_destroy()', 'source:5 ini_set()', 'source:6 ini_set()'],
+            [
+                'source:3 session_start()', 'source:4 \session_destroy()', 'source:5 ini_set()', 'source:6 ini_set()', 'source:7 ini_alter()',
+                'source:8 use function session_start',
+            ],
             $found
         );
     }

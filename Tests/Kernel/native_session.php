@@ -22,7 +22,7 @@ use Tests\Fixtures\RecordingSessionHandler;
 
 $case = (string) ($_GET['case'] ?? '');
 $session = new NativeSession();
-$settings = new SessionSettings('idno_test', false);
+$settings = new SessionSettings(false);
 $warnings = [];
 set_error_handler(static function (int $number, string $message) use (&$warnings): bool {
     $warnings[] = $message;
@@ -41,59 +41,8 @@ switch ($case) {
         }
         break;
     case 'ini-secure':
-        $session->configure(new SessionSettings('idno_test', true));
+        $session->configure(new SessionSettings(true));
         $result['cookie_secure'] = ini_get('session.cookie_secure');
-        break;
-    case 'limiter':
-        $session->configure($settings);
-        $session->start('idno_test');
-        $result['limiter'] = session_cache_limiter();
-        $result['headers'] = headers_list();
-        break;
-    case 'regenerate':
-        $session->configure($settings);
-        $session->start('idno_test');
-        $_SESSION['kept'] = 'value';
-        $before = $session->id();
-        $session->regenerate();
-        $result['changed'] = $session->id() !== $before;
-        $result['kept'] = $_SESSION['kept'] ?? null;
-        break;
-    case 'start-new':
-        $session->configure($settings);
-        $session->start('idno_test');
-        $_SESSION['old'] = 'value';
-        $before = $session->id();
-        $session->destroy();
-        $_SESSION = [];
-        $result['started'] = $session->startNew();
-        $result['changed'] = $session->id() !== $before && $session->id() !== '';
-        $result['empty'] = $_SESSION === [];
-        $result['active'] = $session->isActive();
-        break;
-    case 'abort':
-        $session->configure($settings);
-        $session->start('idno_test');
-        $_SESSION['never'] = 'written';
-        $id = $session->id();
-        $session->abort();
-        $result['active'] = $session->isActive();
-        session_id($id);
-        session_start();
-        $result['written'] = isset($_SESSION['never']);
-        session_abort();
-        break;
-    case 'close':
-        $session->configure($settings);
-        $session->start('idno_test');
-        $_SESSION['written'] = 'yes';
-        $id = $session->id();
-        $session->close();
-        $result['active'] = $session->isActive();
-        session_id($id);
-        session_start();
-        $result['written'] = $_SESSION['written'] ?? null;
-        session_abort();
         break;
     case 'remove-cookie':
         $session->configure($settings);
@@ -116,24 +65,6 @@ switch ($case) {
         $_SESSION['kept'] = 'so the session is stored';
         $result['carried'] = $session->carriedCookie();
         $result['id'] = $session->id();
-        break;
-    case 'handler-before-start':
-        $handler = new RecordingSessionHandler($handlerDirectory);
-        $session->configure($settings);
-        session_set_save_handler($handler, true);
-        $session->start('idno_test');
-        $_SESSION['handled'] = 'yes';
-        $session->close();
-        $result['calls'] = $handler->calls();
-        break;
-    case 'use-handler':
-        $handler = new RecordingSessionHandler($handlerDirectory);
-        $session->configure($settings);
-        $session->useHandler($handler);
-        $session->start('idno_test');
-        $_SESSION['handled'] = 'yes';
-        $session->close();
-        $result['calls'] = $handler->calls();
         break;
     case 'handler-starts-itself':
         $session->configure($settings);

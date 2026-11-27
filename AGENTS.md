@@ -2774,20 +2774,24 @@ callback, and often `exit`: Symfony's session listener would close the session a
   ask for caching (`DeniedResponder::ATTRIBUTE` marks the request) and the response goes out with the session's lines, as a legacy page's 403 did (see "The headers of a site page"). Pinned by `Tests/Kernel/ControllerAuthorizationTest` (`/_test/admin-only`, `/_test/member-only`, `/_test/whoami`:
   `Tests/Fixtures/WhoAmIController`).
 - **One owner of PHP's session** (`Idno\Security\NativeSession`, a public shared container service built with no argument, with the value object
-  `SessionSettings`: the cookie's name and whether it is `Secure`). It is the ONLY class of the application that calls PHP's `session_*` functions, sets a
-  `session.` ini value or reads the session's cookie from `$_COOKIE` (`Tests/Unit/Security/SessionOwnerTest` scans every PHP file of `Idno/`, `IdnoPlugins/`,
-  `ConsolePlugins/`, `index.php`, `bin/console` by tokens and fails for any other that does). Each method is one primitive, in the order and with the arguments
-  the legacy session always made the call with: `configure()` (the ini values `Session::init()` sets, BEFORE the handler step, so a handler a plugin supplies
-  sees them), `start($name, $savePath, $collection)` (the save path when given, the garbage collection's odds when given, the name, the `nocache` limiter and
-  `session_start()`; a session a handler started itself is left as it is; it notes whether the request carried the session's cookie, `carriedCookie()`),
-  `useHandler()`, `regenerate()`, `destroy()`, `abort()`, `close()`, `startNew()`, `expireCookie()` (nothing under `IDNO_UNIT_TEST`), `removeCookieLine()`,
-  `isActive()`, `id()` and `name()`. The RULES stay in `Idno\Core\Session` (who is signed in, stateless requests, the logout, the fingerprint), which fetches the owner
-  once from the container and calls it for every step; its public methods are unchanged. Everything else that closed the session early (`AfterResponse`,
-  `DefaultTemplate::drawPage()` and `renderPage()`, `LegacyStoredFiles::releaseSession()`, the legacy edit page) calls `Idno::site()->session()->finishEarly()`.
-  `RepositoryDataConcierge::handleSession()` installs its handler through the same owner (`useHandler()`), which the factory gives it as a service closure.
-  `SessionTokenStorage` still asks PHP only `session_status()`. Pinned by `Tests/Kernel/NativeSessionTest` (each primitive on a `php -S` of its own, through
-  `Tests/Kernel/native_session.php`: a header list exists only under a web SAPI), and over HTTP by `Tests/Characterisation/SessionLifecycleTest` (a legacy page's login
-  survives its `exit`, `Tests\Fixtures\LegacyLoginExitPage`, registered only when `IDNO_TEST_LOGIN_EXIT=1`; a message is shown once).
+  `SessionSettings`: whether the cookie is `Secure`). It is the only class of the application that calls PHP's `session_*` functions (all but
+  `session_status()`, which `SessionTokenStorage` asks to know whether a session is active), sets a `session.` ini value, expires the session's cookie
+  or takes its `Set-Cookie` line off the response. `Tests/Unit/Security/SessionOwnerTest` scans every PHP file of `Idno/`, `IdnoPlugins/`, `ConsolePlugins/`,
+  `Themes/`, `templates/`, `index.php`, `bin/console`, `idno.php` and `known.php` by tokens and fails for any other that calls one of those functions, calls
+  `ini_set()` or `ini_alter()` with a literal `session.` name, or imports one with `use function`. It does NOT see a function reached by name at run time
+  (`call_user_func('session_start')`), an `ini_set()` whose name is built, `setcookie()` for the session's cookie, or any read of `$_COOKIE`
+  (`NativeSession::start()` is the one place that reads the session's cookie, by convention only). Each method is one primitive, in the order and with the
+  arguments the legacy session always made the call with: `configure()` (the ini values `Session::init()` sets, BEFORE the handler step, so a handler a
+  plugin supplies sees them: `SessionStorageHandlerTest`), `start($name, $savePath, $collection)` (the save path when given, the garbage collection's odds
+  when given, the name when given, the `nocache` limiter and `session_start()`; a session a handler started itself is left as it is; it notes whether the
+  request carried the session's cookie, `carriedCookie()`, false again after `startNew()`), `useHandler()`, `regenerate()`, `destroy()`, `abort()`, `close()`,
+  `startNew()`, `expireCookie()` (nothing under `IDNO_UNIT_TEST`), `removeCookieLine()`, `isActive()`, `id()` and `name()`. The RULES stay in `Idno\Core\Session`
+  (who is signed in, stateless requests, the logout, the fingerprint), which fetches the owner once from the container and calls it for every step; its public
+  methods are unchanged. Everything else that closed the session early (`AfterResponse`, `DefaultTemplate::drawPage()` and `renderPage()`,
+  `LegacyStoredFiles::releaseSession()`, the legacy edit page) calls `Idno::site()->session()->finishEarly()`. `RepositoryDataConcierge::handleSession()`
+  installs its handler through the same owner (`useHandler()`), which the factory gives it as a service closure. Pinned by `Tests/Kernel/NativeSessionTest`
+  (the owner's cookie and ini behaviour on a `php -S` of its own, through `Tests/Kernel/native_session.php`: a header list exists only under a web SAPI) and
+  `Tests/Characterisation/SessionStorageHandlerTest` (`Tests\Fixtures\SessionIniProbeStorage`, a `sessions_storage` class that records the ini values it sees).
 - **The queue worker.** It handles many messages in one process and has no request: `LegacyUserContext::runAs()` and
   `ensureNobodyLoggedOn()` (and so `WorkerHygiene`) call `Session::resetStatelessAuthentication()` before and after each message, so
   neither a session user nor a stateless user (a listener may authenticate one) is left behind or shadows the next message's user.
@@ -5259,8 +5263,8 @@ reach into the legacy application (`Idno::site()`) where that is what they test.
 - no superglobals (`$_GET`, `$_POST`, `$_SERVER`, ...): take input from the `Request`. Only
   the boundary that builds the kernel and the request reads them (`Kernel::fromGlobals()`,
   `FrontController::requestFromGlobals()`)
-- PHP's session is touched only through `Idno\Security\NativeSession` (no `session_*` call and no `ini_set('session.…')` anywhere else, and the session's cookie is read from
-  `$_COOKIE` only there: `SessionOwnerTest`); to close it early call `Idno::site()->session()->finishEarly()`
+- PHP's session is touched only through `Idno\Security\NativeSession` (no `session_*` call but `session_status()`, and no `ini_set('session.…')`, anywhere else:
+  `SessionOwnerTest`); to close it early call `Idno::site()->session()->finishEarly()`
 - no dependency on `Idno\Legacy\` (see "Legacy pages and routes")
 - a new top-level directory that must not be served (code, configuration, data), or a new
   script meant to be run from the command line, needs

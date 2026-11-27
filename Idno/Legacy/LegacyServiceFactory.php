@@ -106,8 +106,8 @@ final class LegacyServiceFactory
      */
     private function repositoryDataConcierge(string $family, \Idno\Core\Config $config): RepositoryDataConcierge
     {
-        if ($this->connection === null || $this->recordStore === null || $this->repository === null || $this->logger === null) {
-            throw new \LogicException('LegacyServiceFactory needs the connection, record store, repository and logger services to build the db() service of an SQL site.');
+        if ($this->connection === null || $this->recordStore === null || $this->repository === null || $this->logger === null || $this->nativeSession === null) {
+            throw new \LogicException('LegacyServiceFactory needs the connection, record store, repository, logger and session-owner services to build the db() service of an SQL site.');
         }
 
         return new RepositoryDataConcierge(

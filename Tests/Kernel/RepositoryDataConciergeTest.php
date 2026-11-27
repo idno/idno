@@ -1332,7 +1332,7 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
         $store = PrivateDatabase::recordStore($connection, new LegacyRecordDefaults(), Idno::container()->get(\Idno\Storage\TypeMap::class), static fn (string $text): string => (string) Idno::site()->language()->uncurlQuotes($text));
         $repository = new EntityRepository($store, new LegacyAccessContext(), new NullLogger());
         $logger = new RecordingLogger();
-        $adapter = new RepositoryDataConcierge('sqlite', $connection, static fn (): RecordStore => $store, static fn (): EntityRepository => $repository, static fn (): \Psr\Log\LoggerInterface => $logger, $path);
+        $adapter = new RepositoryDataConcierge('sqlite', $connection, static fn (): RecordStore => $store, static fn (): EntityRepository => $repository, static fn (): \Psr\Log\LoggerInterface => $logger, $path, static fn (): \Idno\Security\NativeSession => \Idno\Core\Idno::container()->get(\Idno\Security\NativeSession::class));
 
         $this->assertInstanceOf(\PDO::class, $adapter->getClient());
         $this->assertSame($connection->getNativeConnection(), $adapter->getClient());
@@ -1569,7 +1569,7 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
     {
         $repository = new EntityRepository($store, $access, new NullLogger());
 
-        return new RepositoryDataConcierge($family, $connection ?? PrivateDatabase::sqliteMemory(migrate: false), static fn (): RecordStore => $store, static fn (): EntityRepository => $repository, static fn (): \Psr\Log\LoggerInterface => $logger, null);
+        return new RepositoryDataConcierge($family, $connection ?? PrivateDatabase::sqliteMemory(migrate: false), static fn (): RecordStore => $store, static fn (): EntityRepository => $repository, static fn (): \Psr\Log\LoggerInterface => $logger, null, static fn (): \Idno\Security\NativeSession => \Idno\Core\Idno::container()->get(\Idno\Security\NativeSession::class));
     }
 
     private static function sqliteStore(Connection $connection): RecordStore
