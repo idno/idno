@@ -1,21 +1,26 @@
-{# Display the login link, if the user is not currently logged in. If they're logged out, this is probably why they're denied. #}{% set login_url = login_url_for(current_url_parts().path) %}{% if not is_logged_in() %}
-        <a id="soft-forward"
-           href="{{ login_url }}">{{ t('Click here to log in.') }}</a>
-        {% else %}
-        <div class="container result-403">
-            <div class="row" style="margin-bottom: 2em; margin-top: 6em">
-                <div class="col-md-offset-1 col-md-5">
-                    <h1 class="p-name" style="margin-bottom: 2em;">
-                    {{ t("Hold on. You don't have access to this content.") }}
-                    </h1>
-                    <p>{{ t("It's nothing personal. You just don't have the right permissions to see what's here.") }}</p>
-                    <p>
-                    {{ t_html('Find something else to view on the <a href="%s">%s homepage</a>.', [site_url(), setting('title')]) }}
-                    </p>
-                </div>
-                <div class="col-md-5">
-                    <img src="{{ static_url() }}gfx/robots/aleph_403.png" alt="Robot with a stop sign">
-                </div>
+{#- "You can't see this". For a visitor of a private site it is the front door: it says the site is private and how to get in. For a member it says their account lacks the permission, and offers no sign-in: they have signed in. No script: a visitor is not sent on to the sign-in page by one (the link keeps the id `soft-forward`). -#}
+<div class="idno-gate idno-gate-wide">
+    <div class="idno-editor">
+        {% if not is_logged_in() %}
+            {% if setting('walled_garden') %}
+                <h1 class="idno-editor-heading">{{ t('%s is private', [site_title()]) }}</h1>
+                <p class="idno-gate-lead">{{ t('Only members can read this community. If you are a member, sign in. If you have been invited, use the link in your invitation email to create your account.') }}</p>
+            {% else %}
+                <h1 class="idno-editor-heading">{{ t('Sign in to continue') }}</h1>
+                <p class="idno-gate-lead">{{ t('You need to be signed in to see this page.') }}</p>
+            {% endif %}
+            <div class="idno-gate-actions">
+                <a id="soft-forward" class="idno-btn idno-btn-primary" href="{{ login_url_for(current_url_parts().path) }}">{{ t('Sign in') }}</a>
             </div>
-        </div>
-{% endif %}
+            <p class="idno-gate-foot">
+                <a href="{{ site_url() }}account/password">{{ t('Forgot your password?') }}</a>
+            </p>
+        {% else %}
+            <h1 class="idno-editor-heading p-name">{{ t("You don't have access to this page") }}</h1>
+            <p class="idno-gate-lead">{{ t("Your account doesn't have the permissions this page needs.") }}</p>
+            <div class="idno-gate-actions">
+                <a class="idno-btn idno-btn-primary" href="{{ site_url() }}">{{ t('Go to the home page') }}</a>
+            </div>
+        {% endif %}
+    </div>
+</div>

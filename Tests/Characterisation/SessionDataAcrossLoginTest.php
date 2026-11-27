@@ -99,9 +99,9 @@ final class SessionDataAcrossLoginTest extends PrivateSiteTestCase
         $cookie = self::sessionCookieOrNull($post) ?? $cookie;
 
         $this->assertSame(302, $post->status);
-        $this->assertSame($this->baseUrl(), $post->header('Location'));
-        $home = $this->site()->request('GET', '', ['Cookie' => $cookie]);
-        $this->assertStringContainsString('Your password was reset!', Browser::text($home->body));
+        $this->assertSame($this->baseUrl() . 'session/login', $post->header('Location'), 'on to the sign-in page, which a site of any kind shows');
+        $landing = $this->site()->request('GET', 'session/login', ['Cookie' => $cookie]);
+        $this->assertStringContainsString('Your password was changed. Sign in with your new password.', Browser::text($landing->body));
         $this->assertSame(403, $this->site()->request('GET', 'account/settings/', ['Cookie' => $cookie])->status, 'resetting a password does not log anybody on');
         $this->assertSame(200, $this->site()->request('GET', 'account/settings/', ['Cookie' => $this->loginCookie('ada', 'a-new-passphrase-77')])->status);
         $this->assertNull((new Browser($this->site()))->tryLogin('ada', self::PASSWORD), 'and the old password no longer works');

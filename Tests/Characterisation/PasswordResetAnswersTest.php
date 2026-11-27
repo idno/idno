@@ -8,7 +8,8 @@ use Tests\Support\RecordedAnswers;
 
 /**
  * What the password-reset pages (`/account/password`, which asks for a reset, and `/account/password/reset`, which sets the new password) answer,
- * recorded from the legacy pages over HTTP on sites of the test's own (a reset changes an account, so the site is not shared): each page in each
+ * recorded over HTTP (first from the pages as they were, then again when the reset flow changed on purpose: a refused reset is the form in the answer, an accepted one
+ * ends at the sign-in page, a blocked address is sent no mail) on sites of the test's own (a reset changes an account, so the site is not shared): each page in each
  * template type and for each way of asking, to a visitor, a member and a signed request; the request's POST for each kind of address it can be given,
  * with the mail it sends (recipient, sender, subject, both parts); the reset form's GET for each state of a recovery code (valid, wrong, expired, another
  * member's, none, used); and the reset's POST for each field it validates, with the page the same browser loads next, whether the old and the new
@@ -44,6 +45,15 @@ final class PasswordResetAnswersTest extends SignInSiteCase
 
     private const WRONG_CODE = 'ffffffffffffffffffffffffffffffff';
 
+    /** What the site stores of a recovery code: its hash. */
+    private static function stored(string $code): string
+    {
+        return hash('sha256', $code);
+    }
+
+    /** @var list<array<string, mixed>> the mail the last recording of mail read */
+    private array $lastMails = [];
+
     public static function tearDownAfterClass(): void
     {
         try {
@@ -68,6 +78,7 @@ final class PasswordResetAnswersTest extends SignInSiteCase
         $this->assertTrue($this->runInSite(<<<'PHP'
         $config = \Idno\Core\Idno::site()->config();
         $config->from_email = 'site@example.test';
+        $config->smtp_host = 'mail.example.test';
         $config->title = 'Reset Test Site';
         $config->blocked_emails = ['blocked@example.test'];
         $config->save();
@@ -92,7 +103,7 @@ final class PasswordResetAnswersTest extends SignInSiteCase
             $set = static function (string $handle, $code, int $at): void {
                 $user = \Idno\Entities\User::getByHandle($handle);
                 $user->setPassword(%PASSWORD%);
-                $user->password_recovery_code = $code;
+                $user->password_recovery_code = $code === false ? false : \Idno\Entities\User::hashPasswordRecoveryCode($code);
                 $user->password_recovery_code_time = $at;
                 $user->save(true);
             };
@@ -257,10 +268,20 @@ final class PasswordResetAnswersTest extends SignInSiteCase
             $text .= 'mail ' . ($i + 1) . "\nto: " . $list($mail['to']) . "\nfrom: " . $list($mail['from']) . "\nbcc: " . $list($mail['bcc']) . "\nreply-to: " . $list($mail['reply_to'])
                 . "\nsubject: " . $mail['subject'] . "\n\n-- text --\n" . $mail['text'] . "\n-- html --\n" . $mail['html'] . "\n";
         }
+        $this->lastMails = $mails;
         $record = new SiteResponse(200, ['content-type' => 'text/plain'], $mails === [] ? "[no mail was sent]\n" : $text);
         $this->assertRecordedAnswer(static::GROUP, $case, $this->scrubbed()($record));
 
         return $mails;
+    }
+
+    /** The code in the link of the mail that was last recorded. */
+    private function codeInTheMail(): string
+    {
+        $this->assertCount(1, $this->lastMails);
+        $this->assertSame(1, preg_match('#code=([0-9a-f]{32})#', (string) $this->lastMails[0]['text'], $m));
+
+        return $m[1];
     }
 
     // ------------------------------------------------------------------ the request page
@@ -293,6 +314,19 @@ final class PasswordResetAnswersTest extends SignInSiteCase
         });
     }
 
+    /** The pages that ask for a link warn a visitor when the site has no mail service to send it through, and say nothing about any account. */
+    public function testTheRequestPageOfASiteWithNoMailService(): void
+    {
+        $this->seedReset();
+        $this->assertTrue($this->runInSite('$config = \Idno\Core\Idno::site()->config(); $config->smtp_host = ""; $config->save(); return true;'));
+        $this->twice(function (): void {
+            $this->arm();
+            $this->get(['answer' => 'request-no-mail'], '/account/password');
+            $this->get(['answer' => 'request-no-mail-sent'], '/account/password?sent=true');
+            $this->post(['answer' => 'request-post-no-mail', 'then' => 'request-post-no-mail-then'], '/account/password', ['email' => 'nobody@example.com']);
+        });
+    }
+
     public function testRequestingAReset(): void
     {
         $this->seedReset();
@@ -301,6 +335,8 @@ final class PasswordResetAnswersTest extends SignInSiteCase
             $before = $this->recoveryOf('bob');
             $mails = $this->post(['answer' => 'request-post-known', 'then' => 'request-post-known-then', 'after' => 'request-post-known-after', 'user' => 'request-post-known-user', 'mail' => 'request-post-known-mail'], '/account/password', ['email' => 'bob@example.com']);
             $this->assertSame(302, $mails->status);
+            $this->assertCount(1, $this->lastMails, 'one mail was sent');
+            $this->assertSame([['address' => 'bob@example.com', 'name' => '']], $this->lastMails[0]['to'], 'to the member');
             $after = $this->recoveryOf('bob');
             $this->assertNotSame($before['code'], $after['code'], 'the request issues a new code');
             $this->assertTrue($after['hasCode']);
@@ -316,7 +352,7 @@ final class PasswordResetAnswersTest extends SignInSiteCase
 
             $this->arm();
             $this->post(['answer' => 'request-post-handle', 'then' => 'request-post-handle-then', 'mail' => 'request-post-handle-mail'], '/account/password', ['email' => 'bob']);
-            $this->assertSame(self::CODE_BOB, $this->recoveryOf('bob')['code'], 'a handle is no address: Bob has the code he had');
+            $this->assertSame(self::stored(self::CODE_BOB), $this->recoveryOf('bob')['code'], 'a handle is no address: Bob has the code he had');
 
             $this->arm();
             $this->post(['answer' => 'request-post-empty', 'then' => 'request-post-empty-then', 'mail' => 'request-post-empty-mail'], '/account/password', ['email' => '']);
@@ -329,15 +365,16 @@ final class PasswordResetAnswersTest extends SignInSiteCase
             $this->assertSame(302, $answer->status);
             $this->assertSame($this->baseUrl() . 'account/password/?sent=true', $answer->header('Location'));
             $this->recordMail('request-post-array-mail');
-            $this->assertSame(self::CODE_BOB, $this->recoveryOf('bob')['code'], 'no member was issued a new code');
+            $this->assertSame(self::stored(self::CODE_BOB), $this->recoveryOf('bob')['code'], 'no member was issued a new code');
             $this->assertFalse($this->recoveryOf('carol')['hasCode'], 'no member was issued a new code');
 
             $this->arm();
             $this->post(['answer' => 'request-post-blocked', 'then' => 'request-post-blocked-then', 'mail' => 'request-post-blocked-mail'], '/account/password', ['email' => 'blocked@example.test']);
+            $this->assertSame([], $this->lastMails, 'a blocked address is sent no mail');
 
             $this->arm();
             $this->post(['answer' => 'request-post-no-token', 'then' => 'request-post-no-token-then', 'after' => 'request-post-no-token-after', 'mail' => 'request-post-no-token-mail'], '/account/password', ['email' => 'bob@example.com'], ['token' => false]);
-            $this->assertSame(self::CODE_BOB, $this->recoveryOf('bob')['code'], 'no token, no new code');
+            $this->assertSame(self::stored(self::CODE_BOB), $this->recoveryOf('bob')['code'], 'no token, no new code');
 
             $this->arm();
             $this->post(['answer' => 'request-post-json', 'then' => 'request-post-json-then', 'mail' => 'request-post-json-mail'], '/account/password?_t=json', ['email' => 'bob@example.com']);
@@ -361,9 +398,9 @@ final class PasswordResetAnswersTest extends SignInSiteCase
             // repeated requests: each issues a new code, and the earlier one stops working
             $this->arm();
             $this->post(['answer' => 'request-post-repeat-first', 'mail' => 'request-post-repeat-first-mail'], '/account/password', ['email' => 'bob@example.com']);
-            $first = $this->recoveryOf('bob')['code'];
+            $first = $this->codeInTheMail();
             $this->post(['answer' => 'request-post-repeat-second', 'mail' => 'request-post-repeat-second-mail'], '/account/password', ['email' => 'bob@example.com']);
-            $second = $this->recoveryOf('bob')['code'];
+            $second = $this->codeInTheMail();
             $this->assertNotSame($first, $second);
             $this->get(['answer' => 'request-post-repeat-first-code', 'then' => 'request-post-repeat-first-code-then'], '/account/password/reset?email=bob%40example.com&code=' . $first);
             $this->get(['answer' => 'request-post-repeat-second-code'], '/account/password/reset?email=bob%40example.com&code=' . $second);
@@ -502,27 +539,21 @@ final class PasswordResetAnswersTest extends SignInSiteCase
             $this->answer('reset-post-valid-long-password-signs-in', new SiteResponse(200, [], ($this->signsIn('bob', $long) ? 'the password of eighty bytes signs in' : 'the password of eighty bytes does not sign in') . "\n"), $this->scrubbed());
             $this->answer('reset-post-valid-long-password-prefix-signs-in', new SiteResponse(200, [], ($this->signsIn('bob', substr($long, 0, 72)) ? 'its first seventy-two bytes sign in' : 'its first seventy-two bytes do not sign in') . "\n"), $this->scrubbed());
 
-            // passwords the page refuses: the answer goes back to the referrer, the code is kept
+            // passwords the page refuses: the form again in the answer (no redirect, so no code in an address), the code is kept
             $this->arm();
-            $this->post(['answer' => 'reset-post-mismatch', 'then' => 'reset-post-mismatch-then', 'after' => 'reset-post-mismatch-after', 'user' => 'reset-post-mismatch-user'], $path, self::reset(['password2' => self::NEW_PASSWORD . 'x']), ['referer' => $this->baseUrl() . 'account/password/reset?email=bob%40example.com&code=' . self::CODE_BOB]);
+            $this->post(['answer' => 'reset-post-mismatch', 'user' => 'reset-post-mismatch-user'], $path, self::reset(['password2' => self::NEW_PASSWORD . 'x']), ['referer' => $this->baseUrl() . 'account/password/reset?email=bob%40example.com&code=' . self::CODE_BOB]);
             $this->assertTrue($this->recoveryOf('bob')['hasCode'], 'a refused reset keeps the code');
             $this->assertTrue($this->signsIn('bob', self::PASSWORD));
 
             $this->arm();
-            $this->post(['answer' => 'reset-post-mismatch-no-referer', 'then' => 'reset-post-mismatch-no-referer-then', 'after' => 'reset-post-mismatch-no-referer-after'], $path, self::reset(['password2' => 'different']), ['referer' => false]);
+            $this->post(['answer' => 'reset-post-mismatch-json'], $path . '?_t=json', self::reset(['password2' => 'different']));
 
             $this->arm();
-            $this->post(['answer' => 'reset-post-mismatch-foreign-referer', 'then' => 'reset-post-mismatch-foreign-referer-then'], $path, self::reset(['password2' => 'different']), ['referer' => 'https://evil.example/steal']);
-
-            $this->arm();
-            $this->post(['answer' => 'reset-post-mismatch-json', 'then' => 'reset-post-mismatch-json-then'], $path . '?_t=json', self::reset(['password2' => 'different']));
-
-            $this->arm();
-            $this->post(['answer' => 'reset-post-empty-passwords', 'then' => 'reset-post-empty-passwords-then'], $path, self::reset(['password' => '', 'password2' => '']));
+            $this->post(['answer' => 'reset-post-empty-passwords'], $path, self::reset(['password' => '', 'password2' => '']));
             $this->assertTrue($this->signsIn('bob', self::PASSWORD), 'empty passwords change nothing');
 
             $this->arm();
-            $this->post(['answer' => 'reset-post-short', 'then' => 'reset-post-short-then'], $path, self::reset(['password' => 'abc123', 'password2' => 'abc123']));
+            $this->post(['answer' => 'reset-post-short'], $path, self::reset(['password' => 'abc123', 'password2' => 'abc123']));
             $this->assertTrue($this->signsIn('bob', self::PASSWORD));
 
             $this->arm();
@@ -530,7 +561,7 @@ final class PasswordResetAnswersTest extends SignInSiteCase
             $this->assertTrue($this->signsIn('bob', 'abc1234'), 'seven characters are strong enough');
 
             $this->arm();
-            $this->post(['answer' => 'reset-post-spaces-only', 'then' => 'reset-post-spaces-only-then'], $path, self::reset(['password' => '        ', 'password2' => '        ']));
+            $this->post(['answer' => 'reset-post-spaces-only'], $path, self::reset(['password' => '        ', 'password2' => '        ']));
         });
     }
 

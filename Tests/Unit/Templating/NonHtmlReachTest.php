@@ -154,6 +154,7 @@ final class NonHtmlReachTest extends TestCase
         'IdnoPlugins/Styles/templates/default/styles/shell/head.html.twig',
         'IdnoPlugins/Text/templates/default/entity/Entry/icon.html.twig',
         'templates/default/account/password.html.twig',
+        'templates/default/account/password/nomail.html.twig',
         'templates/default/account/password/reset.html.twig',
         'templates/default/account/password/sent.html.twig',
         'templates/default/account/register.html.twig',

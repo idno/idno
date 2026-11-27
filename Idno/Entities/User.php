@@ -772,7 +772,10 @@ namespace Idno\Entities {
         }
 
         /**
-         * Retrieve the current password recovery code - if it's less than three hours old
+         * What the site keeps of the current password recovery code - if it's less than three hours old
+         *
+         * This is the SHA-256 of the code (see hashPasswordRecoveryCode()), never the code that was mailed: a copy of the database must not hold a link
+         * that resets a password. Ask passwordRecoveryCodeMatches() whether a code is the right one.
          *
          * @return string|false
          */
@@ -788,16 +791,43 @@ namespace Idno\Entities {
         }
 
         /**
+         * What is stored of a recovery code. The code is 128 random bits, so a fast hash is as strong as a slow one would be.
+         *
+         * @param  string $code
+         * @return string
+         */
+        static function hashPasswordRecoveryCode($code)
+        {
+            return hash('sha256', (string)$code);
+        }
+
+        /**
+         * Is this the user's current recovery code (made less than three hours ago, and not used)?
+         *
+         * @param  mixed $code What was typed or sent
+         * @return bool
+         */
+        function passwordRecoveryCodeMatches($code)
+        {
+            if (!is_string($code) || $code === '') {
+                return false;
+            }
+            $stored = $this->getPasswordRecoveryCode();
+
+            return is_string($stored) && hash_equals($stored, static::hashPasswordRecoveryCode($code));
+        }
+
+        /**
          * Add a password recovery code to the user
          *
-         * @return string The new recovery code, suitable for sending in an email
+         * @return string The new recovery code, suitable for sending in an email (only its hash is stored)
          */
         function addPasswordRecoveryCode()
         {
             $token = new \Idno\Core\TokenProvider();
 
             $auth_code                         = bin2hex($token->generateToken(16));
-            $this->password_recovery_code      = $auth_code;
+            $this->password_recovery_code      = static::hashPasswordRecoveryCode($auth_code);
             $this->password_recovery_code_time = time();
 
             return $auth_code;

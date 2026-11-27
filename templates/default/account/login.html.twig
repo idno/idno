@@ -3,6 +3,11 @@
         <h4 class="idno-editor-heading">
             {{ t('Welcome back!') }}
         </h4>
+        {% if setting('walled_garden') %}
+            <p class="idno-gate-lead">
+                {{ t('%s is a private community. Sign in to read it. If you have been invited, use the link in your invitation email to create your account.', [site_title()]) }}
+            </p>
+        {% endif %}
 
         <form action="{{ site_url() }}session/login" method="post">
             <div class="idno-form-field">

@@ -34,8 +34,6 @@ final class ArrayInputTest extends SignInSiteCase
      */
     private const ERRORS = [
         'POST /session/login' => ['email', 'password'],
-        'POST /account/password/reset' => ['code', 'password', 'password2'],
-        'GET /account/password/reset' => ['code'],
     ];
 
     /** The site case asks for it; this test records no answer, it asserts what followed. */
@@ -73,7 +71,7 @@ final class ArrayInputTest extends SignInSiteCase
             $bob = \Idno\Entities\User::getByHandle('bob');
             $bob->email = 'bob@example.com';
             $bob->setPassword(%PASSWORD%);
-            $bob->password_recovery_code = %RECOVERY%;
+            $bob->password_recovery_code = \Idno\Entities\User::hashPasswordRecoveryCode(%RECOVERY%);
             $bob->password_recovery_code_time = time();
             $bob->save(true);
             $invitation = new \Idno\Entities\Invitation();
@@ -232,6 +230,6 @@ final class ArrayInputTest extends SignInSiteCase
         [$cookie, $token] = $this->visitorSession();
         $made = $this->send('POST', '/account/password/reset', $valid, 'form', $cookie, $token);
         $this->assertSame(302, $made->status);
-        $this->assertNotSame(self::RECOVERY, $this->state()['recovery'], 'the code is used up by a request made of text');
+        $this->assertNotSame(hash('sha256', self::RECOVERY), $this->state()['recovery'], 'the code is used up by a request made of text');
     }
 }

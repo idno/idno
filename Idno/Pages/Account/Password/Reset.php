@@ -7,7 +7,13 @@
 namespace Idno\Pages\Account\Password {
 
     /**
-     * Default class to serve the password recovery page
+     * Default class to serve the password reset page
+     *
+     * The link in the reset mail carries the member's address and the code in its query, so the page sends `Referrer-Policy: no-referrer`, and the
+     * code is never a variable of the page (a JSON request prints them): the form is drawn on a copy of the page's template. A reset the page
+     * refuses because of the passwords is the form again, in the answer to the POST, carrying the address and the code in hidden fields and never the
+     * passwords; a reset it refuses because of the code is one answer for a wrong, a used and an expired code and for an address that is no
+     * member's or may not reset, and it sends the visitor to the page that asks for a new link.
      */
     class Reset extends \Idno\Common\Page
     {
@@ -16,27 +22,16 @@ namespace Idno\Pages\Account\Password {
         {
 
             $this->reverseGatekeeper();
-            $code  = $this->getInput('code');
-            $email = $this->getInput('email');
+            // Texts: a field sent as an array is an empty one
+            $code  = $this->getTextInput('code');
+            $email = $this->getTextInput('email');
 
-            if (!empty($code) && !empty($email)) {
-                if ($user = \Idno\Entities\User::getByEmail($email)) {
-                    $storedCode = $user->getPasswordRecoveryCode();
-                    if ($storedCode && hash_equals($storedCode, $code)) {
-
-                        $t        = \Idno\Core\Idno::site()->template();
-                        $t->body  = $t->__(array('email' => $email, 'code' => $code))->draw('account/password/reset');
-                        $t->title = \Idno\Core\Idno::site()->language()->_('Reset password');
-
-                        $t->drawPage();
-                        exit;
-
-                    }
-                }
+            if ($this->memberFor($email, $code)) {
+                $this->drawForm($email, $code);
+                return;
             }
 
-            \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->_("The password reset code wasn't valid. They expire after three hours, so you might need to try again."));
-            $this->forward(\Idno\Core\Idno::site()->config()->getURL() . 'account/password');
+            $this->refuseTheCode();
 
         }
 
@@ -44,40 +39,83 @@ namespace Idno\Pages\Account\Password {
         {
 
             $this->reverseGatekeeper();
-            $code      = $this->getInput('code');
-            $email     = $this->getInput('email');
-            $password  = trim($this->getInput('password'));
-            $password2 = trim($this->getInput('password2'));
+            // Texts: a field sent as an array is an empty one
+            $code      = $this->getTextInput('code');
+            $email     = $this->getTextInput('email');
+            $password  = trim($this->getTextInput('password'));
+            $password2 = trim($this->getTextInput('password2'));
 
-            if (\Idno\Entities\User::checkNewPasswordStrength($password) && $password == $password2) {
-                if (!empty($code) && !empty($email)) {
-                    if ($user = \Idno\Entities\User::getByEmail($email)) {
-                        $storedCode = $user->getPasswordRecoveryCode();
-                        if ($storedCode && hash_equals($storedCode, $code)) {
-
-                            /* @var \Idno\Entities\User $user */
-                            $user->setPassword($password);
-                            $user->clearPasswordRecoveryCode();
-                            $user->save(true);
-                            // A member who was locked out of signing in can sign in at once.
-                            \Idno\Pages\Session\Login::throttleReset(\Idno\Pages\Session\Login::throttleKeyFor($user));
-                            \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->_("Your password was reset!"));
-                            $this->forward(\Idno\Core\Idno::site()->config()->getURL());
-                            return;
-
-                        }
-                    }
-                }
-                \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->_("The password reset code wasn't valid. They expire after three hours, so you might need to try again."));
-                $this->forward(\Idno\Core\Idno::site()->config()->getURL() . 'account/password');
-            } else {
-                \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->_('Sorry, your passwords either don\'t match, or are too weak'));
-                $this->forward(\Idno\Pages\Session\Login::sanitizeRedirectUrl($_SERVER['HTTP_REFERER'] ?? ''));
+            // The code is judged first: whoever has not a right one is told only that, whatever they typed as passwords
+            if (!($user = $this->memberFor($email, $code))) {
+                $this->refuseTheCode();
+                return;
             }
 
+            if (!\Idno\Entities\User::checkNewPasswordStrength($password) || $password !== $password2) {
+                \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->_('Sorry, your passwords either don\'t match, or are too weak'));
+                // The form again, here: a redirect would put the code in an address
+                $this->setResponse(400);
+                $this->drawForm($email, $code);
+                return;
+            }
+
+            /* @var \Idno\Entities\User $user */
+            $user->setPassword($password);
+            $user->clearPasswordRecoveryCode();
+            $user->save(true);
+            // A member who was locked out of signing in can sign in at once.
+            \Idno\Pages\Session\Login::throttleReset(\Idno\Pages\Session\Login::throttleKeyFor($user));
+            // On to the sign-in page: the home page of a private site would refuse them, and nobody is signed in by a reset
+            \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->_('Your password was changed. Sign in with your new password.'));
+            $this->forward(\Idno\Core\Idno::site()->config()->getDisplayURL() . 'session/login');
+
+        }
+
+        /**
+         * The member whose address this is, when the code is their current one and they may reset: an account that is being deleted, and an address
+         * the site has blocked, cannot (they could not sign in with the new password either).
+         *
+         * @param  string $email
+         * @param  string $code
+         * @return \Idno\Entities\User|false
+         */
+        private function memberFor($email, $code)
+        {
+            if ($email === '' || $code === '') {
+                return false;
+            }
+            $user = \Idno\Entities\User::getByEmail($email);
+            if (!$user || $user->isClosed() || \Idno\Core\Idno::site()->config()->emailIsBlocked($user->email)) {
+                return false;
+            }
+
+            return $user->passwordRecoveryCodeMatches($code) ? $user : false;
+        }
+
+        /**
+         * The one answer to a code that is not right: it does not say whether it was wrong, used or too old, and the page it goes to asks for a new link.
+         */
+        private function refuseTheCode()
+        {
+            \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->_("The password reset code wasn't valid. They expire after three hours, so you might need to try again."));
+            $this->forward(\Idno\Core\Idno::site()->config()->getURL() . 'account/password');
+        }
+
+        /**
+         * Draw the form for this address and code, in the plain shell with the session's messages: drawPage() would pick the account settings shell for
+         * an address under /account/, which is for people who are signed in.
+         */
+        private function drawForm($email, $code)
+        {
+            header('Referrer-Policy: no-referrer');
+            $t        = \Idno\Core\Idno::site()->template();
+            $t->body  = $t->withVars(array_merge($t->vars, ['email' => $email, 'code' => $code]))->draw('account/password/reset');
+            $t->title = \Idno\Core\Idno::site()->language()->_('Reset password');
+            $t->messages = \Idno\Core\Idno::site()->session()->getAndFlushMessages();
+            $t->sendShellHeaders();
+            echo $t->draw('shell');
         }
 
     }
 
 }
-

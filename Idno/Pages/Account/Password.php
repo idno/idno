@@ -21,11 +21,13 @@ namespace Idno\Pages\Account {
             $this->reverseGatekeeper();
             $t = \Idno\Core\Idno::site()->template();
 
+            // The body is drawn on a copy of the page's template: what it is given is no variable of the page, which a JSON request prints
+            $body = $t->withVars(array_merge($t->vars, ['mail_configured' => Email::isConfigured()]));
             if ($sent = $this->getInput('sent')) {
-                $t->body  = $t->draw('account/password/sent');
+                $t->body  = $body->draw('account/password/sent');
                 $t->title = \Idno\Core\Idno::site()->language()->_('Password recovery email sent');
             } else {
-                $t->body  = $t->draw('account/password');
+                $t->body  = $body->draw('account/password');
                 $t->title = \Idno\Core\Idno::site()->language()->_('Recover password');
             }
 
@@ -38,10 +40,10 @@ namespace Idno\Pages\Account {
         {
 
             $this->reverseGatekeeper();
-            $email_address = $this->getInput('email');
+            $email_address = $this->getTextInput('email'); // A text: a field sent as an array is an empty one
 
-            // (an account that is being deleted is sent no code: the answer is the same)
-            if (($user = User::getByEmail($email_address)) && !$user->isClosed()) {
+            // An account that is being deleted, and an address the site has blocked, are sent no code: the answer is the same
+            if (($user = User::getByEmail($email_address)) && !$user->isClosed() && !\Idno\Core\Idno::site()->config()->emailIsBlocked($user->email)) {
 
                 if ($auth_code = $user->addPasswordRecoveryCode()) {
 

@@ -1,23 +1,11 @@
-<div class="row">
-
-    <div class="col-md-8 col-md-offset-2">
-
-        <h1>{{ t('Your password reset email has been sent') }}</h1>
-
+{#- The page after a reset link was asked for: the same for every address. `mail_configured`: whether the site has a mail service to send through. -#}
+<div class="idno-gate">
+    <div class="idno-editor">
+        <h1 class="idno-editor-heading">{{ t('Check your inbox') }}</h1>
+        <p class="idno-gate-lead">{{ t('If there is an account with that email address, we have sent it a link to choose a new password. The link works for three hours.') }}</p>
+        {{ idno_include('account/password/nomail') }}
+        <div class="idno-gate-actions">
+            <a class="idno-btn idno-btn-primary" href="{{ site_url() }}session/login">{{ t('Back to sign in') }}</a>
+        </div>
     </div>
-
-</div>
-<div class="row" style="margin-top: 2em">
-
-    <div class="col-md-8 col-md-offset-2">
-
-        <p>
-            {{ t("Check your inbox! You'll find an email containing a special link that will help you reset your password.") }}
-        </p>
-        <p>
-            {{ t_html("Did you remember your password? That's okay too. You can <a href=\"%s\">click here to sign in.</a>", [site_url() ~ 'session/login']) }}
-        </p>
-
-    </div>
-
 </div>

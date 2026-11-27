@@ -1,47 +1,30 @@
-<div class="row">
+{#- The form that sets the new password. `email` and `code` come from the reset link, or from the form that was refused; they are drawn on a copy of the page's template, so neither is a variable of the page. The passwords are never printed. -#}
+<div class="idno-gate">
+    <div class="idno-editor">
+        <h1 class="idno-editor-heading">{{ t('Choose a new password') }}</h1>
 
-    <div class="col-md-10 col-md-offset-1">
-
-        <h1>{{ t('Reset your password') }}</h1>
-        <p>
-            {{ t('To change your password, enter your new password below:') }}
-        </p>
-
-    </div>
-    <div class="col-md-10 col-md-offset-1">
-
-        <form action="{{ site_url() }}account/password/reset" method="post" class="form-horizontal">
-
-            <div class="control-group">
-                <label class="control-label" for="inputEmail">{{ t('Your email address') }}<br />
-                    <small>{{ t('The address associated with your %s account.', [setting('title')]) }}</small></label>
-                <div class="controls">
-                    <input type="email" id="inputEmail" placeholder="Email" class="form-control" name="email" value="{{ email }}" required>
-                </div>
+        <form action="{{ site_url() }}account/password/reset" method="post">
+            <div class="idno-form-field">
+                <label class="idno-label" for="reset-email">{{ t('Your email address') }}</label>
+                <input type="email" id="reset-email" name="email" class="idno-input" readonly required autocomplete="username"
+                       value="{{ email|default('') }}">
             </div>
-            <div class="control-group">
-                <label class="control-label" for="inputPassword">{{ t('New password (7 characters or more)') }}</label>
-                <div class="controls">
-                    <input type="password" id="inputPassword" class="form-control" name="password" value="" required>
-                </div>
+            <div class="idno-form-field">
+                <label class="idno-label" for="reset-password">{{ t('New password') }}</label>
+                <input type="password" id="reset-password" name="password" class="idno-input" required minlength="7" autofocus
+                       autocomplete="new-password" aria-describedby="reset-password-help">
+                <p class="idno-form-help" id="reset-password-help">{{ t('At least 7 characters.') }}</p>
             </div>
-            <div class="control-group">
-                <label class="control-label" for="inputPassword2">{{ t('Retype password') }}<br />
-                    <small>{{ t('We ask you to enter the password twice to protect against typos.') }}</small></label>
-                <div class="controls">
-                    <input type="password" id="inputPassword2" class="form-control" name="password2" value="" required>
-                </div>
+            <div class="idno-form-field">
+                <label class="idno-label" for="reset-password2">{{ t('Your new password again') }}</label>
+                <input type="password" id="reset-password2" name="password2" class="idno-input" required minlength="7"
+                       autocomplete="new-password">
             </div>
-            <div class="control-group">
-                <div class="controls">
-                    <button type="submit" class="btn btn-primary">{{ t('Reset password') }}</button>
-                    <input type="hidden" name="code" value="{{ code }}">
-                    {{ form_token('/account/password/reset') }}
-                </div>
+            <div class="idno-gate-actions">
+                <button type="submit" class="idno-btn idno-btn-primary">{{ t('Save new password') }}</button>
             </div>
-
+            <input type="hidden" name="code" value="{{ code|default('') }}">
+            {{ form_token('/account/password/reset') }}
         </form>
-
     </div>
-
 </div>

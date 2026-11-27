@@ -39,7 +39,8 @@ final class ControllerAuthorizationTest extends CharacterisationTestCase
         $this->assertSame(403, $response->status);
         $this->assertStringContainsString('text/html', (string) $response->header('Content-Type'));
         $this->assertNull($response->header('Location'));
-        $this->assertStringContainsString('result-403', $response->body, 'the 403 page of a member: no access to this content');
+        $this->assertStringContainsString('<html', $response->body, 'the 403 page, in its shell');
+        $this->assertStringNotContainsString('id="soft-forward"', $response->body, 'a member is not asked to sign in again');
     }
 
     public function testAdminGets200(): void
