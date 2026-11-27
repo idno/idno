@@ -3,13 +3,11 @@
 namespace Tests\Core;
 
 use Idno\Core\Idno;
-use Idno\Entities\Reader\Feed;
-use Idno\Entities\Reader\Subscription;
 
 /**
- * What a remote site tells us about itself (the title of a feed, the name, photo and
- * address in an h-card) and what the request that caused an error carries (User-Agent,
- * query string, referrer) is written by someone else. The templates that show it must
+ * What a remote site tells us about itself (the name, photo and address in an h-card)
+ * and what the request that caused an error carries (User-Agent, query string, referrer)
+ * is written by someone else. The templates that show it must
  * print it escaped, and must not put an address that is not an http or https one into
  * href or src.
  */
@@ -73,7 +71,7 @@ class RemoteFeedOutputTest extends \Tests\IdnoTestCase
         }
     }
 
-    private const HOSTILE_TEXT = 'Feed "title" <script>alert(1)</script><img src=x onerror=alert(2)>';
+    private const HOSTILE_TEXT = 'A "name" <script>alert(1)</script><img src=x onerror=alert(2)>';
 
     public static function hostileAddressProvider(): array
     {
@@ -84,85 +82,6 @@ class RemoteFeedOutputTest extends \Tests\IdnoTestCase
             'quote'      => ['https://evil.example/" onmouseover="alert(3)'],
             'tag'        => ['https://evil.example/"><script>alert(3)</script>'],
         ];
-    }
-
-    // ---- following/confirm ---------------------------------------------------------
-
-    public function testFeedTitleIsEscapedOnTheConfirmationPage()
-    {
-        $feed = new Feed();
-        $feed->setTitle(self::HOSTILE_TEXT);
-        $feed->url = 'https://evil.example/feed';
-
-        $html = $this->draw('following/confirm', ['feed' => $feed, 'items' => []]);
-
-        $this->assertMarkupIsSafe($html);
-        $this->assertStringNotContainsString('<script', $html);
-        $this->assertStringContainsString('Feed &quot;title&quot; &lt;script&gt;alert(1)&lt;/script&gt;&lt;img src=x onerror=alert(2)&gt;', $html);
-    }
-
-    // ---- entity/Subscription -------------------------------------------------------
-
-    private function subscriptionTo(Feed $feed): Subscription
-    {
-        return new class($feed) extends Subscription {
-            private $feedObject;
-
-            public function __construct($feed)
-            {
-                parent::__construct();
-                $this->feedObject = $feed;
-            }
-
-            public function getFeedObject()
-            {
-                return $this->feedObject;
-            }
-        };
-    }
-
-    public function testSubscriptionEscapesTitleAndFeedAddress()
-    {
-        $feed = new Feed();
-        $feed->setTitle(self::HOSTILE_TEXT);
-        $feed->url = 'https://evil.example/site';
-        $feed->setFeedURL('https://evil.example/feed?a=1&b="<script>alert(4)</script>');
-
-        $html = $this->draw('entity/Subscription', ['object' => $this->subscriptionTo($feed)]);
-
-        $this->assertMarkupIsSafe($html);
-        $this->assertStringContainsString('Feed &quot;title&quot; &lt;script&gt;alert(1)&lt;/script&gt;', $html);
-        $this->assertStringContainsString('href="https://evil.example/site"', $html);
-        $this->assertStringContainsString('&lt;script&gt;alert(4)', $html);
-    }
-
-    /**
-     * @dataProvider hostileAddressProvider
-     */
-    public function testSubscriptionDoesNotLinkToAnAddressThatIsNotHttp($address)
-    {
-        $feed = new Feed();
-        $feed->setTitle('A feed');
-        $feed->url = $address;
-        $feed->setFeedURL($address);
-
-        $html = $this->draw('entity/Subscription', ['object' => $this->subscriptionTo($feed)]);
-
-        $this->assertMarkupIsSafe($html);
-        $this->assertStringContainsString('A feed', $html);
-    }
-
-    public function testOrdinarySubscriptionIsDrawn()
-    {
-        $feed = new Feed();
-        $feed->setTitle('Ben & friends');
-        $feed->url = 'https://static.example.com/?a=1&b=2';
-        $feed->setFeedURL('https://static.example.com/feed.xml');
-
-        $html = $this->draw('entity/Subscription', ['object' => $this->subscriptionTo($feed)]);
-
-        $this->assertStringContainsString('<a href="https://static.example.com/?a=1&amp;b=2">Ben &amp; friends</a>', $html);
-        $this->assertStringContainsString('https://static.example.com/feed.xml', $html);
     }
 
     // ---- account/settings/following/mf2user ----------------------------------------
@@ -184,7 +103,7 @@ class RemoteFeedOutputTest extends \Tests\IdnoTestCase
 
         $this->assertMarkupIsSafe($html);
         $this->assertStringNotContainsString('<script', $html);
-        $this->assertStringContainsString('Feed &quot;title&quot; &lt;script&gt;alert(1)', $html);
+        $this->assertStringContainsString('A &quot;name&quot; &lt;script&gt;alert(1)', $html);
     }
 
     /**

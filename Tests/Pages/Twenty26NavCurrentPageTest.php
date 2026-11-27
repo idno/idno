@@ -257,7 +257,7 @@ namespace Tests\Pages {
                 'member, permalink'                   => ['member', '{permalink}', []],
                 'member, edit page of a post'         => ['member', '{edit}', []],
                 'member, compose page'                => ['member', '/status/edit', []],
-                'member, following'                   => ['member', '/following/', []],
+                'member, a page that is not there'    => ['member', '/navcurrent-not-here/', []],
                 'admin, home'                         => ['admin', '/', ['Home']],
                 'admin, search'                       => ['admin', '/?q=navcurrent', ['Search']],
                 'admin, drafts'                       => ['admin', '/drafts/', ['Drafts']],
@@ -323,7 +323,7 @@ namespace Tests\Pages {
 
         public function testPagesOfNoItemChooseNone()
         {
-            $this->assertSame('', Navigation::currentItem(new \Idno\Pages\Following\Home(), static::$member));
+            $this->assertSame('', Navigation::currentItem(new \Idno\Pages\File\View(), static::$member));
             $this->assertSame('', Navigation::currentItem(new \Idno\Pages\Entity\View(), static::$member));
             $this->assertSame('', Navigation::currentItem(null, static::$member));
         }
