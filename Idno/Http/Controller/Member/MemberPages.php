@@ -10,8 +10,8 @@ use Idno\Templating\TemplateTranslation;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * The pages a signed-in member keeps for themselves: their drafts (`/drafts/`) and the feeds they follow (`/following/`). The one implementation:
- * `MemberPagesController` asks for a member before it calls either, so the lists are always the current member's.
+ * The page a signed-in member keeps for themselves: their drafts (`/drafts/`). The one implementation:
+ * `MemberPagesController` asks for a member before it calls it, so the list is always the current member's.
  */
 final class MemberPages
 {
@@ -42,17 +42,6 @@ final class MemberPages
                 'offset' => $offset,
                 'total' => $drafts['total'],
             ]),
-        ]);
-    }
-
-    /**
-     * The feeds the member follows, with the form to follow another.
-     */
-    public function following(PageContext $page): Response
-    {
-        return $this->renderer->page($page, [
-            'title' => $this->translation->translate('Following'),
-            'body' => $this->renderer->template('following/home', ['subscriptions' => $this->lists->subscriptions()]),
         ]);
     }
 }

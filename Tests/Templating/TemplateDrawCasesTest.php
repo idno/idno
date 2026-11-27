@@ -31,8 +31,6 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
      * @var array<string, string>
      */
     private const EMPTY_OUTPUT = [
-        'feed item without owner' => 'a feed item is drawn only for an entity that has an owner',
-        'subscription without a feed' => 'a subscription whose feed cannot be found draws nothing',
         'link preview, a card with nothing to show' => 'a preview that is only an address has no title, description or image: no card',
         'link preview, a card with a script address' => 'an address that is not http or https draws no card',
         'link preview, no preview' => 'no preview, no card',
@@ -159,8 +157,6 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
         ['admin', 'account/settings/standardsitesync/'],
         ['admin', 'indieauth/auth?me=http%3A%2F%2F127.0.0.1%2F&client_id=https%3A%2F%2Fclient.example%2F&redirect_uri=https%3A%2F%2Fclient.example%2Fcb&state=s1&scope=create'],
         ['admin', 'indieauth/auth?me=http%3A%2F%2F127.0.0.1%2F&client_id=https%3A%2F%2Fclient.example%2F&redirect_uri=https%3A%2F%2Fclient.example%2Fcb&state=s1'],
-        ['admin', 'following/'],
-        ['admin', 'following/add/'],
         ['admin', 'file/picker/'],
         ['admin', 'share/?share_url=https%3A%2F%2Fexample.org%2Fshared&share_title=Shared'],
         ['admin', 'search/users/?q=ada'],
@@ -508,49 +504,12 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
     }
 
     /**
-     * Entities in feeds and the drafts page, which no visit of the golden pages reaches with every branch: a feed item, a followed
-     * feed and its subscription, the drafts page with and without drafts and with its paging.
+     * Entities and the drafts page, which no visit of the golden pages reaches with every branch: the link preview card, the drafts page with and
+     * without drafts and with its paging.
      */
     private function drawEntityCases(): void
     {
         $code = $this->siteDrawPrelude() . <<<'PHP'
-        $feed = new \Idno\Entities\Reader\Feed();
-        $feed->setFeedURL('https://feed.example/rss');
-        $feed->setURL('https://feed.example/');
-        $feed->title = 'A followed site';
-        // The template of a feed item draws the item's own `draw()`, which draws the template of a feed item: a class whose `draw()` ends that
-        $feedItem = new class extends \Idno\Entities\Reader\FeedItem {
-            public function draw($feed_view = false, $suffix = "")
-            {
-                return '<p class="drawn-item">' . htmlspecialchars((string) $this->getTitle()) . '</p>';
-            }
-        };
-        $item = clone $feedItem;
-        $item->setFeedURL('https://feed.example/rss');
-        $item->owner = $ada->getUUID();
-        $item->created = 1773000000;
-        $item->setBody('<p>An item of the feed.</p>');
-        $item->setTitle('The item');
-        // A subscription finds its feed in the database; these hold the feed they are given (or none)
-        $held = new class extends \Idno\Entities\Reader\Subscription {
-            public $heldFeed = false;
-
-            public function getFeedObject()
-            {
-                return $this->heldFeed;
-            }
-        };
-        $subscription = clone $held;
-        $subscription->heldFeed = $feed;
-        $lonely = clone $held;
-        $out['feed item'] = $draw('entity/FeedItem', ['object' => $item]);
-        $out['feed item without owner'] = $draw('entity/FeedItem', ['object' => clone $feedItem]);
-        $out['subscription'] = $draw('entity/Subscription', ['object' => $subscription]);
-        $out['subscription without a feed'] = $draw('entity/Subscription', ['object' => $lonely]);
-        $out['following'] = $draw('following/home', ['subscriptions' => [$subscription, $lonely]]);
-        $out['following nobody'] = $draw('following/home', ['subscriptions' => []]);
-        $out['following confirm'] = $draw('following/confirm', ['feed' => $feed, 'items' => [$item]]);
-        $out['following confirm, nothing yet'] = $draw('following/confirm', ['feed' => $feed, 'items' => []]);
         foreach ([
             'a card' => ['url' => 'https://a.example/post', 'title' => 'The title', 'description' => 'The description', 'image' => 'https://a.example/i.png', 'domain' => 'a.example', 'site_name' => 'A'],
             'a card with no image or domain' => ['url' => 'https://a.example/post', 'title' => 'Only a title'],
@@ -600,8 +559,6 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
         PHP;
         $out = $this->runInSite($code);
         $this->assertDrawn($out);
-        $this->assertStringContainsString('The item', (string) $out['feed item']);
-        $this->assertStringContainsString('class="subscription"', str_replace('row subscription', 'subscription', (string) $out['subscription']));
         $this->assertStringContainsString('Cafe &quot;quoted&quot;', (string) $out['link preview, a card with a quote']);
     }
 
@@ -1743,7 +1700,6 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
         $out['the edit footer'] = $draw('entity/edit/footer');
         $out['spinners'] = $draw('entity/edit/spinner') . $draw('entity/edit/spinner', ['id' => 'mine', 'class' => 'big', 'start-hidden' => false]) . $draw('entity/edit/spinner', ['id' => 'shown', 'start-hidden' => 'no']);
         $out['the delete and edit menu'] = $draw('content/edit', ['object' => $status]);
-        $out['the end of a post, in a feed'] = $draw('content/feed/end', ['object' => $status]) . $draw('content/feed/end', ['object' => new \IdnoPlugins\Status\Status()]);
 
         return $out;
         PHP;

@@ -146,6 +146,25 @@ final class EntityAliasesTest extends TestCase
         }
     }
 
+    /**
+     * The feed reader's classes are gone and no alias is declared for them, so a row of theirs that a site still holds keeps the class name as its type
+     * and is never found by a class.
+     */
+    public function testTheRemovedFeedReaderClassesHaveNoAlias(): void
+    {
+        $map = new AttributeTypeMap();
+        foreach (['Feed', 'FeedItem', 'Subscription'] as $name) {
+            $class = 'Idno\\Entities\\Reader\\' . $name;
+            self::assertFalse(class_exists($class), $class);
+            self::assertSame($class, $map->typeFor($class), $class);
+            self::assertSame([$class], $map->typesFor($class), $class);
+        }
+        foreach (self::entityClasses() as $name => $class) {
+            $attribute = self::attribute($class);
+            self::assertNotContains($attribute?->alias, ['feed', 'feed_item', 'feed_subscription'], $name);
+        }
+    }
+
     public function testTheAliasesOfTheCoreAndBundledClasses(): void
     {
         $map = new AttributeTypeMap();
@@ -157,9 +176,6 @@ final class EntityAliasesTest extends TestCase
             \Idno\Entities\Invitation::class => 'invitation',
             \Idno\Entities\AsynchronousQueuedEvent::class => 'queued_event',
             \Idno\Entities\UnfurledUrl::class => 'unfurled_url',
-            \Idno\Entities\Reader\Feed::class => 'feed',
-            \Idno\Entities\Reader\FeedItem::class => 'feed_item',
-            \Idno\Entities\Reader\Subscription::class => 'feed_subscription',
             \IdnoPlugins\Status\Status::class => 'status',
             \IdnoPlugins\Text\Entry::class => 'article',
             \IdnoPlugins\Photo\Photo::class => 'photo',
@@ -250,7 +266,8 @@ final class EntityAliasesTest extends TestCase
             return $fields;
         };
         self::assertSame($sorted([...$entity, 'actor_uri', 'category', 'code', 'email', 'handle', 'queue', 'source_url', 'user_uuid']), $catalog->indexedFields('entities'));
-        self::assertSame($sorted([...$entity, 'feed_url']), $catalog->indexedFields('reader'));
+        // no class under Idno/ or IdnoPlugins/ is stored in `reader`, so only the schema's own index is there
+        self::assertSame(['access'], $catalog->indexedFields('reader'));
         self::assertSame($sorted([...$entity, 'domain']), $catalog->indexedFields('site'));
         // A real index of the expected name behind every one (information_schema.statistics on
         // MySQL and MariaDB, pragma_index_list on SQLite), not merely a generated column.

@@ -18,7 +18,7 @@ final class LegacyPageDrawerTest extends PrivateSiteTestCase
         $uri = '/status/x';
         $_SERVER['REQUEST_URI'] = $uri;
         \Idno\Core\Idno::container()->get('request_stack')->push(\Symfony\Component\HttpFoundation\Request::create($uri, 'GET', [], [], [], ['REQUEST_URI' => $uri]));
-        \Idno\Core\Idno::site()->setCurrentPage(new \Idno\Pages\Following\Add());
+        \Idno\Core\Idno::site()->setCurrentPage(new \Idno\Pages\Session\Login());
         $before = http_response_code();
         $drawn = (new \Idno\Legacy\LegacyPageDrawer(new \Idno\Legacy\PhpHeaders()))->drawPage(['title' => 'T', 'body' => 'B'], 404);
 
@@ -38,7 +38,7 @@ final class LegacyPageDrawerTest extends PrivateSiteTestCase
         $uri = '/status/x';
         $_SERVER['REQUEST_URI'] = $uri;
         \Idno\Core\Idno::container()->get('request_stack')->push(\Symfony\Component\HttpFoundation\Request::create($uri, 'GET', [], [], [], ['REQUEST_URI' => $uri]));
-        \Idno\Core\Idno::site()->setCurrentPage(new \Idno\Pages\Following\Add());
+        \Idno\Core\Idno::site()->setCurrentPage(new \Idno\Pages\Session\Login());
         echo 'output before the page';
         $drawn = (new \Idno\Legacy\LegacyPageDrawer(new \Idno\Legacy\PhpHeaders()))->drawPage(['title' => 'T', 'body' => 'B'], 404);
 
@@ -55,7 +55,7 @@ final class LegacyPageDrawerTest extends PrivateSiteTestCase
         $uri = '/status/x';
         $_SERVER['REQUEST_URI'] = $uri;
         \Idno\Core\Idno::container()->get('request_stack')->push(\Symfony\Component\HttpFoundation\Request::create($uri, 'GET', [], [], [], ['REQUEST_URI' => $uri]));
-        \Idno\Core\Idno::site()->setCurrentPage(new \Idno\Pages\Following\Add());
+        \Idno\Core\Idno::site()->setCurrentPage(new \Idno\Pages\Session\Login());
         $queue = new class implements \Idno\Legacy\HeaderQueue {
             public array $calls = [];
             private int $asked = 0;

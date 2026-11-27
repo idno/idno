@@ -5,7 +5,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: idno\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-11-26 22:29+0000\n"
+"POT-Creation-Date: 2026-11-26 23:37+0000\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: \n"
 "Language-Team: \n"
@@ -13,7 +13,7 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: ./Idno/Common/Entity.php:909
+#: ./Idno/Common/Entity.php:923
 msgid "There was a problem syndicating."
 msgstr ""
 
@@ -48,7 +48,7 @@ msgid "This page can't be found."
 msgstr ""
 
 #: ./Idno/Common/Page.php:997
-#: ./Idno/Legacy/LegacyPermalinks.php:131
+#: ./Idno/Legacy/LegacyPermalinks.php:129
 #: ./Idno/Pages/Entity/Delete.php:62
 msgid "%s was deleted."
 msgstr ""
@@ -70,7 +70,7 @@ msgstr ""
 msgid "Oh no! Something went wrong."
 msgstr ""
 
-#: ./Idno/Core/Idno.php:455
+#: ./Idno/Core/Idno.php:443
 msgid "Site entity for \"%s\" could not be created"
 msgstr ""
 
@@ -374,23 +374,19 @@ msgstr ""
 msgid "There was a problem saving the new remote user."
 msgstr ""
 
-#: ./Idno/Pages/Account/Settings/Following/Bookmarklet.php:181
-msgid "You are now following %s, would you like to subscribe to their feed?"
-msgstr ""
-
-#: ./Idno/Pages/Account/Settings/Following/Bookmarklet.php:186
+#: ./Idno/Pages/Account/Settings/Following/Bookmarklet.php:178
 msgid "You are now following %s"
 msgstr ""
 
-#: ./Idno/Pages/Account/Settings/Following/Bookmarklet.php:191
+#: ./Idno/Pages/Account/Settings/Following/Bookmarklet.php:183
 msgid "You're already following %s"
 msgstr ""
 
-#: ./Idno/Pages/Account/Settings/Following/Bookmarklet.php:194
+#: ./Idno/Pages/Account/Settings/Following/Bookmarklet.php:186
 msgid "Sorry, that user doesn't exist!"
 msgstr ""
 
-#: ./Idno/Pages/Account/Settings/Following/Bookmarklet.php:197
+#: ./Idno/Pages/Account/Settings/Following/Bookmarklet.php:189
 msgid "No UUID, please try that again!"
 msgstr ""
 
@@ -707,14 +703,6 @@ msgstr ""
 
 #: ./Idno/Pages/File/Picker.php:56
 msgid "You can only upload images."
-msgstr ""
-
-#: ./Idno/Pages/Following/Add.php:23
-msgid "We couldn't find a feed at that site."
-msgstr ""
-
-#: ./Idno/Pages/Following/Confirm.php:54
-msgid "You're following %s!"
 msgstr ""
 
 #: ./Idno/Pages/Search/User.php:24
@@ -1722,7 +1710,6 @@ msgid "Are you sure you want to permanently delete this entry?"
 msgstr ""
 
 #: ./templates/classic/content/end.tpl.php:26
-#: ./templates/classic/content/feed/end.tpl.php:13
 msgid "published this"
 msgstr ""
 
@@ -1731,27 +1718,19 @@ msgid "Star this!"
 msgstr ""
 
 #: ./templates/classic/content/end.tpl.php:61
-#: ./templates/classic/content/feed/end.tpl.php:28
 msgid "star"
 msgstr ""
 
 #: ./templates/classic/content/end.tpl.php:64
-#: ./templates/classic/content/feed/end.tpl.php:30
 msgid "stars"
 msgstr ""
 
 #: ./templates/classic/content/end.tpl.php:95
-#: ./templates/classic/content/feed/end.tpl.php:48
 msgid "comment"
 msgstr ""
 
 #: ./templates/classic/content/end.tpl.php:97
-#: ./templates/classic/content/feed/end.tpl.php:50
 msgid "comments"
-msgstr ""
-
-#: ./templates/classic/content/feed/end.tpl.php:106
-msgid "Also on"
 msgstr ""
 
 #: ./templates/classic/entity/User.tpl.php:62
@@ -2534,30 +2513,6 @@ msgstr ""
 
 #: ./templates/default/file/picker/image.html.twig:49
 msgid "Choose a different image"
-msgstr ""
-
-#: ./templates/default/following/add.html.twig:3
-msgid "Add the address of a site to follow"
-msgstr ""
-
-#: ./templates/default/following/confirm.html.twig:7
-msgid "Follow"
-msgstr ""
-
-#: ./templates/default/following/confirm.html.twig:12
-msgid "Here's the latest content."
-msgstr ""
-
-#: ./templates/default/following/home.html.twig:3
-msgid "Following"
-msgstr ""
-
-#: ./templates/default/following/home.html.twig:11
-msgid "Follow another site"
-msgstr ""
-
-#: ./templates/default/following/home.html.twig:20
-msgid "You're not following anyone yet."
 msgstr ""
 
 #: ./templates/default/forms/components/usersearch/user.html.twig:18

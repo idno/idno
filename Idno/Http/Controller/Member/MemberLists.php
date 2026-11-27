@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Idno\Http\Controller\Member;
 
 /**
- * What the member's pages ask the site: the signed-in member's drafts and the feeds they follow. The legacy application implements it
+ * What the member's pages ask the site: the signed-in member's drafts. The legacy application implements it
  * (`Idno\Legacy\LegacyMemberLists`), so the pages' service is built and tested without it.
  */
 interface MemberLists
@@ -17,11 +17,4 @@ interface MemberLists
      * @return array{items: array<int, mixed>, total: int}
      */
     public function drafts(int $count, int $offset): array;
-
-    /**
-     * The feed subscriptions of the signed-in member.
-     *
-     * @return array<int, mixed>
-     */
-    public function subscriptions(): array;
 }

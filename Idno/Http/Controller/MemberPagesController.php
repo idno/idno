@@ -13,9 +13,8 @@ use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
- * The member's drafts (`/drafts/`) and following (`/following/`) pages. Both are for a signed-in member (a visitor is answered with the site's 403 page,
- * after the page's events, as a legacy gatekeeper did) and read only: the forms on the following page post to pages that stay legacy pages. Core still
- * registers the legacy patterns `/drafts/?` and `/following/?`, held by `Idno\Legacy\ControllerRoute`.
+ * The member's drafts page (`/drafts/`). It is for a signed-in member (a visitor is answered with the site's 403 page, after the page's events, as a
+ * legacy gatekeeper did) and read only. Core still registers the legacy pattern `/drafts/?`, held by `Idno\Legacy\ControllerRoute`.
  */
 #[AsController]
 final class MemberPagesController
@@ -30,13 +29,5 @@ final class MemberPagesController
     public function drafts(PageContext $page): Response
     {
         return $this->pages->drafts($page);
-    }
-
-    #[Route('/{lead}following{slash}', name: 'idno_following', requirements: ['lead' => '/?', 'slash' => '/?'], defaults: ['lead' => '', 'slash' => ''], methods: ['GET', 'HEAD', 'OPTIONS'])]
-    #[SitePage(name: 'Idno\Pages\Following\Home')]
-    #[IsGranted('ROLE_USER')]
-    public function following(PageContext $page): Response
-    {
-        return $this->pages->following($page);
     }
 }

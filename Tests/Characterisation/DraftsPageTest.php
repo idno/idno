@@ -7,23 +7,22 @@ namespace Tests\Characterisation;
 use Tests\Support\RecordedAnswers;
 
 /**
- * What the member's drafts page (`/drafts/`), the following page (`/following/`) and the stream address (`/stream/`) answer, recorded from the legacy pages
- * over HTTP: the status, headers and body of each to a visitor, to members with and without anything to list, to an administrator, in each template type, for
- * each page of the drafts, for each method, for a signed request and for a request that says it is an XHR one. The answers are
- * `Tests/Characterisation/fixtures/answers/member/`; the pages that replace the legacy ones are held to them. Each case is a literal, in the call.
+ * What the member's drafts page (`/drafts/`) answers, recorded from the legacy page over HTTP: the status, headers and body of it to a visitor, to members
+ * with and without drafts, to an administrator, in each template type, for each page of the drafts, for each method, for a signed request and for a request
+ * that says it is an XHR one. The answers are `Tests/Characterisation/fixtures/answers/member/`; the page that replaced the legacy one is held to them.
+ * Each case is a literal, in the call. The addresses of the feed reader that was removed (`/following/`, `/stream/` and the pages under `/following/`)
+ * are the site's missing page.
  *
- * The viewers are `visitor` (nobody), `member` (Carol, who has no draft and follows nobody), `owner` (Bob, who has twenty-six drafts, so that the drafts
- * have a second page, and two subscriptions, one of a feed that names itself with markup and a script address) and `admin` (Ada, who has two drafts).
+ * The viewers are `visitor` (nobody), `member` (Carol, who has no draft), `owner` (Bob, who has twenty-six drafts, so that the drafts have a second page)
+ * and `admin` (Ada, who has two drafts).
  */
-final class ReaderPagesTest extends PermalinkSiteCase
+final class DraftsPageTest extends PermalinkSiteCase
 {
     use RecordedAnswers;
 
     protected const SHARED_SITE = true;
 
     protected const GROUP = 'member';
-
-    private const STREAM_WHY = 'the stream address is the legacy router\'s missing page: the page that listed feed items is gone (it answered an empty page)';
 
     private const METHOD_WHY = 'a method the page does not take is the legacy router\'s 404 page, as for every page that moved to a controller (the legacy page answered the invalid-token redirect)';
 
@@ -36,20 +35,11 @@ final class ReaderPagesTest extends PermalinkSiteCase
      * were, and the test of each asserts the answer of the page that serves it now.
      */
     private const CHANGED = [
-        'stream-visitor' => self::STREAM_WHY,
-        'stream-member' => self::STREAM_WHY,
-        'stream-admin' => self::STREAM_WHY,
-        'stream-member-json' => self::STREAM_WHY,
-        'stream-head' => self::STREAM_WHY,
         'drafts-owner-xhr' => self::XHR_WHY,
         'drafts-visitor-xhr' => self::XHR_WHY,
-        'following-owner-xhr' => self::XHR_WHY,
-        'following-visitor-xhr' => self::XHR_WHY,
         'drafts-post-visitor' => self::METHOD_WHY,
         'drafts-post-owner-with-token' => self::METHOD_WHY,
-        'following-post-visitor' => self::METHOD_WHY,
         'drafts-malformed-host' => self::HOST_WHY,
-        'following-malformed-host' => self::HOST_WHY,
     ];
 
     public static function tearDownAfterClass(): void
@@ -100,40 +90,6 @@ final class ReaderPagesTest extends PermalinkSiteCase
             $draft($n, $bob, 'Bob\'s draft number ' . $n . ', not yet published.');
         }
         $draft(100, $ada, 'Ada\'s second draft, not yet published.');
-
-        // The reader's entities are written to the `entities` collection (an entity class that names another collection through a redeclared private
-        // property is still saved there) and read from `reader`, where an upgraded site holds them: the records are put where they are read.
-        $move = static function (\Idno\Common\Entity $entity) use ($store, $at): void {
-            $record = $store->findById('entities', (string) $entity->getID());
-            $store->delete('entities', (string) $entity->getID());
-            $record['updated'] = $at('2026-03-20 12:00:00');
-            if ($store->save('reader', $record) === false) {
-                throw new \RuntimeException('record not moved');
-            }
-        };
-        $subscribe = static function (int $n, string $feedUrl, string $siteUrl, string $title) use ($id, $at, $bob, $move): void {
-            $feed = new \Idno\Entities\Reader\Feed();
-            $feed->_id = $id($n);
-            $feed->feed_url = $feedUrl;
-            $feed->url = $siteUrl;
-            $feed->title = $title;
-            $feed->created = $at('2026-03-01 09:00:00') + $n;
-            if (!$feed->save(true)) {
-                throw new \RuntimeException('feed not saved');
-            }
-            $move($feed);
-            $subscription = new \Idno\Entities\Reader\Subscription();
-            $subscription->_id = $id($n + 1000);
-            $subscription->feed_url = $feedUrl;
-            $subscription->setOwner($bob);
-            $subscription->created = $at('2026-03-01 09:30:00') + $n;
-            if (!$subscription->save(true)) {
-                throw new \RuntimeException('subscription not saved');
-            }
-            $move($subscription);
-        };
-        $subscribe(200, 'https://ada.example/feed.xml', 'https://ada.example/', 'Ada\'s writing');
-        $subscribe(201, 'https://hostile.example/feed.xml?a=1&b="x"', 'javascript:alert(1)', 'Hostile "><x-canary a=\'1');
 
         return true;
         PHP);
@@ -206,51 +162,6 @@ final class ReaderPagesTest extends PermalinkSiteCase
         $this->addToAssertionCount(1);
     }
 
-    public function testTheFollowingPageForEachViewer(): void
-    {
-        $this->record('following-visitor', 'GET', '/following/');
-        $this->record('following-visitor-json', 'GET', '/following/?_t=json');
-        $this->record('following-visitor-markdown', 'GET', '/following/?_t=markdown');
-        $this->record('following-member', 'GET', '/following/', [], 'member');
-        $this->record('following-member-json', 'GET', '/following/?_t=json', [], 'member');
-        $this->record('following-owner', 'GET', '/following/', [], 'owner');
-        $this->record('following-owner-json', 'GET', '/following/?_t=json', [], 'owner');
-        $this->record('following-owner-markdown', 'GET', '/following/?_t=markdown', [], 'owner');
-        $this->record('following-owner-rss', 'GET', '/following/?_t=rss', [], 'owner');
-        $this->record('following-admin', 'GET', '/following/', [], 'admin');
-        $this->record('following-admin-json', 'GET', '/following/?_t=json', [], 'admin');
-        $this->addToAssertionCount(1);
-    }
-
-    public function testTheFollowingPageForEachMethodAndKindOfRequest(): void
-    {
-        $this->record('following-visitor-head', 'HEAD', '/following/');
-        $this->record('following-owner-head', 'HEAD', '/following/', [], 'owner');
-        $this->record('following-visitor-options', 'OPTIONS', '/following/');
-        $this->record('following-owner-options', 'OPTIONS', '/following/', [], 'owner');
-        $xhr = ['X-Requested-With' => 'XMLHttpRequest'];
-        $this->record('following-owner-xhr', 'GET', '/following/', $xhr, 'owner', null, self::withoutLastModified(...));
-        $this->record('following-visitor-xhr', 'GET', '/following/', $xhr, 'visitor', null, self::withoutLastModified(...));
-        $this->record('following-signed-api', 'GET', '/following/', self::signedHeadersFor('bob', $this->bobsKey(), '/following/'));
-        $this->record('following-signed-api-json', 'GET', '/following/?_t=json', self::signedHeadersFor('bob', $this->bobsKey(), '/following/?_t=json'));
-        $this->record('following-malformed-host', 'GET', '/following/', ['Host' => 'bad host!']);
-        $this->record('following-no-slash', 'GET', '/following', [], 'owner');
-        $this->record('following-double-slash', 'GET', '//following//', [], 'owner');
-        $this->record('following-post-visitor', 'POST', '/following/', [], 'visitor', ['a' => 'b']);
-        $this->addToAssertionCount(1);
-    }
-
-    /** The stream address, which the page that listed feed items answered with an empty page: nothing ever made an item on a supported PHP. */
-    public function testTheStreamAddress(): void
-    {
-        $this->record('stream-visitor', 'GET', '/stream/');
-        $this->record('stream-member', 'GET', '/stream/', [], 'member');
-        $this->record('stream-admin', 'GET', '/stream/', [], 'admin');
-        $this->record('stream-member-json', 'GET', '/stream/?_t=json', [], 'member');
-        $this->record('stream-head', 'HEAD', '/stream/');
-        $this->addToAssertionCount(1);
-    }
-
     /**
      * An XHR GET gets the headers of the same request that is not XHR: the legacy router's own lines for it (a JSON type, a date in 1997, two
      * `Cache-Control` lines and the time of the request as `Last-Modified`) are no longer sent. Its status and body are what they were.
@@ -261,8 +172,6 @@ final class ReaderPagesTest extends PermalinkSiteCase
         $cases = [
             'drafts-owner-xhr' => ['/drafts/', 'owner'],
             'drafts-visitor-xhr' => ['/drafts/', 'visitor'],
-            'following-owner-xhr' => ['/following/', 'owner'],
-            'following-visitor-xhr' => ['/following/', 'visitor'],
         ];
         foreach ($cases as $case => [$path, $viewer]) {
             $answer = $this->site()->request('GET', $path, $this->asViewer($viewer, $xhr));
@@ -277,15 +186,13 @@ final class ReaderPagesTest extends PermalinkSiteCase
         }
     }
 
-    /** A method the page does not take, and a request with a malformed Host, reach the legacy router, which has no page for the address: its 404 page. */
+    /** A method the drafts page does not take, and a request with a malformed Host, reach the legacy router, which has no page for the address: its 404 page. */
     public function testOtherMethodsAndAMalformedHostAreTheRoutersNotFoundPage(): void
     {
         $answers = [
             'drafts-post-visitor' => $this->site()->request('POST', '/drafts/', [], ['a' => 'b']),
             'drafts-post-owner-with-token' => $this->site()->request('POST', '/drafts/', $this->asViewer('owner'), ['a' => 'b', '__bTk' => $this->tokenOf('owner')]),
-            'following-post-visitor' => $this->site()->request('POST', '/following/', [], ['a' => 'b']),
             'drafts-malformed-host' => $this->site()->request('GET', '/drafts/', ['Host' => 'bad host!']),
-            'following-malformed-host' => $this->site()->request('GET', '/following/', ['Host' => 'bad host!']),
         ];
         foreach ($answers as $case => $answer) {
             $this->assertSame(404, $answer->status, $case);
@@ -294,17 +201,27 @@ final class ReaderPagesTest extends PermalinkSiteCase
         }
     }
 
-    public function testTheStreamAddressIsTheNotFoundPage(): void
+    /**
+     * The addresses of the feed reader that was removed (the following list, the pages that followed a feed, the stream of the items of the feeds) are
+     * the site's missing page for every viewer and method: the pages that served them are gone, and no placeholder holds a place for them.
+     */
+    public function testTheAddressesOfTheRemovedFeedReaderAreTheNotFoundPage(): void
     {
-        foreach ([['stream-visitor', 'visitor', '/stream/'], ['stream-member', 'member', '/stream/'], ['stream-admin', 'admin', '/stream/']] as [$case, $viewer, $path]) {
-            $answer = $this->site()->request('GET', $path, $this->asViewer($viewer));
-            $this->assertSame(404, $answer->status, $case);
-            $this->assertStringContainsString("This page can't be found.", html_entity_decode($answer->body, ENT_QUOTES), $case);
-            $this->assertStringNotContainsString('<h1>Stream</h1>', $answer->body, $case);
+        $paths = ['/following/', '/following', '/following/add/', '/following/confirm/?feed=https%3A%2F%2Ffeed.example%2F', '/following/refresh/', '/stream/', '/stream'];
+        foreach ($paths as $path) {
+            foreach (['visitor', 'member', 'owner', 'admin'] as $viewer) {
+                $answer = $this->site()->request('GET', $path, $this->asViewer($viewer));
+                $this->assertSame(404, $answer->status, $viewer . ' ' . $path);
+                $this->assertStringContainsString("This page can't be found", html_entity_decode($answer->body, ENT_QUOTES), $viewer . ' ' . $path);
+            }
+            $this->assertSame(404, $this->site()->request('HEAD', $path)->status, 'HEAD ' . $path);
+            $this->assertSame(404, $this->site()->request('GET', $path . (str_contains($path, '?') ? '&' : '?') . '_t=json', $this->asViewer('owner'))->status, 'json ' . $path);
         }
-        $json = $this->site()->request('GET', '/stream/?_t=json', $this->asViewer('member'));
-        $this->assertSame(404, $json->status);
-        $this->assertSame(404, $this->site()->request('HEAD', '/stream/')->status);
+        foreach (['/following/', '/following/add/', '/following/confirm/', '/following/refresh/'] as $path) {
+            $answer = $this->site()->request('POST', $path, $this->asViewer('owner'), ['feed' => 'https://feed.example/', '__bTk' => $this->tokenOf('owner')]);
+            $this->assertSame(404, $answer->status, 'POST ' . $path);
+            $this->assertNull($answer->header('Location'), 'POST ' . $path);
+        }
     }
 
     public function testEveryCaseThatDiffersOnPurposeIsARecordedCase(): void

@@ -206,7 +206,7 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
   `tearDownAfterClass()`. After every test the fingerprint (`siteFingerprint()`: the rows of `idno_entities`, `idno_reader`, `idno_site`, the settings and
   the names and sizes of the uploaded files; never sessions or the queue) is compared with the one taken after seeding: a test that changed the site fails
   ("changed the shared site") and the next test gets a rebuilt site; the site's cache pool is emptied; every test must ask for the same environment
-  (`Tests/Characterisation/SharedSiteTest` pins the guard for an entity row, a setting, an uploaded file, a reader record and a write through an extra server, the environment check and the kept extra servers). A test that changes the site (a user, a post, a setting, a plugin) stays in a class of its own that is not shared,
+  (`Tests/Characterisation/SharedSiteTest` pins the guard for an entity row, a setting, an uploaded file, a record of the `reader` collection and a write through an extra server, the environment check and the kept extra servers). A test that changes the site (a user, a post, a setting, a plugin) stays in a class of its own that is not shared,
   or puts the change back exactly; `RenderedSiteTestCase::seedSite()` returns what it seeded the first time on a shared site.
 - A test that needs a site with the asynchronous event queue (the rig's site is synchronous) extends
   `Tests\Queue\AsyncSiteTestCase`, a `PrivateSiteTestCase` that sets `IDNO_EVENT_QUEUE=AsynchronousQueue` (through
@@ -385,7 +385,7 @@ Idno/
                                PermalinkController, with Permalink/PermalinkPages, the one implementation of a post's permalink, and Permalinks, the interface of what it asks the site;
                                ShortlinkController and AnnotationController, with Permalink/ShortlinkPages and AnnotationPages and Annotations, the interface of what the annotation pages ask the site;
                                ProfileController, with Profile/ProfilePages, the one implementation of a member's profile page, and Profiles, the interface of what it asks the site;
-                               MemberPagesController, with Member/MemberPages, the one implementation of the member's drafts and following pages, and MemberLists, the interface of what they ask the site;
+                               MemberPagesController, with Member/MemberPages, the one implementation of the member's drafts page, and MemberLists, the interface of what it asks the site;
                                FileController, with File/FilePages, the one implementation of the page of a stored file (streamed), StoredFiles, the interface of what it asks the site,
                                and its value objects (FileLookup, ServedFile, FileCaching, the enum FileOutcome) and static helpers (ByteRange, FileStream);
                                SiteFilesController, WebfingerController, MentionSearchController and FormTokenController, with
@@ -1306,21 +1306,33 @@ for classes that extend `PageShell`, and holds each to the rule); it is `Idno\Pa
   output buffer, flushing first; the file store's pass-through, `PageShell::write()` and the export feeds use it) and `ByteRange::parse()` are the old `View` methods, moved. Pinned by
   `Tests/Characterisation/FileAnswersTest`, `FileWalledAnswersTest`, `FileSubdirectoryTest` and `FileStreamingTest`, `Tests/Unit/Http/Controller/File/FilePagesTest` and `ByteRangeTest` (doubles; `FilePages` takes
   an optional closure for where the bytes go, for a test), `Tests/Kernel/LegacyStoredFilesTest`, `Tests/Pages/File/RangeRequestTest` and `LargeRangeStreamingTest`, and `FileServingTest`.
-- THE MEMBER'S DRAFTS AND FOLLOWING PAGES (`/drafts/` and `/following/`). `Idno\Pages\Drafts` and `Idno\Pages\Following\Home` are deleted (no shell: nothing extends them in the repository; a plugin that does must be disabled
-  before the upgrade) and `Idno\Http\Controller\MemberPagesController` serves both: `drafts()` (`idno_drafts`, `/{lead}drafts{slash}`) and `following()` (`idno_following`, `/{lead}following{slash}`), each `#[SitePage(name: <the deleted class>)]`
-  and `#[IsGranted('ROLE_USER')]` (a visitor gets the page's own 403 after `page/get`, as the gatekeeper's refusal was; a signed request acts as its member), GET, HEAD and OPTIONS, calling `Idno\Http\Controller\Member\MemberPages`. The service
-  asks the site through `MemberLists` (`Idno\Legacy\LegacyMemberLists`): `drafts($count, $offset)` is the current member's OWN drafts only (`Entity::getFromAll(['publish_status' => 'draft', 'owner' => <the member>])`, then
-  `countFromAll()`; an administrator sees their own and no one else's) and `subscriptions()` is `reader()->getUserSubscriptions()` of the member. `drafts()` draws the body `drafts` (`drafts`, `count` 25, `offset` as an integer,
-  `total`) in the shell with the title `Drafts`; `following()` draws `following/home` (`subscriptions`) with the title `Following`. Core still registers `/drafts/?` (`Idno::registerPages()`) and `/following/?`
-  (`Reader::registerPages()`) where it always did, held by `Idno\Legacy\ControllerRoute`; `/following/add/?`, `/following/confirm/?` and `/following/refresh/?` stay legacy pages (the follow forms post to them). The STREAM PAGE
-  (`Idno\Pages\Stream\Home`, `/stream/?`) is DELETED, not ported, with its template `stream/home` and its registration: it listed the `FeedItem`s of the feeds a member follows, none of which can exist on a supported PHP
-  (`Reader::parseFeed()` calls `\DOMDocument::loadHTML()` statically), nothing linked it, and with no item it drew an empty page. `/stream/?` is in `omitted` in `Tests/Kernel/fixtures/core-routes.php`; the address is the 404 page.
-  Known defect, not changed here: `Subscription` and `Feed` redeclare the private property `$collection` that `Entity` keeps, so an entity of either class is SAVED into `entities` and READ from `reader`; the page lists the
-  subscriptions an upgraded site holds in `reader`, and one made through `/following/confirm/` is not found by it. Deliberate differences, each in both upgrade documents: a method the page does not take and a malformed `Host`
-  are the legacy router's 404 page (a POST was the invalid-token redirect), an XHR GET gets the headers of the same request that is not XHR, and `/stream/` is the 404 page. Pinned by
-  `Tests/Characterisation/ReaderPagesTest` (recordings from the legacy pages: `fixtures/answers/member/`, a visitor, a member with nothing, Bob with twenty-six drafts and two subscriptions (one whose feed names itself with markup and a script
-  address: escaped, and the address blanked), an administrator, each template type, each page of the drafts, each method, a signed request, XHR; each case that differs on purpose in the class's `CHANGED` with its own assertion) and
+- THE MEMBER'S DRAFTS PAGE (`/drafts/`). `Idno\Pages\Drafts` is deleted (no shell: nothing extends it in the repository; a plugin that does must be disabled before the upgrade) and
+  `Idno\Http\Controller\MemberPagesController::drafts()` serves it (`idno_drafts`, `/{lead}drafts{slash}`), `#[SitePage(name: 'Idno\Pages\Drafts')]` and `#[IsGranted('ROLE_USER')]` (a visitor gets the page's own 403 after `page/get`,
+  as the gatekeeper's refusal was; a signed request acts as its member), GET, HEAD and OPTIONS, calling `Idno\Http\Controller\Member\MemberPages`. The service asks the site through `MemberLists` (`Idno\Legacy\LegacyMemberLists`):
+  `drafts($count, $offset)` is the current member's OWN drafts only (`Entity::getFromAll(['publish_status' => 'draft', 'owner' => <the member>])`, then `countFromAll()`; an administrator sees their own and no one else's). It draws the
+  body `drafts` (`drafts`, `count` 25, `offset` as an integer, `total`) in the shell with the title `Drafts`. Core still registers `/drafts/?` (`Idno::registerPages()`) where it always did, held by `Idno\Legacy\ControllerRoute`.
+  Deliberate differences from the legacy page, each in both upgrade documents: a method the page does not take and a malformed `Host` are the legacy router's 404 page (a POST was the invalid-token redirect), and an XHR GET gets
+  the headers of the same request that is not XHR. Pinned by `Tests/Characterisation/DraftsPageTest` (recordings from the legacy page: `fixtures/answers/member/`, a visitor, a member with nothing, Bob with twenty-six drafts, an
+  administrator, each template type, each page of the drafts, each method, a signed request, XHR; each case that differs on purpose in the class's `CHANGED` with its own assertion) and
   `Tests/Unit/Http/Controller/Member/MemberPagesTest` (on a double of `MemberLists`).
+- THE FEED READER IS REMOVED. Following a FEED (a site's RSS, Atom or h-feed, to read its items in the site) never worked on a supported PHP, and nothing linked it: `Idno\Core\Reader::parseFeed()` and `getFeedDetails()` called
+  `\DOMDocument::loadHTML()` statically, which is an `\Error` on PHP 8 (`@` does not stop it), so `/following/add/` and `/following/confirm/` answered the 500 page before any record was made and `/following/refresh/` read a collection nothing
+  wrote to (`Subscription`, `Feed` and `FeedItem` redeclared the private property `$collection` that `Entity` keeps, so a save went to `entities` and a read to `reader`). It is deleted, not repaired: `Idno\Core\Reader` (and
+  `Idno::site()->reader()`, the `reader` service), `Idno\Entities\Reader\Feed`, `FeedItem` and `Subscription`, the pages `Idno\Pages\Following\Add`, `Confirm`, `Refresh` and `Home` and the stream page `Idno\Pages\Stream\Home`, the
+  templates `following/*`, `entity/FeedItem`, `entity/Subscription` and `content/feed/end` (the Twig files and their `classic` copies), the test route `/_test/hostile/feed`, the `simplepie/simplepie` dependency, and the follow
+  bookmarklet's offer to subscribe to the followed person's feed (it follows the person and says so). The five addresses `/following/`, `/following/add/`, `/following/confirm/`, `/following/refresh/` and `/stream/` register nothing: each is in `omitted` in
+  `Tests/Kernel/fixtures/core-routes.php` with its reason, and is the site's 404 page for every viewer and method (`Tests/Characterisation/DraftsPageTest::testTheAddressesOfTheRemovedFeedReaderAreTheNotFoundPage`). WHAT STAYS: following a
+  PERSON (`User::addFollowing()`, the `follow` and `unfollow` events, `/account/settings/following/` and its bookmarklet, the `pubsub_pending`, `pubsub_self`, `pubsub_hub` and `pubsub_secrets` fields of a user) and WebSub for those follows (`Idno\Core\WebSub`, the callback controller), which never
+  depended on these classes; the member's drafts page; the `reader` COLLECTION and its table `idno_reader` (the baseline migration creates it and is never edited: it keeps `access`'s index), the 1.x upgrade's copy of the 1.x `reader`
+  tables into it (`LegacyDataCopier`, the progress label "Feed reader") and the MongoDB import's of the `reader` collection, because no record is deleted or migrated. WHAT HAPPENS TO A STORED RECORD of a removed class (an upgraded
+  site's, in `reader`, or one a save of the old classes put in `entities`): it stays in the database untouched and is in the export archive's SQL dump; no code reads it. A lookup that meets it (`Entity::getFromAll()` and the
+  listings built on it, the home page, the profile, a feed, the drafts page) skips it, because `EntityRepository::hydrate()` and `DataConcierge::rowToEntity()` give nothing for a class that does not exist; `getByUUID()` and
+  `getByID()` give false, so its address `/view/<id>` is the 410 page; a count (`countFromAll()`, the drafts page's total) still counts the record, as it counts any record whose class is gone. A copy of a 1.x database stores its
+  `type` as the class name (no alias is declared for the removed classes: `AttributeTypeMap::typeFor()` gives the name back). Pinned by `Tests/Kernel/RemovedFeedReaderRecordsTest` (rows of each removed class in both collections;
+  the listings, pages and address above; the rows and the dump), `Tests/Kernel/EntityAliasesTest::testTheRemovedFeedReaderClassesHaveNoAlias` and the copier's test of a 1.x `reader` row. The declared indexes `feed_url` on the three classes and
+  the entity-level ones (`slug`, `shorturl`, `url`, `canonical`) those classes carried into `reader` are not declared any more, and an index is never dropped: a database made by an earlier build keeps `ix_feed_url`, `ix_slug` and
+  the others on `idno_reader` (unused), and a database made now has only `access` there (the rig's databases need recreating, `composer test:down` then `test:up`, for a fresh one; `UpgradeCommandTest::CORE_INDEXES` and
+  `EntityAliasesTest` expect `reader` to hold `access` alone). A third-party plugin that extends or names one of the deleted classes stops the site booting until it is disabled.
 - `PageShell::delegate(\Closure $serve)` runs `$serve(PageContext): Response` on the request being served as a controller would. The context is built from the
   request on Symfony's `RequestStack` (which `LegacyResponse` pushes while legacy code runs; the process's request where there is none) and from what the shell
   holds: its `arguments`, the inputs it was given with `setInput()`, its owner, entity, permalink flag and status, and the `#[SitePage]` of the action the shell names (below)
@@ -1559,7 +1571,7 @@ page class `name` is kept and core still registers it for the path) and the lega
   and `Tests/Kernel/fixtures/routed-pages.php` hold the added ones. A page that moves
   to a controller does not delete its registration: core registers the legacy pattern(s) again where it always did, with a placeholder, `Idno\Legacy\ControllerRoute`, in place of
   the class that was deleted (`Idno::registerPages()` for the home page's streams, the feeds, search, tags, the manifest, the service worker, the mention search, robots.txt, the
-  token endpoint and the drafts page; `Idno\Core\Reader::registerPages()` for the following page; `Idno\Core\Webfinger::registerpages()` for WebFinger, which `LegacyBootstrap::boot()` builds AFTER the plugins, so it still registers after them; `/bookmarklet.js`
+  token endpoint and the drafts page; `Idno\Core\Webfinger::registerpages()` for WebFinger, which `LegacyBootstrap::boot()` builds AFTER the plugins, so it still registers after them; `/bookmarklet.js`
   was removed outright and has no registration: a plugin's broader pattern, or the 404, answers it as for any unknown path). A kept shell is still registered under its own class.
   `ControllerRoute` is no `Page` and has no method: a request the legacy router dispatches to it (a method the controller does not take, a spelling Symfony's router did not match)
   fires Toro's `404` hook, the site's 404 page, for every method, as a path with no registration did; a webmention aimed at it finds no page (`target_not_found`). Third-party code
@@ -4089,8 +4101,8 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
     values; `shell/identities` links only http(s) addresses; `js/idno` and the service worker script use JSON_HEX_* / `|e('js')`
     (`Tests/Templating/TemplateEscapingTest`). The service worker branch of `shell/webapp`
     (HTTPS and a member) is not drawn by the golden pages (the rig is http); `TemplateEscapingTest::testTheServiceWorkerScriptIsWrittenForAScript` draws it.
-  - Entities, content, streams, pages, files and following are Twig too (`templates/default/{entity,content,stream,pages,file,following}/**` and
-    `drafts`: 58 files). They draw every other template with `idno_include()`, which draws on a COPY: a variable a `.tpl.php` template (the old look's, or a third party's) left on the page's template object
+  - Entities, content, streams, pages and files are Twig too (`templates/default/{entity,content,pages,file}/**` and
+    `drafts`). They draw every other template with `idno_include()`, which draws on a COPY: a variable a `.tpl.php` template (the old look's, or a third party's) left on the page's template object
     by `__()` is gone for the Twig ones, and an HTML page that showed one changed by it, on purpose (below); the JSON keys they left stay, because (the JSON, JSONP, Markdown, feed and KML pages draw `templates/classic/` copies of the
     page-body templates `entity/wrapper`, `entity/User/profile` and `pages/home/blurb`, which still draw on the page's object, so those pages are byte for byte what they were:
     `fixtures/fallback-trace.php`; `NonHtmlReachTest::testAPageBodyANonHtmlTypeCanReachIsAClassicFileOrAListedTwigFile` lists the other
@@ -4110,9 +4122,7 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
     lists an unknown answer as "Other responses" (the old one stopped); `file/picker/image` and `file/picker/donejs` write their words and the file
     address for a script; `entity/User/profile/contact` draws only the schemes it has an icon for. The htmlentities() of the old templates (`é` as
     `&eacute;`) is Twig's escape (`é`): the same text. `Tests/Fixtures/HostilePageController`
-    (`/_test/hostile/feed`, `/_test/hostile/hcard`, test environment only) serves another site's page that names itself with a script. The following
-    page that fetches a feed cannot run on PHP 8 (`Reader::getFeedDetails()` calls `DOMDocument::loadHTML()` statically), and the template of a feed item
-    draws `$item->draw()`, which draws the template again: both are old defects, so those templates are drawn with the objects the pages would give them.
+    (`/_test/hostile/hcard`, test environment only) serves another site's page whose h-card names itself with a script.
   - The form templates are Twig too (`templates/default/forms/**`: 28 files). Things to know when you change one.
     (1) A control is drawn on the PAGE's template object by a `.tpl.php` page (`$this->__(['name' => ...])->draw('forms/input/text')`), and the old
     control took its variables off that object again (`unset($this->vars[...])`, "prevent bonita pollution"); a Twig file draws its includes on a copy,
@@ -4261,7 +4271,7 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   JavaScript or Alpine attributes in the template, not a change to `frontend/src` (a rebuild is not byte-identical). What the inline scripts of the look do:
   `entity/edit/footer` (every edit form: a second submit of a form is ignored while the first is sending, without disabling the buttons, which would drop the
   submit button's own `publish_status`; an empty required rich-text field takes the cursor), `admin/diagnostics` (fetches the page with `X-Requested-With: XMLHttpRequest`,
-  which answers the report as text, into `#diagnostics-report-text`), `following/home` (a `<details id="follow-enclosure">`, no script) and the static page's
+  which answers the report as text, into `#diagnostics-report-text`), the static page's
   advanced options (Alpine). Media posts play in the browser's own `<audio controls>` / `<video controls>` (no waveform, no MediaElement.js, no WaveSurfer: the plugin's
   `external/wavesurfer/` and its `shell/head` and `shell/footer` extensions are deleted); static pages are edited as HTML source in a plain `<textarea name="body">`,
   because the body is HTML the administrator wrote (forms, ids, `<style>`, frames) that Tiptap, which only keeps the markup its schema knows, would rewrite on the first
@@ -5005,9 +5015,10 @@ its `#[AsEntity]`: `#[\Idno\Storage\Attribute\IndexedField('slug')]` (options: `
   the same collection, stores `admin`, `read` and `write` as lists of user uuids, and
   `User::getXAccessGroupIDs('admin')` looks groups up by them; pinned by
   `Tests/Data/AccessGroupPermissionLookupTest`); `Site`: `domain`;
-  `Invitation`: `email`, `code`; `AsynchronousQueuedEvent`: `queue`; `UnfurledUrl`: `source_url`;
-  `Reader\Feed`, `Reader\Subscription`, `Reader\FeedItem`: `feed_url`. A new declaration on a core
-  class ships with a new, empty migration, so that sites reconcile it on upgrade.
+  `Invitation`: `email`, `code`; `AsynchronousQueuedEvent`: `queue`; `UnfurledUrl`: `source_url`. A new declaration on a core
+  class ships with a new, empty migration, so that sites reconcile it on upgrade. The classes of the removed feed reader (`Reader\Feed`, `Subscription` and `FeedItem`: `feed_url`) declared
+  fields too, and are not declared any more (see "The feed reader is removed"): an index is never dropped, so a database made by an earlier build keeps them, and with no class stored in the
+  collection `reader` the entity-level declarations no longer reach it either.
 - Bundled plugin declarations (plugin declarations, created as above, not by the upgrade page):
   `StaticPages\StaticPage`: `category`; `ActivityPub\Entities\ActivityPubFollower`: `actor_uri`,
   `user_uuid`. None of the core or bundled declarations is unique (nothing enforces uniqueness today;
@@ -5505,9 +5516,7 @@ no installer writes one.
   `templates/default/entity/LinkPreviewCard.html.twig` (and its `classic` copy, `LinkPreviewCard.tpl.php`), checks them
   again and escapes every value of the preview. `Tests/Core/LinkPreviewCardTest.php`
   checks this.
-- Following and the error mail: a feed's title and addresses
-  (`templates/default/following/confirm.html.twig`, `templates/default/entity/Subscription.html.twig`),
-  an h-card's name, photo and address
+- The follow bookmarklet and the error mail: an h-card's name, photo and address
   (`templates/default/account/settings/following/mf2user.html.twig`) and the User-Agent,
   query string and referrer of a request (`templates/email/admin/oops.html.twig`) come from
   other sites or from the request, and are stored or passed on as they were sent, so the
@@ -5524,7 +5533,7 @@ no installer writes one.
   every redirect hop. That covers a URL a remote party supplied (a webmention's source, the endpoints
   a webmention target advertises, ActivityPub actor and key documents and follower inboxes, Micropub
   media URLs, the hubs and feeds a followed site advertises), a URL taken from content a remote
-  server returned, and a URL a logged-in MEMBER typed (a feed to subscribe to, a shared or bookmarked
+  server returned, and a URL a logged-in MEMBER typed (a shared or bookmarked
   URL, a Bridgy page): on a multi-user site a member is not the admin, and a page can redirect
   anywhere. `isSafeUrl($url)` alone does not cover redirects: it checks the first URL only. Calls to
   `\Idno\Core\UrlValidator::isSafeUrl()` stay before those fetches, to refuse early with a log line of
@@ -5532,8 +5541,7 @@ no installer writes one.
   first URL (it refuses a host that resolves to a private or reserved address before any request
   is made; it does not see redirects, which the remote client now does). The fetches are
   `Idno\Legacy\LegacyWebmentionSources::fetch()` (the webmention endpoint's), `Idno\Core\MentionClient`,
-  `Idno\Core\Webmention` (`getIconFromURL()`, `addSyndicatedReplyTargets()`), `Idno\Core\Reader`,
-  `Idno\Entities\Reader\Feed::retrieveItems()`, `Idno\Core\WebSub` (feed and topic fetches and
+  `Idno\Core\Webmention` (`getIconFromURL()`, `addSyndicatedReplyTargets()`), `Idno\Core\WebSub` (feed and topic fetches and
   the subscribe and unsubscribe requests to a hub a feed advertised; its publish ping to the hub of
   the site's own `hub` setting stays on the site client), `Idno\Pages\Entity\Share`, the following
   bookmarklet, `UnfurledUrl::unfurl()`, `IdnoPlugins\Like\Like::getTitleFromURL()`,
@@ -5546,7 +5554,7 @@ no installer writes one.
   private address at the actor, link-preview and Micropub-media call sites is
   `Tests/Kernel/RemoteFetchRefusalTest`; the flows the rig can drive are in
   `Tests/Characterisation/RemoteFetchTest`). Deliberate difference: a member can no longer
-  subscribe to, unfurl, share or bookmark a URL on the site's own private network or on localhost, and a
+  unfurl, share or bookmark a URL on the site's own private network or on localhost, and a
   site served from a loopback or private address (a development or intranet install) can no longer
   discover and subscribe to the hub of a profile or feed on that same address.
   Also moved, to the remote client, because every URL it requests comes from a member's input or from

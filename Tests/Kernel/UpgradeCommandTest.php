@@ -46,10 +46,11 @@ final class UpgradeCommandTest extends TestCase
         'idno_upgrade_rejects',
     ];
 
-    /** The indexes the classes under Idno/ declare (#[IndexedField]), per collection. */
+    /** The indexes the classes under Idno/ declare (#[IndexedField]), per collection. A database made by an earlier build also has `ix_feed_url`, `ix_slug` and the others in `reader`, which an index never drops. */
     private const CORE_INDEXES = [
         'entities' => ['canonical', 'code', 'email', 'handle', 'queue', 'shorturl', 'slug', 'source_url', 'url'],
-        'reader' => ['canonical', 'feed_url', 'shorturl', 'slug', 'url'],
+        // no class under Idno/ is stored in `reader` any more: a fresh database has only the schema's own index there (`access`, below)
+        'reader' => [],
         'site' => ['canonical', 'domain', 'shorturl', 'slug', 'url'],
     ];
 

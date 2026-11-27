@@ -178,40 +178,6 @@ final class RemoteFetchTest extends CharacterisationTestCase
         $this->assertAllRemote($this->recorded($name));
     }
 
-    public function testAFeedAMemberSubscribesToIsFetchedThroughTheRemoteClient(): void
-    {
-        $name = $this->sink('feed');
-        $cookie = $this->logIn($this->user());
-
-        $this->site()->request('GET', 'following/confirm/?feed=' . urlencode($this->sinkUrl($name)), ['Cookie' => $cookie]);
-
-        $this->assertAllRemote($this->recorded($name));
-    }
-
-    public function testFeedsAreFetchedThroughTheRemoteClient(): void
-    {
-        $name = $this->sink('feedparse');
-        $url = $this->sinkUrl($name);
-
-        // The sink answers with an empty body, which the feed parser cannot read (it throws, as before);
-        // the request has been made by then.
-        $feed = new \Idno\Entities\Reader\Feed();
-        $feed->setFeedURL($url);
-        foreach ([
-            fn() => \Idno\Core\Idno::site()->reader()->fetchAndParseFeed($url),
-            fn() => $feed->retrieveItems(),
-        ] as $fetch) {
-            try {
-                $fetch();
-            } catch (\Error) {
-            }
-        }
-
-        $requests = $this->recorded($name);
-        $this->assertCount(2, $requests);
-        $this->assertAllRemote($requests);
-    }
-
     public function testAReplyTargetsPageIsFetchedThroughTheRemoteClient(): void
     {
         $name = $this->sink('reply');

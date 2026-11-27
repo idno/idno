@@ -24,9 +24,6 @@ return [
     'templates/email/shell.html.twig' => [
         ['expression' => 'body', 'reason' => 'the mail\'s body: HTML the mail template (or a third-party `.tpl.php` mail template) already drew and escaped; the shell only places it'],
     ],
-    'templates/default/entity/FeedItem.html.twig' => [
-        ['expression' => 'object.draw()', 'reason' => 'HTML an entity has already drawn through its own templates (`Entity::draw()`); the page only places it. Escaping what members and other sites supplied is the job of those templates (those of the bundled plugins are ported and checked on their own)'],
-    ],
     'templates/default/entity/User/profile.html.twig' => [
         ['expression' => 'user.draw()', 'reason' => 'HTML an entity has already drawn through its own templates(`Entity::draw()`); the page only places it. Escaping what members and other sites supplied is the job of those templates(those of the bundled plugins are ported and checked on their own)'],
         ],
@@ -46,12 +43,6 @@ return [
     ],
     'templates/default/forms/link.html.twig' => [
         ['expression' => 'label', 'reason' => 'the label of the link: markup its caller built (an icon and text). `action_link()` escapes a label that is not markup before it draws this template, and the legacy `Actions::createLink()` callers pass markup'],
-    ],
-    'templates/default/following/confirm.html.twig' => [
-        ['expression' => 'item.draw()', 'reason' => 'a feed item\'s own drawing (`entity/FeedItem`), which escapes what the remote feed supplied'],
-    ],
-    'templates/default/following/home.html.twig' => [
-        ['expression' => 'subscription.draw()', 'reason' => 'a subscription\'s own drawing (`entity/Subscription`), which escapes what the followed feed supplied'],
     ],
     'templates/default/js/idno.html.twig' => [
         ['expression' => 'environment|json_encode(constant(\'JSON_HEX_TAG\') b-or constant(\'JSON_HEX_AMP\') b-or constant(\'JSON_HEX_APOS\') b-or constant(\'JSON_HEX_QUOT\'))', 'reason' => 'JSON for a script, encoded with all four JSON_HEX_* flags, so no value in it (the page\'s address holds the visitor\'s words) can end the script or open a tag'],

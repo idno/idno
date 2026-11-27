@@ -36,19 +36,6 @@ namespace Tests\Characterisation {
             $this->assertStringNotContainsString('<html', $report->body);
         }
 
-        public function testTheFollowPageHasTheFormTheAddPanelHoldsAndNoJquery(): void
-        {
-            $cookie = $this->logIn($this->user());
-
-            $page = $this->site()->request('GET', 'following/', ['Cookie' => $cookie]);
-            $this->assertSame(200, $page->status, substr($page->body, 0, 1500));
-            $this->assertNoJquery($page->body);
-            $this->assertMatchesRegularExpression('~<form action="[^"]*following/add" method="post">~', $page->body);
-            $this->assertMatchesRegularExpression('~<input type="text" name="url"~', $page->body);
-            $fields = $this->formToken($page->body, 'following/add');
-            $this->assertCount(3, $fields);
-        }
-
         public function testTheEditFooterAndAnEditPageLoadNoJqueryAndKeepTheirSubmitButtons(): void
         {
             $cookie = $this->logIn($this->user());

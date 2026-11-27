@@ -70,6 +70,10 @@ final class LegacyDataCopierTest extends TestCase
             ];
             $written[] = [$collection, $class, $document['created'], $fixture->insert($collection, $document)];
         }
+        // No class is stored in `reader` any more, but a 1.x site holds records there: one of the removed feed reader's classes is copied like any other
+        $removed = 'Idno\\Entities\\Reader\\Feed';
+        $document = ['entity_subtype' => $removed, 'title' => 'A record of ' . $removed, 'body' => '<p>Some <b>body</b> text #tag</p>', 'created' => 1_700_000_000 + $i++, 'owner' => 'https://legacy.example/profile/owner', 'access' => 'PUBLIC'];
+        $written[] = ['reader', $removed, $document['created'], $fixture->insert('reader', $document)];
         $collections = array_unique(array_column($written, 0));
         self::assertContains('entities', $collections);
         self::assertContains('reader', $collections);
@@ -590,6 +594,8 @@ final class LegacyDataCopierTest extends TestCase
         self::assertTrue($progress->complete);
         self::assertSame(json_decode($post['contents'], true), $this->store()->findById('entities', $post['_id']));
         self::assertSame(json_decode($feed['contents'], true), $this->store()->findByUuid('reader', $feed['uuid']));
+        // the feed reader's classes are gone, so no alias is declared for them: the copied row keeps the class name as its `type` (nothing reads it)
+        self::assertSame('Idno\\Entities\\Reader\\Feed', $fixture->connection->fetchOne('select type from idno_reader where uuid = ?', [$feed['uuid']]));
         self::assertSame('a note 🎉', $fixture->connection->fetchOne('select search from idno_entities where id = ?', [$post['_id']]));
         self::assertSame('Site', $this->store()->findLatest('config')['title'] ?? null);
     }

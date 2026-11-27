@@ -35,7 +35,6 @@ final class LegacyServicesTest extends TestCase
             'template' => [\Idno\Core\Template::class, 'template'],
             'language' => [\Idno\Core\Language::class, 'language'],
             'syndication' => [\Idno\Core\Syndication::class, 'syndication'],
-            'reader' => [\Idno\Core\Reader::class, 'reader'],
             'queue' => [\Idno\Core\EventQueue::class, 'queue'],
             'statistics' => [\Idno\Stats\StatisticsCollector::class, 'statistics'],
             'cache' => [\Idno\Caching\PersistentCache::class, 'cache'],

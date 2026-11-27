@@ -295,7 +295,6 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
             \Idno\Core\Template::class,
             \Idno\Core\Language::class,
             \Idno\Core\Syndication::class,
-            \Idno\Core\Reader::class,
             \Idno\Core\EventQueue::class,
             \Idno\Stats\StatisticsCollector::class,
             \Idno\Caching\PersistentCache::class,

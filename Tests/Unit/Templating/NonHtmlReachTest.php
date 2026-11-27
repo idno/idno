@@ -182,9 +182,6 @@ final class NonHtmlReachTest extends TestCase
         'templates/default/entity/editwrapper.html.twig',
         'templates/default/entity/share.html.twig',
         'templates/default/file/picker/donejs.html.twig',
-        'templates/default/following/add.html.twig',
-        'templates/default/following/confirm.html.twig',
-        'templates/default/following/home.html.twig',
         'templates/default/forms/input/captcha.html.twig',
         'templates/default/pages/403.html.twig',
         'templates/default/pages/404.html.twig',
@@ -199,7 +196,7 @@ final class NonHtmlReachTest extends TestCase
         $reached = [];
         foreach (self::reachable($root, true) as $files) {
             foreach ($files as $file) {
-                if (preg_match('#^(?:templates/default/(?:drafts|(?:entity|content|stream|pages|file|following|forms|account|admin)/.*)|IdnoPlugins/[^/]+/templates/default/.*)\.html\.twig$#', $file) === 1) {
+                if (preg_match('#^(?:templates/default/(?:drafts|(?:entity|content|stream|pages|file|forms|account|admin)/.*)|IdnoPlugins/[^/]+/templates/default/.*)\.html\.twig$#', $file) === 1) {
                     $reached[$file] = true;
                 }
             }

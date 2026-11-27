@@ -1,8 +1,0 @@
-<form action="{{ site_url() }}following/add" method="post">
-    <p>
-        {{ t('Add the address of a site to follow') }}:<br>
-            <input type="text" name="url" value="" placeholder="https:// ..." style="width: 100%"><br>
-        <input type="submit" class="btn btn-primary" value="Add" style="width: 15%">
-        {{ form_token('following/add') }}
-    </p>
-</form>

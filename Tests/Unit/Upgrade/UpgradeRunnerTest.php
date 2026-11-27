@@ -86,7 +86,7 @@ final class UpgradeRunnerTest extends TestCase
         self::assertSame([], (new SchemaMigrator($this->db()))->pending());
         $catalog = new SchemaCatalog($this->db());
         self::assertContains('slug', $catalog->indexedFields('entities'), 'the core indexes are made in the same step');
-        self::assertContains('feed_url', $catalog->indexedFields('reader'));
+        self::assertSame(['access'], $catalog->indexedFields('reader'), 'no class is stored in the reader collection: only the schema\'s own index');
         self::assertTrue((new UpgradeLock($this->other()))->acquire(), 'the lock is released');
     }
 
@@ -550,7 +550,7 @@ final class UpgradeRunnerTest extends TestCase
         self::assertSame('current', $result['status']);
         self::assertSame('Ran the migration ' . self::BASELINE . '.', $lines[0]);
         self::assertContains('Created the index entities.slug.', $lines);
-        self::assertContains('Created the index reader.feed_url.', $lines);
+        self::assertNotContains('Created the index reader.feed_url.', $lines);
 
         $lines = [];
         $result = $this->runner()->run(static function (string $line) use (&$lines): void {

@@ -38,18 +38,21 @@ class EntityListenersTest extends \Tests\IdnoTestCase
         $this->assertSame($before, $this->listeners(), 'no listener for an object of a class that has one');
     }
 
-    public function testAClassOfAnotherCollectionHasItsOwnListenerOnce(): void
+    public function testAClassNotSeenBeforeHasItsOwnListenerOnce(): void
     {
         new Status();
+        // a class of the test's own: no other test has built one
+        $make = static fn (): Entity => new class extends Status {
+        };
         $before = $this->listeners();
-        new \Idno\Entities\Reader\Feed();
-        $withReader = $this->listeners();
-        $this->assertSame($before + 1, $withReader, 'a class of the reader collection is looked up in its own collection: it gets its own listener');
+        $make();
+        $withClass = $this->listeners();
+        $this->assertSame($before + 1, $withClass, 'a class not seen before gets its own listener');
 
         for ($i = 0; $i < 20; $i++) {
-            new \Idno\Entities\Reader\Feed();
+            $make();
         }
-        $this->assertSame($withReader, $this->listeners(), 'and only one');
+        $this->assertSame($withClass, $this->listeners(), 'and only one');
     }
 
     public function testASecondDispatcherGetsTheListenersAgain(): void

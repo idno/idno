@@ -19,8 +19,8 @@ use Tests\Unit\Http\Controller\Discovery\RecordingDrawer;
 require_once dirname(__DIR__) . '/Discovery/DiscoveryDoubles.php';
 
 /**
- * The member's drafts and following pages on a double of what they ask the site and a real renderer over a recording drawer, and what the controller
- * declares for each.
+ * The member's drafts page on a double of what they ask the site and a real renderer over a recording drawer, and what the controller
+ * declares for it.
  */
 final class MemberPagesTest extends TestCase
 {
@@ -80,23 +80,9 @@ final class MemberPagesTest extends TestCase
         $this->assertSame(['drafts' => [], 'count' => 25, 'offset' => 0, 'total' => 0], $this->drawer->templates[0][1]);
     }
 
-    public function testTheSubscriptionsAreTheMembersAndTheTitleIsFollowing(): void
+    public function testTheControllerDeclaresTheRouteAndAsksForAMember(): void
     {
-        $pages = $this->pages();
-        $this->lists->subscriptions = ['s1', 's2'];
-
-        $response = $pages->following(self::context('/following/'));
-
-        $this->assertSame(200, $response->getStatusCode());
-        $this->assertSame(['following/home', ['subscriptions' => ['s1', 's2']]], $this->drawer->templates[0]);
-        $this->assertSame('<Following>', $this->drawer->pages[0][0]['title']);
-        $this->assertSame('[following/home]', $this->drawer->pages[0][0]['body']);
-        $this->assertSame(0, $this->lists->draftCalls, 'the following page asks nothing of the drafts');
-    }
-
-    public function testTheControllerDeclaresTheRoutesAndAsksForAMember(): void
-    {
-        foreach (['drafts' => ['idno_drafts', '/{lead}drafts{slash}', 'Idno\Pages\Drafts'], 'following' => ['idno_following', '/{lead}following{slash}', 'Idno\Pages\Following\Home']] as $action => [$name, $path, $class]) {
+        foreach (['drafts' => ['idno_drafts', '/{lead}drafts{slash}', 'Idno\Pages\Drafts']] as $action => [$name, $path, $class]) {
             $method = new \ReflectionMethod(MemberPagesController::class, $action);
             $route = $method->getAttributes(Route::class)[0]->newInstance();
             $page = $method->getAttributes(SitePage::class)[0]->newInstance();
@@ -128,19 +114,11 @@ final class RecordingLists implements MemberLists
 
     public int $total = 0;
 
-    /** @var array<int, mixed> */
-    public array $subscriptions = [];
-
     public function drafts(int $count, int $offset): array
     {
         $this->draftCalls++;
         $this->asked[] = [$count, $offset];
 
         return ['items' => $this->items, 'total' => $this->total];
-    }
-
-    public function subscriptions(): array
-    {
-        return $this->subscriptions;
     }
 }

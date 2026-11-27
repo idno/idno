@@ -47,8 +47,6 @@ return [
     'admin /event/edit/' => ['content_type', 'formFields', 'messages', 'object', 'posseLinks', 'services', 'title'],
     'admin /event/edit/00000000-0000-4000-8000-000000000015' => ['content_type', 'formFields', 'messages', 'object', 'posseLinks', 'services', 'title'],
     'admin /file/picker/' => ['hidenav', 'messages', 'title'],
-    'admin /following/' => ['messages', 'subscriptions', 'title'],
-    'admin /following/add/' => ['#status 302'],
     'admin /indieauth/auth?me=http%3A%2F%2F127.0.0.1%2F&client_id=https%3A%2F%2Fclient.example%2F&redirect_uri=https%3A%2F%2Fclient.example%2Fcb&state=s1' => ['client_id', 'code_challenge', 'code_challenge_method', 'me', 'messages', 'pretty_id', 'redirect_uri', 'scope', 'state', 'title'],
     'admin /indieauth/auth?me=http%3A%2F%2F127.0.0.1%2F&client_id=https%3A%2F%2Fclient.example%2F&redirect_uri=https%3A%2F%2Fclient.example%2Fcb&state=s1&scope=create' => ['client_id', 'code_challenge', 'code_challenge_method', 'me', 'messages', 'pretty_id', 'redirect_uri', 'scope', 'state', 'title'],
     'admin /like/edit/' => ['content_type', 'formFields', 'label', 'messages', 'object', 'posseLinks', 'services', 'title', 'url'],

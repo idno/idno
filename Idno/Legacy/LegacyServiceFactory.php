@@ -218,11 +218,6 @@ final class LegacyServiceFactory
         return new \Idno\Core\Syndication();
     }
 
-    public function reader(): \Idno\Core\Reader
-    {
-        return new \Idno\Core\Reader();
-    }
-
     public function queue(): ?\Idno\Core\EventQueue
     {
         // The adapter over Messenger, whatever `event_queue` says: the setting only decides, at each
