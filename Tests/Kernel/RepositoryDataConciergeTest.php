@@ -760,16 +760,16 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
 
     /**
      * A search array the parser rejects matches nothing and is logged once as a warning
-     * that names the method and the query's shape, never its values. The one rejected shape with a
-     * plausible dynamic source: `$not => [$in => []]`, which the old backend ran as `!= 'Array'`
-     * (in production: the records that have the field).
+     * that names the method and the query's shape, never its values. The rejected shape with a
+     * plausible dynamic source: `$not => ['a', 'b']`, a list where a plain value or a map of `$in` belongs
+     * (the old backend ran it as `!= 'Array'`: in production, the records that have the field).
      */
     public function testAnUnreadableSearchMatchesNothingAndIsLogged(): void
     {
         $db = Idno::site()->db();
         $marker = 'adapter-test-' . bin2hex(random_bytes(6));
         $this->status('Has the field ' . $marker, $marker, 1_700_000_000);
-        $search = ['testmarker' => ['$not' => ['$in' => []]], 'secret-value-key' => 'do-not-log-me'];
+        $search = ['testmarker' => ['$not' => ['a', 'b']], 'secret-value-key' => 'do-not-log-me'];
 
         $this->captureLog();
         $this->assertSame([], $db->getObjects('', $search));
@@ -780,14 +780,14 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
 
         $this->assertCount(4, $log, implode("\n", $log));
         foreach (['getObjects', 'countObjects', 'getRecords', 'countRecords'] as $i => $method) {
-            $this->assertStringContainsString('warning - ' . $method . '(): the search could not be read, so nothing matches it: {testmarker: {$not: {$in: []}}, secret-value-key: _}', $log[$i]);
+            $this->assertStringContainsString('warning - ' . $method . '(): the search could not be read, so nothing matches it: {testmarker: {$not: […]}, secret-value-key: _}', $log[$i]);
             $this->assertStringNotContainsString('do-not-log-me', $log[$i]);
         }
     }
 
     /**
-     * A value a request supplied where text was expected, an array that is not a map of known operators,
-     * matches nothing through the adapter and is logged once by shape: it never drops the field's condition.
+     * Catches a request's `code[]=x`, `code[$in]=` or `code[$lt][]=x` dropping the field's condition (and so matching every record): an
+     * array that is not a map of operators with operands they can use matches nothing through the adapter and is logged once by shape.
      */
     public function testAnArrayThatIsNotAnOperatorMapMatchesNothingAndIsLogged(): void
     {
@@ -796,7 +796,7 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
         $this->status('Has the field ' . $marker, $marker, 1_700_000_000);
         $this->assertCount(1, $db->getObjects('', ['testmarker' => $marker]), 'positive control');
 
-        foreach ([['x'], [], ['$gt' => 'a', '$regex' => 'x'], ['$ne' => 'zzz']] as $value) {
+        foreach ([['x'], [], ['$gt' => 'a', '$regex' => 'x'], ['$ne' => 'zzz'], ['$in' => []], ['$in' => ''], ['$lt' => []], ['$not' => []]] as $value) {
             $search = ['testmarker' => $value];
             $this->captureLog();
             $this->assertSame([], $db->getObjects('', $search));
@@ -808,6 +808,23 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
             $this->assertStringNotContainsString('zzz', implode("\n", $log));
         }
         $this->assertSame([], Status::getFromX('', ['testmarker' => ['x']]));
+    }
+
+    /**
+     * Catches `code[$lt]=0` or `code[$gt]=` being dropped as "no condition" (which matched the marker's record whatever it held): an
+     * empty plain operand is compared, so it excludes this record, and nothing is logged.
+     */
+    public function testAnEmptyPlainOperandIsAComparisonAndNeverDropsTheCondition(): void
+    {
+        $db = Idno::site()->db();
+        $marker = 'adapter-empty-' . bin2hex(random_bytes(6));
+        $this->status('Has the field ' . $marker, $marker, 1_700_000_000);
+
+        foreach ([['$lt' => 0], ['$lt' => ''], ['$lt' => '0']] as $value) {
+            $this->assertSame([], $db->getObjects('', ['testmarker' => $value]), json_encode($value));
+        }
+        $this->assertCount(1, $db->getObjects('', ['testmarker' => ['$gt' => 0]]), 'compared, not dropped: a marker sorts after 0');
+        $this->assertCount(1, $db->getObjects('', ['testmarker' => ['$not' => '']]));
     }
 
     public function testTheLoggedShapeHasNoValuesAndIsBounded(): void

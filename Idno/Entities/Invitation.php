@@ -70,6 +70,57 @@ namespace Idno\Entities {
         }
 
         /**
+         * An invitation is no content: it is never federated, never in a feed, never titled.
+         */
+        function getActivityStreamsObjectType()
+        {
+            return false;
+        }
+
+        function getTitle()
+        {
+            return '';
+        }
+
+        function getDescription()
+        {
+            return '';
+        }
+
+        function getURL()
+        {
+            return \Idno\Core\Idno::site()->config()->getURL() . 'admin/users';
+        }
+
+        /**
+         * Invitations stored before they were administrators' alone have the access of any post. Make this one
+         * an administrators' invitation (a listing then no longer returns it to anyone else).
+         */
+        private function protect(): void
+        {
+            if ($this->access !== self::ACCESS) {
+                $this->access = self::ACCESS;
+                parent::save(true);
+            }
+        }
+
+        /**
+         * Every invitation, newest first (for an administrator's list).
+         *
+         * @return Invitation[]
+         */
+        static function all()
+        {
+            $found = static::unrestricted(static fn () => static::get([], [], 1000));
+            $found = is_array($found) ? $found : [];
+            foreach ($found as $invitation) {
+                $invitation->protect();
+            }
+
+            return $found;
+        }
+
+        /**
          * Nothing of an invitation is serialised: its code is a credential.
          */
         public function jsonSerialize(): mixed
@@ -113,7 +164,12 @@ namespace Idno\Entities {
                 }
             );
 
-            return is_array($rows) ? array_values($rows) : [];
+            $rows = is_array($rows) ? array_values($rows) : [];
+            foreach ($rows as $row) {
+                $row->protect();
+            }
+
+            return $rows;
         }
 
         /**

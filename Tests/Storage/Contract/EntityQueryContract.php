@@ -484,13 +484,12 @@ abstract class EntityQueryContract extends \Tests\IdnoTestCase
     public static function emptyConditions(): array
     {
         return [
-            'an empty $in' => [['$in' => []]],
-            'a dropped operand ($lt 0)' => [['$lt' => 0]],
+            'a $not that excludes an empty list' => [['$not' => ['$in' => []]]],
         ];
     }
 
     /**
-     * A deliberate difference: a caller's `access` that parses to no condition is no condition, so the read groups
+     * A caller's `access` that excludes nothing (`$not` of an empty list) is no condition, so the read groups
      * stay in force. (Legacy replaced the read groups with nothing, so an anonymous visitor found
      * every access level, drafts still hidden.)
      *

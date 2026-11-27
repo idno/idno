@@ -361,6 +361,9 @@ namespace Idno\Common {
          */
         static function getByURL($url, $cached = true)
         {
+            if (!is_string($url) || $url === '') {
+                return false;
+            }
             if (isset(self::$entity_cache[$url]) && $cached) return self::$entity_cache[$url];
 
             if (!self::isLocalUUID($url)) {

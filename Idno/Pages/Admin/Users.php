@@ -12,6 +12,19 @@ namespace Idno\Pages\Admin {
     class Users extends \Idno\Common\Page
     {
 
+        /**
+         * The invitation with an id, and only an invitation: an id of anything else (a post) is none.
+         *
+         * @param  mixed $id
+         * @return Invitation|null
+         */
+        private static function invitation($id)
+        {
+            $found = Invitation::unrestricted(static fn () => Invitation::getByID($id));
+
+            return $found instanceof Invitation ? $found : null;
+        }
+
         function getContent()
         {
             $this->adminGatekeeper(); // Admins only
@@ -22,7 +35,7 @@ namespace Idno\Pages\Admin {
             $users = User::getFromX(["Idno\\Entities\\User", "Idno\\Entities\\RemoteUser"], [], [], $limit, $offset);
             $count = User::countFromX(["Idno\\Entities\\User", "Idno\\Entities\\RemoteUser"]);
 
-            $invitations = Invitation::get();
+            $invitations = Invitation::all();
 
             $t        = \Idno\Core\Idno::site()->template();
             $t->body  = $t->__(array('items' => $users, 'invitations' => $invitations, 'count' => $count, 'items_per_page' => $limit))->draw('admin/users');
@@ -97,7 +110,7 @@ namespace Idno\Pages\Admin {
                 case 'remove_invitation':
                     $invitation_id = $this->getInput('invitation_id');
 
-                    if ($invitation = Invitation::getByID($invitation_id)) {
+                    if ($invitation = self::invitation($invitation_id)) {
                         if ($invitation->delete()) {
                             \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->_("The invitation was removed."));
                         }
@@ -108,7 +121,7 @@ namespace Idno\Pages\Admin {
 
                     $invitation_id = $this->getInput('invitation_id');
 
-                    if ($invitation = Invitation::getByID($invitation_id)) {
+                    if ($invitation = self::invitation($invitation_id)) {
                         $email = $invitation->email;
                         if ($invitation->delete()) {
                             $new_invitation = new Invitation();

@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Tests\Characterisation;
 
-use Tests\Support\RecordedAnswers;
-
 /**
  * A request can send an array where a page expects text: `x[]=a`, `x[$gt]=a`, `x[$lt]=z`, `x[$not]=a` in a query or a form, and an object in a JSON
  * body or in the `json` field. PHP builds the same arrays from the first four, and a JSON object becomes the same array, so a lookup that was handed one
@@ -19,10 +17,6 @@ use Tests\Support\RecordedAnswers;
  */
 final class ArrayInputTest extends SignInSiteCase
 {
-    use RecordedAnswers;
-
-    protected const GROUP = 'array-input';
-
     private const INVITED = 'dana@example.test';
 
     private const CODE = '0123456789abcdef0123456789abcd01';
@@ -44,6 +38,12 @@ final class ArrayInputTest extends SignInSiteCase
         'POST /account/password/reset' => ['code', 'password', 'password2'],
         'GET /account/password/reset' => ['code'],
     ];
+
+    /** The site case asks for it; this test records no answer, it asserts what followed. */
+    protected function assertRecordedAnswer(string $group, string $case, SiteResponse $response): void
+    {
+        $this->fail('ArrayInputTest records no answers');
+    }
 
     protected function seedsOwnedPosts(): bool
     {
@@ -164,6 +164,10 @@ final class ArrayInputTest extends SignInSiteCase
     public function testTheLoginPage(): void
     {
         $this->seed(true);
+        // The control that lets the sweep fail: the same login with text signs Bob in, by the same check the sweep makes
+        [$cookie, $token] = $this->visitorSession();
+        $login = $this->send('POST', '/session/login', ['email' => 'bob', 'password' => self::PASSWORD], 'form', $cookie, $token);
+        $this->assertSame(200, $this->site()->request('GET', 'account/settings/', ['Cookie' => self::sessionCookieOrNull($login) ?? $cookie])->status, 'a login of text signs in');
         $this->sweep('POST', '/session/login', ['email' => 'bob', 'password' => self::PASSWORD], ['email', 'password'], ['form', 'json', 'field']);
     }
 

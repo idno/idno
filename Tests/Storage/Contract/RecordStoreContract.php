@@ -597,23 +597,23 @@ abstract class RecordStoreContract extends TestCase
         $this->assertMatches(['n' => ['$gt' => '5', '$lt' => '95']], [$nine]);
     }
 
-    public function testZeroOperandIsIgnored(): void
+    /**
+     * `code[$lt]=0` or `code[$not]=` from a request must be a comparison, not a dropped condition that matches everything.
+     */
+    public function testAnEmptyPlainOperandIsComparedLikeAnyOther(): void
     {
         $five = $this->put($this->r(['n' => 5]));
         $minus = $this->put($this->r(['n' => -3]));
-        $zero = $this->put($this->r(['n' => 0])); // indexed as 0: applying "$not 0" would exclude it
+        $zero = $this->put($this->r(['n' => 0])); // indexed as 0
 
-        // An empty operand (0, '0', '', null, []) adds no condition: everything matches.
-        $all = [$five, $minus, $zero];
-        $this->assertMatches(['n' => ['$lt' => 0]], $all);
-        $this->assertMatches(['n' => ['$gt' => 0]], $all);
-        $this->assertMatches(['n' => ['$gt' => '0']], $all);
-        $this->assertMatches(['n' => ['$in' => []]], $all);
-        $this->assertMatches(['n' => ['$not' => 0]], $all);
-        $this->assertMatches(['n' => ['$not' => '0']], $all);
-        $this->assertMatches(['n' => ['$not' => '']], $all);
-        $this->assertMatches(['n' => ['$not' => []]], $all);
-        // Positive control: a non-empty operand IS applied.
+        $this->assertMatches(['n' => ['$lt' => 0]], [$minus]);
+        $this->assertMatches(['n' => ['$lt' => '0']], [$minus]);
+        $this->assertMatches(['n' => ['$gt' => 0]], [$five]);
+        $this->assertMatches(['n' => ['$not' => 0]], [$five, $minus]);
+        $this->assertMatches(['n' => ['$not' => '0']], [$five, $minus]);
+        $this->assertMatches(['n' => ['$not' => '']], [$five, $minus, $zero]);
+        // An exclusion of an empty list excludes nothing
+        $this->assertMatches(['n' => ['$not' => ['$in' => []]]], [$five, $minus, $zero]);
         $this->assertMatches(['n' => ['$not' => '5']], [$minus, $zero]);
     }
 
@@ -624,7 +624,7 @@ abstract class RecordStoreContract extends TestCase
 
         // A query that cannot be read is no query: it is refused before any store sees it (the adapters
         // turn that into "matches nothing"), never answered with the condition dropped.
-        foreach ([['n' => ['$regex' => 'x']], ['n' => ['$exists' => true]]] as $search) {
+        foreach ([['n' => ['$regex' => 'x']], ['n' => ['$exists' => true]], ['n' => ['$in' => []]], ['n' => ['$not' => []]], ['n' => ['$lt' => null]]] as $search) {
             try {
                 $this->criteria($search);
                 $this->fail('expected a refusal for ' . json_encode($search));

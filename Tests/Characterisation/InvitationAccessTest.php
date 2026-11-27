@@ -128,4 +128,49 @@ final class InvitationAccessTest extends PrivateSiteTestCase
             $this->runInSite('\Idno\Core\Idno::site()->db()->setIgnoreAccess(true); return (string) \Idno\Entities\Invitation::getByID(' . $this->literal(self::ID) . ')->access;')
         );
     }
+
+    /**
+     * Catches an invitation stored by an earlier Idno (access PUBLIC) being returned by a listing to a visitor, in the home stream asked
+     * for the invitation's class by name and in a finder that does not call canRead(). Until something reads the invitation (the
+     * administrators' list, the registration lookup) a finder still returns it: that is the one listing left open, in code that
+     * calls the finder itself.
+     */
+    public function testAnInvitationStoredWithPublicAccessIsInNoListingForAVisitor(): void
+    {
+        $this->seed();
+        $this->runInSite(str_replace('%ID%', $this->literal(self::ID), <<<'PHP'
+        $site = \Idno\Core\Idno::site();
+        $site->db()->setIgnoreAccess(true);
+        $store = \Idno\Core\Idno::container()->get(\Idno\Storage\RecordStore::class);
+        $record = $store->findById('entities', %ID%);
+        $record['access'] = 'PUBLIC';
+        $record['publish_status'] = 'published';
+        $store->save('entities', $record);
+
+        return true;
+        PHP));
+        $listed = $this->site()->request('GET', '/?q=dana&_t=json&types[]=' . rawurlencode('Idno\\Entities\\Invitation'));
+        $this->assertStringNotContainsString(self::CODE, $listed->body);
+        $this->assertStringNotContainsString('dana@example.test', $listed->body);
+        $this->assertSame(
+            [1, 0],
+            $this->runInSite('$before = count(\Idno\Entities\Invitation::get([], [], 10)); \Idno\Entities\Invitation::all(); return [$before, count(\Idno\Entities\Invitation::get([], [], 10))];')
+        );
+    }
+
+    /**
+     * Catches an administrator's `remove_invitation` deleting a post whose id was posted instead of an invitation's.
+     */
+    public function testRemoveInvitationRemovesAnInvitationAndNothingElse(): void
+    {
+        $this->seed();
+        $admin = $this->loginCookie('admin', 'correct-horse-battery-9');
+        $post = $this->publishStatus($admin, 'A post that is not an invitation');
+        $postId = $this->runInSite('$s = \IdnoPlugins\Status\Status::getOne(); return $s->getID();');
+        $token = self::formToken($this->site()->request('GET', 'admin/users', ['Cookie' => $admin])->body, 'admin/users')['__bTk'];
+        $this->site()->request('POST', 'admin/users', ['Cookie' => $admin], ['__bTk' => $token, 'action' => 'remove_invitation', 'invitation_id' => $postId]);
+        $this->assertSame(200, $this->site()->request('GET', str_starts_with($post, $this->baseUrl()) ? substr($post, strlen($this->baseUrl())) : $post)->status, 'the post is still there');
+        $this->site()->request('POST', 'admin/users', ['Cookie' => $admin], ['__bTk' => $token, 'action' => 'remove_invitation', 'invitation_id' => self::ID]);
+        $this->assertFalse($this->runInSite('\Idno\Core\Idno::site()->db()->setIgnoreAccess(true); return (bool) \Idno\Entities\Invitation::getByID(' . $this->literal(self::ID) . ');'));
+    }
 }

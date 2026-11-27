@@ -2232,12 +2232,15 @@ the tag pages and the small public endpoints are served through them (and the fi
       an existing record was re-saved with its uuid; that is refused now on every database;
     - DIFFERENCE (empty `access`/`entity_subtype` conditions): see the `Criteria` merge below;
     - DIFFERENCE (an array that is not an operator map): a field value that is an array must be a map made only
-      of the operators `$not`, `$in`, `$lt` and `$gt`. A plain list (`['a', 'b']`), an empty array and an unknown
-      operator (`$regex`, `$ne`, `$exists`), alone or beside known ones, make the whole query unreadable, so it
+      of the operators `$not`, `$in`, `$lt` and `$gt`, each with an operand it can use: `$in` an array of plain
+      values (an empty one matches nothing), `$not` a plain value or a map holding only `$in` (an empty `$in`
+      excludes nothing, so it adds no condition), `$lt` and `$gt` a plain value (`0`, `'0'` and `''` are compared
+      like any other, never dropped). Anything else (a plain list, an empty array, an unknown operator alone or
+      beside known ones, an array where a plain value belongs, `null` as an operand) makes the whole query unreadable, so it
       matches nothing (below). The old backend dropped such a value and ran the rest of the query, so a request
-      that sent `code[]=x` for a value the code meant as text removed that condition from the lookup. A
-      recognised operator with an empty operand (`['$in' => []]`, `['$lt' => 0]`) is still dropped. The list
-      form of `$or` (a list of conditions) still contributes no alternative;
+      that sent `code[]=x`, `code[$lt]=` or `code[$not]=0` for a value the code meant as text removed that condition
+      from the lookup. The list form of `$or` (a list of conditions) still contributes no alternative. A viewer with
+      no read group reads nothing (`EntityRepository`: an empty `$in` of read groups was a dropped condition);
     - DIFFERENCE (unloadable classes): `getObjects()` leaves out a record whose class cannot be loaded instead of
       returning `false` in its place (`getFromX()` already filtered those out; counts still include it);
     - DIFFERENCE (publish-status override): `getObjects()` hides unpublished entities by
@@ -2354,10 +2357,9 @@ the tag pages and the small public endpoints are served through them (and the fi
     a member of;
   - the `Criteria` is merged OVER those conditions: a top-level condition on `access` or
     `entity_subtype` REPLACES the repository's, so it can widen what a user reads. Pass one only
-    when your code has already decided what the user may see. DIFFERENCE (empty conditions): a value that
-    parses to no condition (`['$in' => []]`, an operator with an empty operand; an empty array `[]` is
-    refused: see the `db()` list above) is no
-    condition, so the viewer's read groups (or the types) stay; legacy drops the filter entirely;
+    when your code has already decided what the user may see. DIFFERENCE (empty conditions): a `$not` of an
+    empty `$in` excludes nothing, so it is no
+    condition (any other value Criteria cannot use is refused: see the `db()` list above), so the viewer's read groups (or the types) stay; legacy drops the filter entirely;
   - `find()`: with ignore-access on there is no access condition; the page is cut in the database,
     then records whose class does not exist and unpublished entities the user may not see (only owner
     and admins see them) are dropped, so a page can come back short. The publish-status rule is
@@ -5665,15 +5667,17 @@ no installer writes one.
   operators (`$lt`, `$not`) or, when it held none, dropped from the query, removing the condition the lookup was meant to have (an invitation was
   found on its address alone; the newest member answered for `email[]=x`). Two rules close it. (1) The finders that take a value a request can supply
   answer their not-found value for anything but a non-empty string, before any query: `Entity::getByID()`, `getByUUID()`, `getBySlug()`,
-  `getByShortURL()`, `User::getByEmail()`, `getByHandle()`, `getByProfileURL()` and `UnfurledUrl::getBySourceURL()`, and the `Invitation` finders; a new
+  `getByURL()`, `getByShortURL()`, `File::getByID()`, `User::getByEmail()`, `getByHandle()`, `getByProfileURL()` and `UnfurledUrl::getBySourceURL()`, and the `Invitation` finders; a new
   finder does the same. (2) The storage layer refuses what it cannot read: a field value that is an array but not a map of `$not`, `$in`, `$lt` and
-  `$gt` alone (a plain list, an empty array, an unknown operator alone or beside known ones) matches nothing (see the `db()` list), so a finder that
-  forgot rule 1 still cannot be bent into dropping its condition. `Tests/Common/FindersTakeTextOnlyTest` pins the finders and
+  `$gt` with operands they can use (a plain list, an empty array, an unknown key, an empty `$in`, a list where a plain value belongs; see the
+  `db()` list) matches nothing, so `code[]=x`, `code[$lt]=` and `code[$not]=0` can no longer drop a lookup's condition. A request
+  that sends a well-formed operator map (`code[$lt]=g`) still reaches a lookup that forgot rule 1 and is compared as such (a range or an exclusion on
+  the field): rule 1, the finder's own text check, is what protects a lookup. `Tests/Common/FindersTakeTextOnlyTest` pins the finders and
   `Tests/Characterisation/ArrayInputTest` the login, registration, password request and reset pages with each text field in each shape (a page that
   fails on a value it cannot read answers a server error, which refuses the request too; the test lists them). Never pass a request's value as a
   search array's value without it being text. `Idno\Entities\Invitation` is a credential, not content: its access is `INVITATION` (no access group
   matches), `canRead()` and `canEdit()` are true for administrators only (so `/view/<id>` is a missing page for everyone else), `jsonSerialize()`
-  is empty, and the registration page looks it up through `Invitation::unrestricted()`. `Invitation::validate()` (and `getByEmailAndCode()`)
+  is empty, and its finders run through `Invitation::unrestricted()` (the registration page, which a visitor uses, reaches them through `validate()`), and an invitation stored by an earlier Idno with the access of any post becomes an administrators' one the first time `allForEmail()` or `Invitation::all()` reads it (a finder called directly may return it until then). An invitation has no title, description or address, and is never federated; the administrators' `remove_invitation` removes an `Invitation` only. `Invitation::validate()` (and `getByEmailAndCode()`)
   require a string email and code, read every invitation for the address and compare each code with `hash_equals()`; the code is never a condition of
   the lookup. Pinned by `Tests/Characterisation/InvitationAccessTest`.
 - Logging in (`Idno\Pages\Session\Login`). ONE failure message for an unknown login name and a wrong password: "Oops! That

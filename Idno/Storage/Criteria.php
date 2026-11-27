@@ -49,13 +49,14 @@ final class Criteria
     /**
      * Parses the search arrays legacy code passes to getObjects()/getRecords().
      *
-     * Per field, the legacy code looks at each of these operators in turn, in this fixed
-     * order: $not (a NotIn when its value holds a non-empty $in, otherwise a NotEquals),
-     * $in, $lt, $gt. An operator whose operand is empty (0, '0', '', [], null, false) is
-     * dropped. A field whose value is not an array is an Equals (even a false or empty one).
-     * A field whose value is an array must be a map of those four operators and nothing else:
-     * a plain list, an empty array and an unknown operator (alone or beside known ones) are
-     * rejected with an InvalidArgumentException, so the query matches nothing. After the operators, a key '$or' whose value is an array becomes an AnyOf of
+     * A field whose value is not an array is an Equals (even a false or empty one). A field whose
+     * value is an array must be a map of the operators $not, $in, $lt and $gt and nothing else, each
+     * with an operand it can use (see operators()): a plain list, an empty array, an unknown
+     * operator (alone or beside known ones), an empty $in and an array where a plain value belongs
+     * are rejected with an InvalidArgumentException, so the query matches nothing. The operators
+     * are read in this order: $not (a NotIn when its value is a map holding $in, nothing for an empty
+     * one, otherwise a NotEquals), $in, $lt, $gt; an empty plain operand (0, '', '0') is compared
+     * like any other. After the operators, a key '$or' whose value is an array becomes an AnyOf of
      * what its entries produce (recursively, with the same rules: a nested '$or' key is a
      * nested AnyOf), and a key '$search' whose value is an array becomes a Search of its
      * element [0] (nothing when that is empty). A '$or' given as a LIST of conditions (the
@@ -127,25 +128,7 @@ final class Criteria
                 continue;
             }
             if ($key !== '$or' && $key !== '$search') {
-                self::assertOperatorMap($value, $field);
-            }
-
-            if (!empty($value['$not'])) {
-                $not = $value['$not'];
-                if (is_array($not) && !empty($not['$in'])) {
-                    $out[] = new NotIn($field, self::values($not['$in'], $field));
-                } else {
-                    $out[] = new NotEquals($field, self::scalar($not, $field));
-                }
-            }
-            if (!empty($value['$in'])) {
-                $out[] = new In($field, self::values($value['$in'], $field));
-            }
-            if (!empty($value['$lt'])) {
-                $out[] = new LessThan($field, self::scalar($value['$lt'], $field));
-            }
-            if (!empty($value['$gt'])) {
-                $out[] = new GreaterThan($field, self::scalar($value['$gt'], $field));
+                array_push($out, ...self::operators($value, $field));
             }
             if ($key === '$or') {
                 $out[] = new AnyOf(self::parse($value, true));
@@ -163,24 +146,64 @@ final class Criteria
     }
 
     /**
-     * A field value that is an array must be a map made only of operators the parser knows: a plain list, an
-     * empty array, or a key it does not know (alone or beside known ones) is a query that cannot be
-     * answered, so that a value a request supplied can never drop or bend the condition it was meant for.
+     * The conditions of a field whose value is an array. It must be a map made only of the operators the parser
+     * knows, each with an operand it can use: `$in` an array of plain values (an empty one matches nothing, so the
+     * query is refused), `$not` a plain value or a map holding only `$in` (an empty `$in` excludes nothing, so it
+     * adds no condition), `$lt` and `$gt` a plain value (an empty one, `0` or `''`, is compared like any other).
+     * A plain list, an empty array, a key that is no operator (alone or beside ones that are) and an array where a
+     * plain value belongs is a query that cannot be answered, so that a value a request supplied can never drop or
+     * bend the condition it was meant for.
      *
      * @param array<int|string, mixed> $value
      *
+     * @return list<Criterion>
+     *
      * @throws \InvalidArgumentException
      */
-    private static function assertOperatorMap(array $value, string $field): void
+    private static function operators(array $value, string $field): array
     {
         if ($value === []) {
             throw new \InvalidArgumentException(sprintf('The value for "%s" is an empty array: use an operator map or a scalar.', $field));
         }
-        foreach (array_keys($value) as $operator) {
+        foreach ($value as $operator => $operand) {
             if (!in_array($operator, self::OPERATORS, true)) {
                 throw new \InvalidArgumentException(sprintf('The value for "%s" is an array that is not made only of the operators $not, $in, $lt and $gt.', $field));
             }
+            $usable = match ($operator) {
+                '$in' => self::isListOfPlainValues($operand) && $operand !== [],
+                '$not' => is_scalar($operand) || (is_array($operand) && array_keys($operand) === ['$in'] && self::isListOfPlainValues($operand['$in'])),
+                default => is_scalar($operand),
+            };
+            if (!$usable) {
+                throw new \InvalidArgumentException(sprintf('The "%s" operator of "%s" has an operand it cannot use.', $operator, $field));
+            }
         }
+
+        $out = [];
+        if (array_key_exists('$not', $value)) {
+            $not = $value['$not'];
+            if (!is_array($not)) {
+                $out[] = new NotEquals($field, $not);
+            } elseif ($not['$in'] !== []) {
+                $out[] = new NotIn($field, array_values($not['$in']));
+            }
+        }
+        if (array_key_exists('$in', $value)) {
+            $out[] = new In($field, array_values($value['$in']));
+        }
+        if (array_key_exists('$lt', $value)) {
+            $out[] = new LessThan($field, $value['$lt']);
+        }
+        if (array_key_exists('$gt', $value)) {
+            $out[] = new GreaterThan($field, $value['$gt']);
+        }
+
+        return $out;
+    }
+
+    private static function isListOfPlainValues(mixed $operand): bool
+    {
+        return is_array($operand) && count(array_filter($operand, 'is_scalar')) === count($operand);
     }
 
     private static function scalar(mixed $value, string $field): string|int|float|bool|null
@@ -193,29 +216,12 @@ final class Criteria
     }
 
     /**
-     * @return list<string|int|float|bool|null>
-     */
-    private static function values(mixed $values, string $field): array
-    {
-        if (!is_array($values)) {
-            throw new \InvalidArgumentException(sprintf('The $in operand for "%s" must be an array.', $field));
-        }
-        $out = [];
-        foreach ($values as $value) {
-            $out[] = self::scalar($value, $field);
-        }
-
-        return $out;
-    }
-
-    /**
-     * Legacy code drops an operator with an empty operand and a search with an empty term,
-     * so a node holding one has no faithful legacy form.
+     * An empty list has no legacy form ($in refuses it, $not takes it as no condition), and nor has a search
+     * with an empty term (legacy code ignores it).
      */
     private static function assertWritable(Criterion $child): void
     {
         $empty = match (true) {
-            $child instanceof NotEquals, $child instanceof LessThan, $child instanceof GreaterThan => empty($child->value),
             $child instanceof In, $child instanceof NotIn => empty($child->values),
             $child instanceof Search => empty($child->query),
             default => false,

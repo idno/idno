@@ -7,13 +7,13 @@ namespace Tests\Common;
 use Idno\Entities\User;
 
 /**
- * Deleting an account looks up what it owns with a condition on `owner` and nothing else. That lookup must be a
- * query the storage layer can read: a query it cannot read matches nothing, so the account's objects would be
- * left behind without a word.
+ * Catches the query in User::delete() that looked up an account's objects with a misplaced parenthesis (`[... , [], 100]` inside the
+ * search array): the storage layer refuses a query it cannot read, so the lookup matched nothing and logged a warning every time an
+ * account was deleted. (Which objects the lookup finds is a separate matter: it is the exact type Entity.)
  */
-final class UserDeleteRemovesOwnedPostsTest extends \Tests\IdnoTestCase
+final class UserDeleteOwnedObjectsQueryTest extends \Tests\IdnoTestCase
 {
-    public function testTheLookupOfAnAccountsObjectsIsAQueryThatCanBeRead(): void
+    public function testDeletingAnAccountDoesNotRunAnUnreadableSearch(): void
     {
         $member = new User();
         $member->handle = 'delete-owned-lookup';

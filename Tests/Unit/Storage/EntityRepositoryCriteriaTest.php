@@ -133,11 +133,10 @@ final class EntityRepositoryCriteriaTest extends TestCase
         $this->assertSame(4, $this->countFor(self::member(), new EntityQuery(readGroups: ['PUBLIC'])));
     }
 
-    public function testAnEmptyReadGroupListAddsNoCondition(): void
+    public function testAViewerWithNoReadGroupReadsNothing(): void
     {
-        // As legacy: an `$in` with no values is dropped from the query.
-        $this->assertSame(7, $this->countFor(new FixedAccessContext(null, false, []), new EntityQuery()));
-        $this->assertSame([], $this->lastCriteria());
+        // An empty list of read groups used to be dropped from the query, so such a viewer read every record
+        $this->assertSame(0, $this->countFor(new FixedAccessContext(null, false, []), new EntityQuery()));
     }
 
     public function testTypeInclusion(): void
@@ -206,15 +205,13 @@ final class EntityRepositoryCriteriaTest extends TestCase
     public static function emptyConditions(): array
     {
         return [
-            'an empty $in' => [['$in' => []]],
-            'a dropped operand ($lt 0)' => [['$lt' => 0]],
+            'a $not that excludes an empty list' => [['$not' => ['$in' => []]]],
         ];
     }
 
     /**
-     * A caller condition on `access` that parses to nothing does not remove the read groups, a
-     * deliberate difference from legacy (array_merge() would leave no access condition at all, and
-     * count 7 here).
+     * A caller's `access` that excludes nothing (`$not` of an empty list) is no condition, so it cannot remove
+     * the read groups (array_merge() would leave no access condition at all, and count 7 here).
      *
      * @dataProvider emptyConditions
      *

@@ -11,7 +11,8 @@ use Idno\Entities\User;
 use IdnoPlugins\Status\Status;
 
 /**
- * A request can send an array where text is expected (`email[]=x`, `email[$gt]=a`, a JSON object). A finder that
+ * Catches a lookup (a finder called with `email[]=x` or `code[$lt]=`) that took an array for its value and so matched the newest record, or any record,
+ * instead of nothing. A request can send an array where text is expected (`email[]=x`, `email[$gt]=a`, a JSON object). A finder that
  * is handed one finds nothing: it never lets the value drop or bend the condition of its lookup, which would
  * otherwise answer with the newest record the viewer may read.
  */
@@ -61,6 +62,10 @@ final class FindersTakeTextOnlyTest extends \Tests\IdnoTestCase
             'a map with $gt' => [['$gt' => 'a']],
             'a range' => [['$gt' => 'a', '$lt' => 'zzzzzzzz']],
             'a map with $not' => [['$not' => 'zzz']],
+            'an empty $lt (dropped before)' => [['$lt' => '']],
+            'an empty $in (dropped before)' => [['$in' => '']],
+            'a $not of 0 (dropped before)' => [['$not' => 0]],
+            'a $gt of 0 (dropped before)' => [['$gt' => 0]],
             'an object' => [new \stdClass()],
             'a number' => [12],
             'null' => [null],
@@ -98,6 +103,8 @@ final class FindersTakeTextOnlyTest extends \Tests\IdnoTestCase
         $this->assertFalse(Entity::getByShortURL($value));
         $this->assertFalse(Entity::getBySlug($value));
         $this->assertFalse(Entity::getByX($value));
+        $this->assertFalse(Entity::getByURL($value));
+        $this->assertFalse(\Idno\Entities\File::getByID($value));
     }
 
     /**

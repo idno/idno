@@ -319,6 +319,9 @@ namespace Idno\Entities {
          */
         static function getByID($id)
         {
+            if (!is_string($id) || $id === '') {
+                return false;
+            }
             if ($fs = \Idno\Core\Idno::site()->filesystem()) {
                 try {
                     return $fs->findOne(array('_id' => \Idno\Core\Idno::site()->db()->processID($id)));

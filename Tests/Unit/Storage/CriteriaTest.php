@@ -93,12 +93,10 @@ final class CriteriaTest extends TestCase
         $this->assertEquals([new NotIn('complete', [true])], $this->parse(['complete' => ['$not' => ['$in' => [true]]]]));
     }
 
-    public function testNotWithAnEmptyInIsRejectedAsLegacyBindsAnArray(): void
+    public function testNotOfAnEmptyListExcludesNothingSoItAddsNoCondition(): void
     {
-        // The "$in" is empty, so the legacy code falls to the "!=" branch and binds the whole
-        // array as a parameter: a PHP warning there, an InvalidArgumentException here.
-        $this->expectException(\InvalidArgumentException::class);
-        $this->parse(['n' => ['$not' => ['$in' => []]]]);
+        // Nothing is in an empty list: no restriction (an exclusion that cannot drop a record)
+        $this->assertSame([], $this->parse(['n' => ['$not' => ['$in' => []]]]));
     }
 
     public function testNotWithAnArrayOperandIsRejected(): void
@@ -155,38 +153,73 @@ final class CriteriaTest extends TestCase
     }
 
     /**
-     * @return array<string, array{array<int|string, mixed>}>
+     * @return array<string, array{array<int|string, mixed>, Criterion}>
      */
-    public static function emptyOperands(): array
+    public static function emptyPlainOperands(): array
     {
         $cases = [];
-        foreach ([0, '0', '', [], null, false] as $empty) {
+        foreach ([0, '0', '', false] as $empty) {
             $name = json_encode($empty);
-            foreach (['$not', '$in', '$lt', '$gt'] as $operator) {
-                $cases["$operator $name"] = [['n' => [$operator => $empty]]];
-            }
+            $cases['$not ' . $name] = [['n' => ['$not' => $empty]], new NotEquals('n', $empty)];
+            $cases['$lt ' . $name] = [['n' => ['$lt' => $empty]], new LessThan('n', $empty)];
+            $cases['$gt ' . $name] = [['n' => ['$gt' => $empty]], new GreaterThan('n', $empty)];
         }
 
         return $cases;
     }
 
     /**
-     * @dataProvider emptyOperands
+     * A request's `code[$lt]=` or `code[$gt]=0` must not parse to no condition (that dropped the lookup's condition):
+     * an empty plain operand is compared like any other.
+     *
+     * @dataProvider emptyPlainOperands
      *
      * @param array<int|string, mixed> $search
      */
-    public function testEmptyOperandIsDropped(array $search): void
+    public function testAnEmptyPlainOperandIsAConditionNotADroppedOne(array $search, Criterion $expected): void
     {
-        $this->assertSame([], $this->parse($search));
+        $this->assertEquals([$expected], $this->parse($search));
     }
 
-    public function testEmptyOperandIsDroppedButItsNeighboursAreKept(): void
+    /**
+     * @return array<string, array{array<int|string, mixed>}>
+     */
+    public static function operandsThatCannotBeUsed(): array
+    {
+        $cases = [];
+        foreach (['$in', '$lt', '$gt', '$not'] as $operator) {
+            $cases[$operator . ' []'] = [['n' => [$operator => []]]];
+            $cases[$operator . ' null'] = [['n' => [$operator => null]]];
+        }
+        $cases['$in ""'] = [['n' => ['$in' => '']]];
+        $cases['$in 0'] = [['n' => ['$in' => 0]]];
+        $cases['$in false'] = [['n' => ['$in' => false]]];
+        $cases['$in with null'] = [['n' => ['$in' => ['a', null]]]];
+        $cases['$in with a list'] = [['n' => ['$in' => [['a']]]]];
+        $cases['$not with another key'] = [['n' => ['$not' => ['$in' => ['a'], '$lt' => 'b']]]];
+
+        return $cases;
+    }
+
+    /**
+     * `code[$in]=`, `code[$lt][]=x` and the like must make the query match nothing rather than drop the condition.
+     *
+     * @dataProvider operandsThatCannotBeUsed
+     *
+     * @param array<int|string, mixed> $search
+     */
+    public function testAnOperandThatCannotBeUsedIsRejected(array $search): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->parse($search);
+    }
+
+    public function testAKnownOperatorBesideAnEmptyPlainOneKeepsBoth(): void
     {
         $this->assertEquals(
-            [new GreaterThan('n', 3)],
-            $this->parse(['n' => ['$lt' => 0, '$in' => [], '$not' => '', '$gt' => 3]])
+            [new NotEquals('n', ''), new LessThan('n', 0), new GreaterThan('n', 3)],
+            $this->parse(['n' => ['$lt' => 0, '$not' => '', '$gt' => 3]])
         );
-        $this->assertEquals([new NotEquals('n', '5')], $this->parse(['n' => ['$not' => '5']]));
     }
 
     /**
@@ -227,12 +260,6 @@ final class CriteriaTest extends TestCase
             $this->assertStringContainsString('"code"', $e->getMessage());
             $this->assertStringNotContainsString('secret-operand', $e->getMessage());
         }
-    }
-
-    public function testARecognisedOperatorWithAnEmptyOperandIsStillDropped(): void
-    {
-        $this->assertSame([], $this->parse(['n' => ['$in' => []]]));
-        $this->assertSame([], $this->parse(['n' => ['$lt' => 0, '$not' => '']]));
     }
 
     public function testAssociativeOrParsesToAnyOfOfItsEntries(): void
@@ -379,7 +406,7 @@ final class CriteriaTest extends TestCase
             'lt gt' => [['n' => ['$gt' => 1, '$lt' => 9]]],
             'all four' => [['n' => ['$gt' => 1, '$lt' => 9, '$in' => [1], '$not' => 5]]],
             'not and not in cannot co-occur but in+not can' => [['n' => ['$in' => [1], '$not' => 5]]],
-            'dropped operands' => [['n' => ['$lt' => 0, '$in' => [], '$not' => '']]],
+            'empty plain operands' => [['n' => ['$lt' => 0, '$not' => '', '$gt' => '0']]],
             'or' => [['$or' => ['slug' => 'a', 'owner' => 'x']]],
             'or with operators' => [['$or' => ['owner' => ['$in' => ['a', 'b']], 'n' => ['$gt' => 1, '$lt' => 9]]]],
             'or list' => [['$or' => [['slug' => 'a'], ['slug' => 'b']]]],
@@ -516,12 +543,6 @@ final class CriteriaTest extends TestCase
     public static function nodesLegacyCodeWouldIgnore(): array
     {
         return [
-            'LessThan 0' => [new LessThan('n', 0)],
-            'LessThan empty string' => [new LessThan('n', '')],
-            'GreaterThan "0"' => [new GreaterThan('n', '0')],
-            'GreaterThan null' => [new GreaterThan('n', null)],
-            'NotEquals false' => [new NotEquals('n', false)],
-            'NotEquals ""' => [new NotEquals('n', '')],
             'In []' => [new In('n', [])],
             'NotIn []' => [new NotIn('n', [])],
             'Search ""' => [new Search('')],

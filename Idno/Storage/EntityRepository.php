@@ -6,6 +6,7 @@ namespace Idno\Storage;
 
 use Idno\Common\Entity;
 use Idno\Storage\Criterion\AllOf;
+use Idno\Storage\Criterion\AnyOf;
 use Idno\Storage\Criterion\Criterion;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
@@ -20,15 +21,15 @@ use Psr\Log\NullLogger;
  *    several are an `$in`, and exclusions a `$not` (one) or `$not $in` (several). Class names match
  *    the stored name exactly: no leading backslash, no subclasses.
  *  - access: unless the user is an admin, `access` must be one of the query's read groups, or, when
- *    it names none, the user's (AccessContext::readAccessGroupIds()). An empty list adds no condition.
+ *    it names none, the user's (AccessContext::readAccessGroupIds()). A user with no read group at all reads nothing.
  *  - the caller's criteria are merged over those: a top-level condition on `entity_subtype` or
  *    `access` REPLACES the repository's (as legacy array_merge() does), so a caller can widen access.
  *    Only code that has already decided what the user may read may pass an `access` condition.
- *    DELIBERATE DIFFERENCE from legacy: a caller's `access` or `entity_subtype` value
- *    that parses to no condition (`['$in' => []]`, an operator with an empty operand such as
- *    `['$lt' => 0]`) is no condition, so the viewer's read groups (or the requested types) stay in
- *    force. Legacy array_merge() replaces them with nothing, so getObjects()/countObjects() then do
- *    not filter on that field at all (for `access`: an access-filter bypass).
+ *    A caller's `access` or `entity_subtype` value follows Criteria's rule like any other: an empty `$in`
+ *    is a query that cannot be answered (it matches nothing), `$lt`, `$gt` and `$not` with a plain operand
+ *    (`0` and `''` too) are conditions that replace the repository's, and a `$not` holding an empty
+ *    `$in` excludes nothing, so it adds no condition and the viewer's read groups (or the requested
+ *    types) stay in force.
  * find() only:
  *  - with access ignored (AccessContext::ignoreAccess()) there is no access condition and nothing is
  *    hidden by publish status;
@@ -175,11 +176,17 @@ final class EntityRepository
     private function criteria(EntityQuery $query, array $readGroups, bool $applyAccess): Criteria
     {
         $parameters = self::typeParameters($query->types);
+        $nobody = false;
         if ($applyAccess && !$this->access->isAdmin()) {
             if (empty($readGroups)) {
                 $readGroups = $this->access->readAccessGroupIds();
             }
-            $parameters['access'] = ['$in' => $readGroups];
+            if ($readGroups !== []) {
+                $parameters['access'] = ['$in' => $readGroups];
+            } else {
+                // A viewer with no read group may read nothing: an empty `$in` is a query that matches nothing
+                $nobody = true;
+            }
         }
         $base = Criteria::fromLegacyArray($parameters)->root()->children;
 
@@ -193,7 +200,10 @@ final class EntityRepository
         }
         $kept = array_values(array_filter($base, static fn (Criterion $criterion): bool => !isset($replaced[self::fieldOf($criterion) ?? ''])));
 
-        return new Criteria(new AllOf([...$kept, ...$callers]));
+        // The access condition a caller replaced is the caller's to have decided; otherwise nobody matches nothing
+        $none = $nobody && !isset($replaced['access']) ? [new AnyOf([])] : [];
+
+        return new Criteria(new AllOf([...$kept, ...$none, ...$callers]));
     }
 
     private static function fieldOf(Criterion $criterion): ?string
