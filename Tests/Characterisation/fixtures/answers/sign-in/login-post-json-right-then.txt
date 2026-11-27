@@ -1,0 +1,25 @@
+status 200
+access-control-allow-credentials: true
+access-control-allow-headers: Authorization, Content-Type
+access-control-allow-origin: *
+cache-control: no-store, no-cache, must-revalidate
+content-length: <the length of the body>
+content-type: application/json
+expires: <past>
+link: <{site}/indieauth/auth>; rel="authorization_endpoint"
+link: <{site}/indieauth/token>; rel="token_endpoint"
+link: <{site}/micropub/endpoint>; rel="micropub"
+link: <{site}/webmention/>; rel="http://webmention.org/"
+link: <{site}/webmention/>; rel="webmention"
+link: <https://hub.example/>; rel="hub"
+link: <{site}/session/login/?fwd=<{site}/>&_t=json>; rel="self"
+pragma: no-cache
+vary: Accept
+x-clacks-overhead: GNU Terry Pratchett
+x-powered-by: https://idno.co
+
+{
+    "fwd": "{site}\/",
+    "title": "Sign in",
+    "messages": []
+}
