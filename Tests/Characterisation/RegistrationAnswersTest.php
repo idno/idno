@@ -167,6 +167,7 @@ final class RegistrationAnswersTest extends SignInSiteCase
             foreach (\Idno\Entities\User::get([], [], 100) ?: [] as $user) {
                 if (!in_array($user->handle, ['ada', 'bob', 'carol'], true)) {
                     $user->delete();
+                    \Idno\Core\AccountRegistry::releaseHandle((string) $user->handle); // (a deleted account's handle is kept back)
                 }
             }
             foreach (\Idno\Entities\Invitation::get([], [], 100) ?: [] as $invitation) {

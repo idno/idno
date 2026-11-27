@@ -13,6 +13,20 @@
         {{ idno_include('forms/usersearch') }}
     </div>
 
+    <div class="idno-admin-card" id="reserved-handles">
+        <h2 class="idno-admin-card-title">{{ t('Usernames kept back') }}</h2>
+        <p class="idno-admin-description">{{ t('These belonged to accounts that were deleted. Nobody can register them, so that nobody is taken for the member who had them. Release one to let someone register it.') }}</p>
+        {% for reserved in reserved_handles|default([]) %}
+            <div class="idno-admin-list-item">
+                <div>{{ reserved.handle }} <small>{{ t('deleted') }} {{ reserved.at|date('M j, Y') }}</small></div>
+                <div>{{ action_link(site_url() ~ 'admin/users', t('Release'), {handle: reserved.handle, action: 'release_handle'}, {class: 'idno-btn idno-btn-small', confirm: true, 'confirm-text': t('Are you sure? Anyone will be able to register this username, and will not be told apart from the member who had it in the likes and replies that member left on other posts.')}) }}</div>
+            </div>
+        {% else %}
+            <p>{{ t('No usernames are kept back.') }}</p>
+        {% endfor %}
+        {% if reserved_handles_more|default(0) > 0 %}<p><small>{{ t('And more are kept back than are listed here.') }}</small></p>{% endif %}
+    </div>
+
     {% if can_add_users() %}
     <div class="idno-admin-card" id="invite">
         <h2 class="idno-admin-card-title">{{ t('Invite people') }}</h2>

@@ -10,6 +10,49 @@ namespace Idno\Core {
     {
 
         /**
+         * Runs $work after the answer the page is about to give, wherever the page ends (a legacy page forwards and exits, a controller page returns a Response):
+         * for a controller page when the kernel terminates; for a legacy page in a shutdown function, which closes the connection first (the output the page made is sent with
+         * its length, so the client lets go) and lifts the time limit. Unlike run() it does not answer or end the request itself, so code deep in a page can ask for it.
+         * From the command line there is no answer to wait for and $work runs at once.
+         *
+         * @param callable $work
+         */
+        static function later(callable $work): void
+        {
+            $page = \Idno\Core\Idno::site()->currentPage();
+            if ($page instanceof \Idno\Legacy\ControllerPage) {
+                $page->context()->afterResponse(\Closure::fromCallable($work));
+
+                return;
+            }
+            if (PHP_SAPI === 'cli') {
+                $work();
+
+                return;
+            }
+            register_shutdown_function(static function () use ($work): void {
+                ignore_user_abort(true);
+                if (!headers_sent() && ($length = ob_get_length()) !== false) {
+                    header('Connection: close');
+                    header('Content-Length: ' . (string) $length);
+                }
+                while (ob_get_level() > 0) {
+                    @ob_end_flush();
+                }
+                @flush();
+                if (function_exists('fastcgi_finish_request')) {
+                    fastcgi_finish_request();
+                }
+                set_time_limit(0);
+                try {
+                    $work();
+                } catch (\Throwable $e) {
+                    \Idno\Core\Idno::site()->logging()->error('Work after the response failed: ' . get_class($e));
+                }
+            });
+        }
+
+        /**
          * Answers the page's request with a redirect to $location at once, closes the connection, runs $work
          * with no time limit, and ends the process (so the page's own forwarding does not run again).
          *

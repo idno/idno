@@ -1567,6 +1567,16 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
             {
                 return false;
             }
+
+            public function closedOwners(): array
+            {
+                return [];
+            }
+
+            public function siteContentClasses(): array
+            {
+                return [];
+            }
         };
         $connection = PrivateDatabase::sqliteMemory();
         $logger = new RecordingLogger();

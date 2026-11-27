@@ -35,4 +35,18 @@ interface AccessContext
      * Whether access control is switched off (the legacy setIgnoreAccess(true)).
      */
     public function ignoreAccess(): bool;
+
+    /**
+     * The uuids of the accounts that are being deleted: what they own is in no listing and no count, for anyone but an administrator.
+     *
+     * @return list<string>
+     */
+    public function closedOwners(): array;
+
+    /**
+     * The entity classes that are the site's own content, whoever owns them (a static page): what a closed account owns of them is still listed.
+     *
+     * @return list<string>
+     */
+    public function siteContentClasses(): array;
 }

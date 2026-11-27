@@ -20,6 +20,8 @@ final class FixedAccessContext implements AccessContext
         private readonly bool $isAdmin = false,
         private readonly array $readAccessGroupIds = ['PUBLIC'],
         private readonly bool $ignoreAccess = false,
+        private readonly array $closedOwners = [],
+        private readonly array $siteContentClasses = [],
     )
     {
     }
@@ -42,5 +44,15 @@ final class FixedAccessContext implements AccessContext
     public function ignoreAccess(): bool
     {
         return $this->ignoreAccess;
+    }
+
+    public function closedOwners(): array
+    {
+        return $this->closedOwners;
+    }
+
+    public function siteContentClasses(): array
+    {
+        return $this->siteContentClasses;
     }
 }

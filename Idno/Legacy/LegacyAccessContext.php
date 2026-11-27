@@ -51,6 +51,16 @@ final class LegacyAccessContext implements AccessContext
         return $db !== null && (bool) $db->getIgnoreAccess();
     }
 
+    public function closedOwners(): array
+    {
+        return \Idno\Core\AccountRegistry::closed();
+    }
+
+    public function siteContentClasses(): array
+    {
+        return \Idno\Core\AccountContent::classes();
+    }
+
     private function site(): Idno
     {
         $site = Idno::site();

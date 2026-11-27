@@ -8,6 +8,8 @@ use Idno\Common\Entity;
 use Idno\Storage\Criterion\AllOf;
 use Idno\Storage\Criterion\AnyOf;
 use Idno\Storage\Criterion\Criterion;
+use Idno\Storage\Criterion\In;
+use Idno\Storage\Criterion\NotIn;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 
@@ -30,6 +32,9 @@ use Psr\Log\NullLogger;
  *    (`0` and `''` too) are conditions that replace the repository's, and a `$not` holding an empty
  *    `$in` excludes nothing, so it adds no condition and the viewer's read groups (or the requested
  *    types) stay in force.
+ *  - the records an account that is being deleted owns (AccessContext::closedOwners()) are left out for everyone but an administrator, whatever the
+ *    caller's criteria say (a condition of the caller's on `owner` cannot lift it), except the classes the site keeps whoever made them
+ *    (AccessContext::siteContentClasses(): a static page an administrator wrote); count() leaves them out too, so a total agrees with its listing.
  * find() only:
  *  - with access ignored (AccessContext::ignoreAccess()) there is no access condition and nothing is
  *    hidden by publish status;
@@ -203,7 +208,16 @@ final class EntityRepository
         // The access condition a caller replaced is the caller's to have decided; otherwise nobody matches nothing
         $none = $nobody && !isset($replaced['access']) ? [new AnyOf([])] : [];
 
-        return new Criteria(new AllOf([...$kept, ...$none, ...$callers]));
+        // What an account that is being deleted owns is in no listing, whatever the caller asked for (so it is added after the caller's conditions, which cannot replace it)
+        $closed = [];
+        if ($applyAccess && !$this->access->isAdmin() && ($owners = $this->access->closedOwners()) !== []) {
+            // (except what the site keeps whoever made it: a static page an administrator wrote stays in every listing)
+            $exclusion = new NotIn('owner', array_values($owners));
+            $siteClasses = $this->access->siteContentClasses();
+            $closed = [$siteClasses === [] ? $exclusion : new AnyOf([$exclusion, new In('entity_subtype', array_values($siteClasses))])];
+        }
+
+        return new Criteria(new AllOf([...$kept, ...$none, ...$callers, ...$closed]));
     }
 
     private static function fieldOf(Criterion $criterion): ?string

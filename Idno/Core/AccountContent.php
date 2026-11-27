@@ -21,7 +21,7 @@ namespace Idno\Core;
  */
 final class AccountContent
 {
-    /** @var array<string, true> lower-case class names, without a leading backslash */
+    /** @var array<string, string> the class names registered, by lower-case name without a leading backslash */
     private static array $kept = [];
 
     private static int $removing = 0;
@@ -45,7 +45,17 @@ final class AccountContent
      */
     public static function keep(string $class): void
     {
-        self::$kept[self::normalise($class)] = true;
+        self::$kept[self::normalise($class)] = ltrim($class, '\\');
+    }
+
+    /**
+     * The class names that are kept (the core's and the registered ones), as written.
+     *
+     * @return list<string>
+     */
+    public static function classes(): array
+    {
+        return array_values(array_unique([...array_map(static fn (string $class): string => ltrim($class, '\\'), self::CORE), ...array_values(self::$kept)]));
     }
 
     /**

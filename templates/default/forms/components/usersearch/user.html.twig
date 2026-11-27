@@ -27,6 +27,14 @@
                 {% if closed %}<strong>{{ t('Being deleted') }}</strong>{% elseif user.getEntityTypeName() == 'RemoteUser' %}<span>{{ t('Remote member') }}</span>{% elseif user.isAdmin() %}<strong>{{ t('Administrator') }}</strong>{% else %}<span>{{ t('Member') }}</span>{% endif %}
             </div>
         </div>
+        {% if closed %}{% set removal = entity_value(user, 'account_removal') %}{% if removal %}
+        <div class="idno-account-remaining">
+            <p>{{ t('Not everything could be deleted. What remains:') }}
+            {% for class, count in removal.classes|default({}) %}<span>{{ class }} ({{ count }})</span>{% if not loop.last %}, {% endif %}{% endfor %}
+            {% if removal.reason|default('') == 'unreadable' %}{{ t('The database could not be read.') }}{% endif %}</p>
+            <p>{{ t('A plugin\'s listener may have refused to delete them: disable that plugin and press Continue deleting, or delete the records by hand.') }}</p>
+        </div>
+        {% endif %}{% endif %}
         <div class="idno-user-actions">
             {% if not is_self and closed %}
                 {{ action_link(site_url('admin/users'), t('Continue deleting'), {'user': user.getUUID(), 'action': 'delete'}, {'class': 'idno-user-action-link idno-user-action-danger', 'confirm': true, 'confirm-text': t('Are you sure? This will go on deleting this user and all their content.')}) }}

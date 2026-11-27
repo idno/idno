@@ -40,9 +40,11 @@ namespace Idno\Pages\Admin {
             $count = User::countFromX(["Idno\\Entities\\User", "Idno\\Entities\\RemoteUser"]);
 
             $invitations = Invitation::all();
+            $reserved    = array_values(\Idno\Core\AccountRegistry::reservedHandles());
+            usort($reserved, static fn (array $a, array $b): int => $b['at'] <=> $a['at']);
 
             $t        = \Idno\Core\Idno::site()->template();
-            $t->body  = $t->__(array('items' => $users, 'invitations' => $invitations, 'mail_configured' => \Idno\Core\Email::isConfigured(), 'invitation_days' => Invitation::lifetimeDays(), 'invitation_batch' => Invitation::MAX_PER_BATCH, 'count' => $count, 'items_per_page' => $limit))->draw('admin/users');
+            $t->body  = $t->__(array('items' => $users, 'invitations' => $invitations, 'mail_configured' => \Idno\Core\Email::isConfigured(), 'invitation_days' => Invitation::lifetimeDays(), 'invitation_batch' => Invitation::MAX_PER_BATCH, 'count' => $count, 'items_per_page' => $limit, 'reserved_handles' => array_slice($reserved, 0, 100), 'reserved_handles_more' => max(0, count($reserved) - 100)))->draw('admin/users');
             $t->title = \Idno\Core\Idno::site()->language()->_('User Management');
             $t->drawPage();
 
@@ -78,6 +80,12 @@ namespace Idno\Pages\Admin {
                         if ($user->delete()) {
                             \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->esc_("%s was removed from your site.", [$user->getTitle()]));
                         }
+                    }
+                    break;
+                case 'release_handle':
+                    $handle = trim($this->getTextInput('handle'));
+                    if ($handle !== '' && \Idno\Core\AccountRegistry::releaseHandle($handle)) {
+                        \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->esc_("The username %s can be registered again.", [$handle]));
                     }
                     break;
                 case 'invite_users':
@@ -117,7 +125,7 @@ namespace Idno\Pages\Admin {
                         \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->_("Please enter a username and email address."));
                     } else if (!empty($email) && filter_var($email, FILTER_VALIDATE_EMAIL)) {
                         if (!($emailuser = \Idno\Entities\User::getByEmail($email))
-                        && !($handleuser = \Idno\Entities\User::getByHandle($handle))
+                        && !($handleuser = \Idno\Entities\User::getByHandle($handle) ?: \Idno\Core\AccountRegistry::handleIsReserved($handle))
                         && !empty($handle) && strlen($handle) <= 32
                         && !substr_count($handle, '/')
                         ) {

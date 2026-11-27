@@ -260,7 +260,7 @@ namespace Idno\Pages\Account {
             } else if (!empty($email) && filter_var($email, FILTER_VALIDATE_EMAIL)) {
                 if (!($blocked = $site->config()->emailIsBlocked($email))
                     && !($emailuser = \Idno\Entities\User::getByEmail($email))
-                    && !($handleuser = \Idno\Entities\User::getByHandle($handle))
+                    && !($handleuser = \Idno\Entities\User::getByHandle($handle) ?: \Idno\Core\AccountRegistry::handleIsReserved($handle))
                     && !empty($handle) && strlen($handle) <= 32
                     && preg_match('/^[a-zA-Z0-9_]{1,}$/', $handle)
                     && $password == $password2

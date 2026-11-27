@@ -96,7 +96,7 @@ class Delivery
      * Tell the servers of a local account's followers that the actor is gone: ONE Delete whose object is the actor, signed with the account's key and
      * sent to each follower's inbox (a shared inbox once for each server). The deliveries are SIGNED HERE and queued as they are to be sent (the inbox, the
      * body and the signed headers), so they need neither the account nor its key when a worker runs them: the account is deleted by then. Then the
-     * account's follower records are removed. Nothing is sent when the account has no key (it never federated) or no followers.
+     * account's follower records are removed (before anything is sent). With the synchronous queue the deliveries are made after the response. Nothing is sent when the account has no key (it never federated) or no followers.
      *
      * A signature is dated when it is made, and the servers that receive it accept a date within twelve hours: a queue that is not worked for longer than
      * that has these deliveries refused.
@@ -108,6 +108,7 @@ class Delivery
     {
         $queued  = 0;
         $inboxes = ActivityPubFollower::getUniqueInboxesForUser($user->getUUID());
+        $send    = [];
         if (!empty($inboxes) && !empty($user->privateKey)) {
             $actorId  = $user->getActivityPubActorID();
             $keyId    = $actorId . '#main-key';
@@ -117,15 +118,26 @@ class Delivery
                     continue;
                 }
                 $headers = HTTPSignature::sign((string) $user->privateKey, $keyId, $inbox, $body);
-                if (empty($headers)) {
-                    continue;
-                }
-                if (\Idno\Core\Idno::site()->queue()->enqueue('default', 'activitypub/deliver-signed', ['inbox' => $inbox, 'body' => $body, 'headers' => $headers], false) !== false) {
-                    $queued++;
+                if (!empty($headers)) {
+                    $send[] = ['inbox' => $inbox, 'body' => $body, 'headers' => $headers];
                 }
             }
         }
+        // The follower records go first: what is signed is all that is needed to deliver
         ActivityPubFollower::removeForUser($user->getUUID());
+        $enqueue = static function () use ($send, &$queued): void {
+            foreach ($send as $delivery) {
+                if (\Idno\Core\Idno::site()->queue()->enqueue('default', 'activitypub/deliver-signed', $delivery, false) !== false) {
+                    $queued++;
+                }
+            }
+        };
+        if (\Idno\Core\Idno::site()->queue()->isAsynchronous()) {
+            $enqueue();
+        } else {
+            // With no worker the deliveries are made at once: not inside the administrator's request, which has other things to do
+            \Idno\Core\AfterResponse::later($enqueue);
+        }
 
         return $queued;
     }

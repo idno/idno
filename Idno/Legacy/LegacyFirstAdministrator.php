@@ -24,7 +24,7 @@ final class LegacyFirstAdministrator implements FirstAdministrator
     {
         $problems = $details->problems();
         $site = self::site();
-        if (!isset($problems['handle']) && $this->ignoringAccess(static fn () => User::getByHandle(strtolower($details->handle)))) {
+        if (!isset($problems['handle']) && ($this->ignoringAccess(static fn () => User::getByHandle(strtolower($details->handle))) || \Idno\Core\AccountRegistry::handleIsReserved($details->handle))) {
             $problems['handle'] = 'That username is already taken on this site. Choose another.';
         }
         if (!isset($problems['email'])) {

@@ -117,6 +117,40 @@ final class QueueAdaptersTest extends TestCase
         }
     }
 
+    /**
+     * Catches the events a member had queued before the account was closed (a webmention, a Create) piling up in the failure transport: the work does not run
+     * (nothing is sent as the closed actor) and nothing is thrown, for an account that is closed and for one that was deleted; a user that was never there still throws.
+     */
+    public function testTheWorkOfAClosedOrDeletedAccountIsDroppedWithoutAnExceptionAndTheWorkDoesNotRun(): void
+    {
+        $user = new \Idno\Entities\User();
+        $user->handle = 'queued-closed-' . bin2hex(random_bytes(3));
+        $user->email = $user->handle . '@example.test';
+        $user->setTitle('Closed');
+        $user->setPassword('a-password-of-sufficient-length');
+        $user->save(true);
+        $uuid = $user->getUUID();
+        $ran = [];
+        try {
+            $user->close();
+            $this->assertNull($this->context()->runAs($uuid, static function () use (&$ran): string {
+                $ran[] = 'closed';
+
+                return 'ran';
+            }));
+            $user->delete();
+            $this->assertNull($this->context()->runAs($uuid, static function () use (&$ran): string {
+                $ran[] = 'deleted';
+
+                return 'ran';
+            }));
+        } finally {
+            \Idno\Core\AccountRegistry::releaseHandle($user->handle);
+            \Idno\Core\AccountRegistry::unmarkClosed($uuid);
+        }
+        $this->assertSame([], $ran);
+    }
+
     public function testAUserThatDoesNotExistThrowsAndTheWorkDoesNotRun(): void
     {
         $ran = false;

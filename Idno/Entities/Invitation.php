@@ -436,7 +436,7 @@ namespace Idno\Entities {
 
         /**
          * Does using it make an administrator? Only if it is stored as an administrator's and the member who sent it
-         * is still an administrator: an invitation is issued by an administrator, so one whose sender has since lost
+         * is still an administrator whose account is not being deleted: an invitation is issued by an administrator, so one whose sender has since lost
          * their rights (or their account) is a member's.
          */
         function makesAnAdministrator()
@@ -446,7 +446,8 @@ namespace Idno\Entities {
             }
             $inviter = User::getByUUID($this->invited_by);
 
-            return $inviter instanceof User && !empty($inviter->admin);
+            // (an administrator whose account is being deleted makes no administrators: it is closed)
+            return $inviter instanceof User && !empty($inviter->admin) && !$inviter->isClosed();
         }
 
         /**

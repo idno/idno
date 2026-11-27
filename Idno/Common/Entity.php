@@ -1984,7 +1984,8 @@ namespace Idno\Common {
             if ($this->isHiddenByPublishStatus($user_id)) return false;
 
             // What an account that is being deleted owns is for administrators alone (see User::isClosed())
-            if (!($this instanceof User) && !empty($this->owner) && User::uuidIsClosed($this->owner)) {
+            // (not what the site keeps, a static page an administrator wrote: AccountContent)
+            if (!($this instanceof User) && !empty($this->owner) && User::uuidIsClosed($this->owner) && !\Idno\Core\AccountContent::keeps(['entity_subtype' => static::class])) {
                 $viewer = $user_id ? User::getByUUID($user_id) : false;
                 if (!($viewer instanceof User && $viewer->isAdmin())) return false;
             }

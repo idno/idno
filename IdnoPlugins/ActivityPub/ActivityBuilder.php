@@ -348,7 +348,7 @@ class ActivityBuilder
 
         return [
             '@context'  => 'https://www.w3.org/ns/activitystreams',
-            'id'        => $actorId . '#delete',
+            'id'        => $actorId . '#delete-' . time() . '-' . bin2hex(random_bytes(4)),
             'type'      => 'Delete',
             'actor'     => $actorId,
             'to'        => [self::PUBLIC_AUDIENCE],

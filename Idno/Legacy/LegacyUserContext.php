@@ -30,6 +30,13 @@ final class LegacyUserContext implements UserContext
                 // earlier event cached them must not pass. A user the session will not log on (a blocked
                 // address) is no user either: the event must not run as nobody instead.
                 $user = User::getByUUID($uuid, false);
+                if (($user instanceof User && $user->isClosed()) || (!$user instanceof User && \Idno\Core\AccountRegistry::isDeletedAccount($uuid))) {
+                    // Queued as an account that has since been closed or deleted: nothing is done as it (nothing is announced for a closed actor), and the
+                    // event is dropped, not failed: one line says so
+                    \Idno\Core\Idno::site()->logging()->info('An event queued as an account that was closed or deleted was dropped.');
+
+                    return null;
+                }
                 if (!$user instanceof User || !$this->session->logUserOn($user)) {
                     throw new \RuntimeException('Invalid user (' . $uuid . ') given for runAsContext, aborting');
                 }
