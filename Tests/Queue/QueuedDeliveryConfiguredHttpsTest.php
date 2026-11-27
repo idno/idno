@@ -9,8 +9,10 @@ namespace Tests\Queue;
  * receives, the worker's included, is plain http (as when a proxy terminates TLS and talks http to
  * the origin without marking the request). See QueuedDeliverySchemeTest for what decides the scheme.
  * Pinned as it is, odd parts included: the object's `id` (an entity uuid) is built from the
- * configured url as it is, so is https; the permalink, the actor and the object's `url` are built in
- * the publishing request from the display url, which follows that request, so are http when it is plain.
+ * configured url as it is, so is https; the actor and the object's `url` are built in the publishing
+ * request from the display url, which follows that request, so are http when it is plain. The permalink
+ * is the address the publish form redirects to: the redirect rule makes an http address of the site's
+ * own host https when the configured url is, so it is https although the request is plain.
  * The keyId is built in the worker, which has no request: the site is https there exactly when its
  * configured url is (it used to follow the plain-http request the worker made to the site).
  */
@@ -27,7 +29,7 @@ final class QueuedDeliveryConfiguredHttpsTest extends AsyncSiteTestCase
         $https = 'https://' . substr($http, strlen('http://'));
         $post = $http . date('Y') . '/hello-queue';
         $this->assertSame([
-            'permalink' => $post,
+            'permalink' => $https . date('Y') . '/hello-queue',
             'actor' => $http . 'actor/alice',
             'objectId' => $https . 'view/<uuid>',
             'objectUrl' => $post,

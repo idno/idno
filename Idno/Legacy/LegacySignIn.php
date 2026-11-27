@@ -76,6 +76,11 @@ final class LegacySignIn implements SignIn
         return Idno::site()->config()->getDisplayURL();
     }
 
+    public function configuredUrl(): string
+    {
+        return (string) Idno::site()->config()->getURL();
+    }
+
     public function isSecure(): bool
     {
         return Page::isSSL();

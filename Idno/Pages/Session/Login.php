@@ -55,7 +55,7 @@ namespace Idno\Pages\Session {
          */
         public static function sanitizeRedirectUrl($url)
         {
-            return \Idno\Http\RedirectTarget::sanitize((string) $url, \Idno\Core\Idno::site()->config()->getDisplayURL());
+            return \Idno\Http\RedirectTarget::sanitize((string) $url, \Idno\Core\Idno::site()->config()->getDisplayURL(), \Idno\Core\Idno::site()->config()->getURL());
         }
 
     }

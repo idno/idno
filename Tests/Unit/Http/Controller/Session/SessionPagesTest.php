@@ -26,7 +26,7 @@ require_once dirname(__DIR__) . '/Discovery/DiscoveryDoubles.php';
  */
 final class SessionPagesTest extends TestCase
 {
-    private function pages(SignInDouble $site): SessionPages
+    private function pages(SignInDouble $site, ?\Closure $spend = null): SessionPages
     {
         $throttle = new LoginThrottle(new ArrayAdapter());
         $attempts = new LoginAttempts(static fn (): LoginThrottle => $throttle, static fn (): NullLogger => new NullLogger());
@@ -36,7 +36,7 @@ final class SessionPagesTest extends TestCase
             {
                 return $text;
             }
-        });
+        }, $spend);
     }
 
     private static function post(string $name): PageContext
@@ -68,26 +68,31 @@ final class SessionPagesTest extends TestCase
     }
 
     /**
-     * Catches: a login for a name nobody has skipping the work a wrong password costs, so that the time the page takes tells a visitor which names are
-     * members' (the one message for the two is no use if the time differs).
+     * Catches: a login for a name nobody has skipping the verification a wrong password costs, so that the time the page takes tells a visitor which names are
+     * members' (the one message for the two is no use if the time differs). A member with a wrong password spends none of its own here: the double's check
+     * stands for the real one.
      */
-    public function testALoginForANameNobodyHasCostsWhatAWrongPasswordCosts(): void
+    public function testALoginForANameNobodyHasSpendsAVerificationAndAMemberWithAWrongPasswordDoesNot(): void
     {
-        $costOf = static function (\Closure $work): float {
-            $start = hrtime(true);
-            $work();
-
-            return (hrtime(true) - $start) / 1e9;
-        };
-        $verification = min($costOf(static fn () => (new Passwords(4))->spendVerification('a wrong password')), $costOf(static fn () => (new Passwords(4))->spendVerification('a wrong password')));
+        $spent = [];
         $site = new SignInDouble();
         $site->known = false;
-        $pages = $this->pages($site);
+        $pages = $this->pages($site, static function (string $password) use (&$spent): void {
+            $spent[] = $password;
+        });
 
-        $spent = $costOf(static fn () => $pages->signIn(self::post('nobody-has-this-name')));
+        $pages->signIn(self::post('nobody-has-this-name'));
 
+        $this->assertSame(['a wrong password'], $spent, 'one verification was spent on the password');
         $this->assertSame(0, $site->checks, 'there is no member whose password could be checked');
-        $this->assertGreaterThan($verification / 2, $spent);
+
+        $spent = [];
+        $known = new SignInDouble();
+        $this->pages($known, static function (string $password) use (&$spent): void {
+            $spent[] = $password;
+        })->signIn(self::post('bob'));
+        $this->assertSame([], $spent, 'a member\'s own check is the cost: nothing more is spent');
+        $this->assertSame(1, $known->checks);
     }
 }
 
@@ -157,6 +162,11 @@ final class SignInDouble implements SignIn
     }
 
     public function displayUrl(): string
+    {
+        return 'https://example.com/';
+    }
+
+    public function configuredUrl(): string
     {
         return 'https://example.com/';
     }

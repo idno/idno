@@ -33,6 +33,7 @@ final class SessionPages
         private readonly LoginAttempts $attempts,
         private readonly Passwords $passwords,
         private readonly TemplateTranslation $translation,
+        private readonly ?\Closure $spendVerification = null, // a seam for a test: what a login for a name nobody has spends (the default is `Passwords::spendVerification()`)
     )
     {
     }
@@ -51,7 +52,7 @@ final class SessionPages
             $raw = self::text($page, 'fwd');
             $fwd = empty($raw) ? $site : $this->signIn->decodeForward($raw);
 
-            return $this->renderer->redirect($page, RedirectTarget::sanitize($fwd, $site));
+            return $this->renderer->redirect($page, RedirectTarget::sanitize($fwd, $site, $this->signIn->configuredUrl()));
         }
 
         $fwd = $this->signIn->decodeForward(self::text($page, 'fwd'));
@@ -61,7 +62,7 @@ final class SessionPages
         if (empty($fwd)) {
             $fwd = $site;
         }
-        $vars = ['fwd' => RedirectTarget::sanitize($fwd, $site)];
+        $vars = ['fwd' => RedirectTarget::sanitize($fwd, $site, $this->signIn->configuredUrl())];
 
         // Signed in and still here: an API login, which gets the member's key. Only the JSON answer may carry it: another site cannot read that one, but it can
         // load any answer that is a script (JSONP), and the browser may send the session cookie with it.
@@ -83,7 +84,7 @@ final class SessionPages
     {
         $fwd = self::text($page, 'fwd');
         $site = $this->signIn->displayUrl();
-        $fwd = RedirectTarget::sanitize(empty($fwd) ? $site : $fwd, $site);
+        $fwd = RedirectTarget::sanitize(empty($fwd) ? $site : $fwd, $site, $this->signIn->configuredUrl());
 
         $login = self::text($page, 'email');
         $password = trim(self::text($page, 'password'));
@@ -108,7 +109,7 @@ final class SessionPages
             $page->setStatus(401);
             // A login for a name nobody has costs what a wrong password for a member costs (one bcrypt), so that the time it takes does not say which names
             // are members'.
-            $this->passwords->spendVerification($password);
+            ($this->spendVerification ?? $this->passwords->spendVerification(...))($password);
             $this->signIn->message($oops, 'alert-danger');
 
             return $this->toTheLoginPage($page, $fwd);
@@ -142,7 +143,7 @@ final class SessionPages
             $this->signIn->message($this->translation->translate("You've signed out. See you soon!"));
         }
 
-        return $this->renderer->redirect($page, RedirectTarget::sanitize((string) $page->request()->headers->get('Referer', ''), $this->signIn->displayUrl()));
+        return $this->renderer->redirect($page, RedirectTarget::sanitize((string) $page->request()->headers->get('Referer', ''), $this->signIn->displayUrl(), $this->signIn->configuredUrl()));
     }
 
     private function toTheLoginPage(PageContext $page, string $fwd): Response

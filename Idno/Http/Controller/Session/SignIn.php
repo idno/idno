@@ -71,6 +71,11 @@ interface SignIn
     public function displayUrl(): string;
 
     /**
+     * The site's configured address (its scheme is the configured one, where `displayUrl()` follows the request).
+     */
+    public function configuredUrl(): string;
+
+    /**
      * Whether the request came over a secure connection (the one rule of the site: `Idno\Http\TrustedProxies::isSecure()`).
      */
     public function isSecure(): bool;

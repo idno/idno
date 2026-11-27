@@ -79,6 +79,8 @@ final class AccountSettingsCurrentPasswordTest extends PrivateSiteTestCase
 
         $this->assertStringContainsString('Too many failed sign-in attempts', Browser::text($this->settings($cookie, $locked)->body));
         $this->assertSame('ada@example.com', $this->stored('ada', 'email'), 'even the right password changes nothing while the account is locked');
+        // the login page counts for the same account: the settings page's failures have used up its five (a guess at one is a guess at the other)
+        $this->assertNull((new Browser($this->site()))->tryLogin('ada', self::PASSWORD), 'the login page refuses the right password too');
     }
 
     /**

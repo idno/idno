@@ -1333,14 +1333,14 @@ for classes that extend `PageShell`, and holds each to the rule); it is `Idno\Pa
   (`Tests/Unit/Http/Controller/Session/SessionPagesTest`). `login()` does what `Login::getContent()` did: the GET's `fwd` is base64 and decoded; a signed-in member on the `default` type is forwarded to it through `RedirectTarget::sanitize()`
   (the site's address when empty); the form's `fwd` is the site's address when it is the login page's own; the `api-token` only for a signed-in member, the exact `json` type and a secure request. `signIn()` does what `postContent()` did, in
   order: the POST's `fwd` is NOT decoded (empty is the site's address, then sanitised); the throttle key of the account the name resolves to, else of the folded name; `attempt()` BEFORE the password; a refused attempt is the throttle message and
-  never reaches the password; a name nobody has fires `login/failure/nouser`, sets the status 401 (which the forward overwrites), spends a verification and gives the one message; a right password clears the count, fires `login/success` and
+  never reaches the password; a name nobody has fires `login/failure/nouser`, sets the status 401 (which a browser's redirect replaces; a signed request's JSON answer keeps it), spends a verification and gives the one message; a right password clears the count, fires `login/success` and
   signs the member on through `Session::logUserOn()` (a new session id and form token); a wrong one gives the one message and fires `login/failure`. EVERY branch, success included, forwards to the login page (`session/login/?fwd=...`), which
   sends a signed-in member on to the page they asked for. A login field that is not text (`email[]=bob`) is an empty value: a failed login, never an error. `logout()` fires `logout/success`, ends the session and starts another (`logUserOff()` then
   `startNewSession()`), puts the "signed out" message in the NEW session unless the request is a signed one, and forwards to the `Referer` through `RedirectTarget::sanitize()`. Unchanged although the classes moved, held by the recorded answers
   of `Tests/Characterisation/SignInAnswersTest`, `SignInWalledAnswersTest` and `SignInBlockedAnswersTest` (`fixtures/answers/sign-in/`, `sign-in-walled/`, `sign-in-blocked/`): a login while signed in switches the account; an XHR login or
   logout ends with an empty 200 and no `Location`; a blocked member's login is refused silently. Deliberate differences, each a `CHANGED` case of the answers class with an assertion of the new answer, and in both upgrade documents: `GET`
   and `HEAD` of the logout, `PUT` and `DELETE` of either address and a malformed `Host` are the legacy router's 404 page (the logout answered an empty 200 to a GET, the redirect home or the 403 to the others); an XHR GET of the login page gets
-  the headers of the same request that is not XHR; an XHR logout is sent the caching lines of every XHR POST (the legacy logout's new session replaced them with the session's one line); a signed request's JSON `{"location": ...}` is `application/json`; a login field that is not text is a failed login (it was the 500 page of a PHP error).
+  the headers of the same request that is not XHR; an XHR logout is sent the caching lines of every XHR POST (the legacy logout's new session replaced them with the session's one line); a signed request's JSON `{"location": ...}` is `application/json`; a login field that is not text is a failed login (it was the 500 page of a PHP error); an XHR POST of either page with a missing or wrong form token is the site's 403 page, the lifecycle's rule for every site page (the legacy page ended such a request with an empty answer).
 
 - THE FEED READER IS REMOVED. Following a FEED (a site's RSS, Atom or h-feed, to read its items in the site) never worked on a supported PHP, and nothing linked it: `Idno\Core\Reader::parseFeed()` and `getFeedDetails()` called
   `\DOMDocument::loadHTML()` statically, which is an `\Error` on PHP 8 (`@` does not stop it), so `/following/add/` and `/following/confirm/` answered the 500 page before any record was made and `/following/refresh/` read a collection nothing
@@ -5795,9 +5795,11 @@ no installer writes one.
   the old id is dead. Tests: `LoginFlowTest`.
 - Redirect targets taken from user input must go through
   `\Idno\Http\RedirectTarget::sanitize($url, $siteUrl)` (same-origin only; a static helper with no legacy dependency, the rule
-  `Login::sanitizeRedirectUrl()` held, which stays as a deprecated delegate for third-party plugins). An `http://` address
-  is refused (the site's address is answered) when the site's own address is https, and so is any address with user information in
-  front of the host (`https://user@site.example/`); an `https://` address on an http site is kept: pinned in `Tests/Unit/Http/RedirectTargetTest`
+  `Login::sanitizeRedirectUrl()` held, which stays as a deprecated delegate for third-party plugins). Any address with user information in
+  front of the host (`https://user@site.example/`) is refused (the site's address is answered). An `http://` address of the site's own host is made `https://`
+  (port, path, query and fragment kept) when the site is https, judged by EITHER the configured `url` (the optional third argument `$configuredUrl`) OR the site's address as the request sees
+  it (`getDisplayURL()`, the second argument, follows the request: `Page::isSSL()`); an `https://` address is never made http. `Page::currentUrl()` builds from the configured `url`, so IndieAuth's return address is
+  http on a site reached over https, which the rule makes https: pinned in `Tests/Unit/Http/RedirectTargetTest` and over HTTP by `Tests/Characterisation/IndieAuthSignInOverHttpsTest`
 - Error page: an exception thrown while a page is being served goes to
   `Page::exception()`, which draws `templates/default/pages/500.html.twig`. The page shows
   the exception's message, and the whole exception (message and stack trace) when `debug`

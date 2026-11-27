@@ -87,6 +87,6 @@ final class LegacyProfiles implements Profiles
 
     public function referrer(PageContext $page): string
     {
-        return \Idno\Http\RedirectTarget::sanitize($page->request()->headers->get('Referer') ?? '', \Idno\Core\Idno::site()->config()->getDisplayURL());
+        return \Idno\Http\RedirectTarget::sanitize($page->request()->headers->get('Referer') ?? '', \Idno\Core\Idno::site()->config()->getDisplayURL(), \Idno\Core\Idno::site()->config()->getURL());
     }
 }

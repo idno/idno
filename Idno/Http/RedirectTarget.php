@@ -19,13 +19,15 @@ namespace Idno\Http;
  *   `https://site.example.evil.test/` and `https://site.example@evil.test/` are refused) and whose port is the site's
  *   (both none, or the same): kept as given; anything else is the site's address.
  *
- * Two more refusals: an `http://` address when the site's own address is https (the redirect would leave the encrypted
- * connection), and an address with user information in front of the host (`https://user@site.example/`, a form that
- * makes a link look like the site's). An `https://` address on a site whose address is http is kept.
+ * Two more rules: an address with user information in front of the host (`https://user@site.example/`, a form that makes a
+ * link look like the site's) is refused; and an `http://` address of the site's own host is made `https://` (the rest of it
+ * kept) when the site is https, so a redirect never leaves the encrypted connection. The site is https when either the
+ * site's address as the request sees it (the `$siteUrl` callers give is the display address, which follows the request) or
+ * the configured address (`$configuredUrl`) is. An `https://` address is never made http.
  */
 final class RedirectTarget
 {
-    public static function sanitize(string $url, string $siteUrl): string
+    public static function sanitize(string $url, string $siteUrl, ?string $configuredUrl = null): string
     {
         $url = trim($url);
 
@@ -55,11 +57,16 @@ final class RedirectTarget
         if (isset($target['user']) || isset($target['pass'])) {
             return $siteUrl;
         }
-        if (isset($site['scheme']) && strtolower($site['scheme']) === 'https' && strtolower($target['scheme']) !== 'https') {
-            return $siteUrl;
-        }
         if (($target['port'] ?? null) !== ($site['port'] ?? null)) {
             return $siteUrl;
+        }
+
+        // The site is https when its address as the request sees it is (the display address follows the request) or its configured address is. An http
+        // address of the site's own host is then made https, the rest of it (port, path, query, fragment) kept; an https address is never made http.
+        $httpsSite = strtolower((string) ($site['scheme'] ?? '')) === 'https'
+            || ($configuredUrl !== null && strtolower((string) parse_url($configuredUrl, PHP_URL_SCHEME)) === 'https');
+        if ($httpsSite && strtolower($target['scheme']) === 'http') {
+            return 'https' . substr($url, 4);
         }
 
         return $url;

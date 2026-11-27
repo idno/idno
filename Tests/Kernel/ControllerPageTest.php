@@ -423,7 +423,10 @@ final class ControllerPageTest extends TestCase
         $this->assertTrue($routes->isRoutePublic($this->page('/', 'GET', [], [], new SitePage('A', publicOnPrivateSite: true))));
         $this->assertFalse($routes->isRoutePublic($this->page()));
         $this->assertFalse($routes->isRoutePublic('Idno\Pages\Nonesuch'));
-        $this->assertSame($routes->isRoutePublic(\Idno\Pages\Admin\Home::class), $routes->isRoutePublic(new \Idno\Pages\Admin\Home()));
+        // a page registered public is public asked by class name and as an instance (the instance path ignoring the registration would show here)
+        $routes->addPublicRoute(ControllerPagePublicFixture::class);
+        $this->assertTrue($routes->isRoutePublic(ControllerPagePublicFixture::class));
+        $this->assertTrue($routes->isRoutePublic(new ControllerPagePublicFixture()));
     }
 
     public function testPublicGatekeeperHonoursTheAttribute(): void
