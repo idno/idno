@@ -48,34 +48,6 @@ the database back end supports. Any other array makes the query match nothing, o
 * A page that reads one text from the request should use `$this->getTextInput('name')`, which gives an empty string
   when the field was sent as an array (`name[]=x`).
 
-## Invitations and registration
-
-For site administrators:
-
-* **Inviting an address again in another role gives it a new link.** The link that was mailed before stops working.
-  Sending an invitation again in the same role keeps its link, as before.
-* **An administrator's invitation works only while the person who made it is an administrator.** If they have been
-  demoted, banned or deleted since, the link is refused and the invited person is told to ask for a new invitation.
-  Invite the address again (or use "Send again", which puts the invitation in your name) to make a working one.
-  Invitations as a member are not affected.
-* **"Send again" is refused for an address that has been blocked** since it was invited.
-* **A site that can take no more members** (a plugin answers the `users/add/check` event) is closed to open
-  registration too, not only to invitations.
-
-For plugin authors:
-
-* `Invitation::consume()` is now one conditional delete and triggers no `delete` / `deleted` events. To use an
-  invitation for something, call `Invitation::redeem($make)`: it claims the invitation, runs `$make`, and gives the
-  invitation back if `$make` returns nothing or throws.
-* The database back ends have two new methods, with fallbacks in `Idno\Core\DataConcierge` for back ends that do not
-  define them: `removeRecord($id, $collection)`, which removes one record and says whether this call removed it, and
-  `transaction(callable $work)`, which on MySQL keeps what `$work` changed only if it returns something other than
-  `false` or `null`. `MySQL::saveRecord()` joins a transaction that is open instead of beginning its own.
-* The registration templates (`account/register`, `onboarding/register`) get the same variables as before, but these
-  are no longer variables of the page: a shell or another template drawn afterwards does not see `email` or `code`.
-* The registration page ends the request when it draws the form again or a refusal after a POST, and sends
-  `Referrer-Policy: same-origin`.
-
 ## The feed reader was removed
 
 The feed reader let a member follow a feed (RSS, Atom or a page with microformats) and read its items in the site,

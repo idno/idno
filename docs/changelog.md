@@ -33,6 +33,13 @@ These changes are on the `dev` branch and will be part of the next release.
 * Security: IndieAuth authorization codes and Micropub access tokens are generated from the system's random source. Tokens already issued keep working
 * Security: a Micropub access token authenticates requests to the Micropub endpoint only. Before, a request to any page of the site could carry one and act as the token's user. Plugins that want to accept these tokens on a page of their own call `\IdnoPlugins\IndiePub\Main::authenticate()` there
 * IndieAuth supports PKCE (`S256`), and no longer issues an access token when a client asked only to authenticate (no scope)
+* Security: an invitation makes exactly one account, also when its form is sent several times at once, and one whose account could not be saved can be used again. Plugins that use an invitation up call `Invitation::redeem()`
+* Security: inviting an address again in another role (member or administrator) gives the invitation a new link, and the link mailed before stops working. Sending an invitation again in the same role keeps its link
+* Security: an invitation as an administrator works only while the administrator who made it, or last sent it again, is still an administrator. Otherwise its link is refused and the person is asked to get a new invitation
+* Security: the registration page no longer gives an invitation's code and address in its JSON and JSONP forms, and sends `Referrer-Policy: same-origin`
+* "Send again" is refused for an invitation to an address that has been blocked since
+* A site that can take no more members (a plugin answers the `users/add/check` event) is closed to open registration as well as to invitations
+* Fixed the administrators' Users page answering with an error page when an action named something that is not a member
 * Fixed draft posts being readable by URL when their access was set to public
 * Fixed posts containing emoji and other multi-byte text failing to save or to be found in search on MySQL
 * Fixed posting forms: cancel buttons, saving drafts and reply-to links
