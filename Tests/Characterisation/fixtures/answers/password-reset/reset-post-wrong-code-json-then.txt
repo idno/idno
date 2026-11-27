@@ -18,5 +18,11 @@ x-clacks-overhead: GNU Terry Pratchett
 x-powered-by: https://idno.co
 
 {
-    "title": "Recover password"
+    "title": "Recover password",
+    "messages": [
+        {
+            "message": "The password reset code wasn't valid. They expire after three hours, so you might need to try again.",
+            "message_type": "alert-danger"
+        }
+    ]
 }

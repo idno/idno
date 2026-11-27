@@ -99,7 +99,7 @@ x-powered-by: https://idno.co
 <body class="idno_pages_file_view page-file page-file-00000000000000000000000000000000 logged-out">
 <div class="idno-shell">
 <nav class="idno-nav-sidebar" aria-label="Main navigation">
-<a href="{site}/" class="idno-nav-logo">
+<a href="{site}/session/login" class="idno-nav-logo">
 Fixture Site
 </a>
 <ul class="idno-nav-items">

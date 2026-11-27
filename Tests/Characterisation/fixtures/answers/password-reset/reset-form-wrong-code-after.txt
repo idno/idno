@@ -130,11 +130,6 @@ Reset Test Site
 <main class="idno-main">
 <div class="idno-feed h-feed">
 <div id="page-messages">
-<div class="idno-message" style="background:var(--color-error-bg, #fef2f2);color:var(--color-error-text, #991b1b);border-color:var(--color-error-border, #fecaca);border:1px solid;border-radius:var(--radius-sm);padding:0.75rem 1rem;margin-bottom:0.75rem;display:flex;align-items:flex-start;gap:0.5rem;font-size:var(--font-size-sm)"
-     x-data="{ show: true }" x-show="show" x-cloak>
-<span style="flex:1">The password reset code wasn't valid. They expire after three hours, so you might need to try again.</span>
-<button type="button" x-on:click="show = false" style="background:none;border:none;cursor:pointer;padding:0;line-height:1;font-size:1.25rem;opacity:0.5;color:inherit" aria-label="Dismiss">&times;</button>
-</div>
 </div>
 <a name="pagecontent"></a>
 <div class="idno-profile h-card">

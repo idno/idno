@@ -94,7 +94,7 @@ x-powered-by: https://idno.co
 <body class="idno_pages_entity_view page-2026 page-2026-bob-publishes-a-note-anyone-can-read.md logged-out">
 <div class="idno-shell">
 <nav class="idno-nav-sidebar" aria-label="Main navigation">
-<a href="{site}/" class="idno-nav-logo">
+<a href="{site}/session/login" class="idno-nav-logo">
 Fixture Site
 </a>
 <ul class="idno-nav-items">
