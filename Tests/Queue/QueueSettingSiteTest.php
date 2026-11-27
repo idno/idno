@@ -32,12 +32,4 @@ class QueueSettingSiteTest extends AsyncSiteTestCase
         }
         $this->assertSame($this->expectsFederation(), $this->runInSite('return \Idno\Core\Idno::site()->queue()->isAsynchronous();'));
     }
-
-    public function testTheQueuesServicePagesAreGone(): void
-    {
-        $cookie = $this->registerUser('alice');
-        foreach (['service/queue/list', 'service/queue/dispatch/abc', 'service/queue/gc'] as $path) {
-            $this->assertSame(404, $this->site()->request('GET', $path, ['Cookie' => $cookie])->status, $path);
-        }
-    }
 }

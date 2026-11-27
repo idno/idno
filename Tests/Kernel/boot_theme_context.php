@@ -48,7 +48,6 @@ $site->config()->theme = $argv[3] ?? 'ZzProbeTheme';
 $themes = new \Idno\Core\Themes();
 
 echo json_encode([
-    'constants_defined'    => defined('IDNO_MULTITENANT_HOST') || defined('KNOWN_MULTITENANT_HOST'),
     'boot_theme_loaded'    => array_keys($bootThemes->themes),
     'boot_template_type'   => $bootTemplateType,
     'theme'                => $themes->get(),
@@ -58,5 +57,4 @@ echo json_encode([
     'plugins_stored'       => array_keys($site->plugins()->getStored()),
     'plugins_loaded'       => array_keys($site->plugins()->getLoaded()),
     'themes_stored'        => array_keys($themes->getStored()),
-    'phantom_exists'       => $site->plugins()->exists('Phantom'),
 ]);

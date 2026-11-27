@@ -70,6 +70,7 @@ final class TrustedProxiesSiteTest extends PrivateSiteTestCase
         $response = (new HttpSiteClient($this->startExtraServer(['IDNO_TRUSTED_PROXIES' => '10.0.0.0/0'])))->request('GET', 'session/login');
 
         $this->assertSame(500, $response->status);
+        $this->assertNotSame('', trim($response->body), 'an error page is drawn: an empty body would pass the checks below');
         // The message naming the entry is for the log and the console: a visitor learns nothing of the setting, a server path or a trace.
         foreach (['trusted_proxies', '10.0.0.0', '/Idno/', '.php', 'Stack trace', '#0 '] as $leak) {
             $this->assertStringNotContainsString($leak, $response->body, $leak);

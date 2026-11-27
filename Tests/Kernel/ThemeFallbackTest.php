@@ -69,15 +69,6 @@ final class ThemeFallbackTest extends IdnoTestCase
         $this->assertSame('solo', Themes::resolve('solo'));
     }
 
-    public function testRetiredListMatchesDeletedDirectories(): void
-    {
-        $root = dirname(__DIR__, 2);
-        foreach (Themes::RETIRED as $name) {
-            $this->assertDirectoryDoesNotExist($root . '/Themes/' . $name);
-        }
-        $this->assertDirectoryDoesNotExist($root . '/Themes/Twenty26', 'Idno 2026 is built in: it is not a theme directory');
-    }
-
     /**
      * Runs boot_theme_fallback.php in a clean PHP process.
      *

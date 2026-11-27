@@ -62,7 +62,7 @@ final class BuiltInLookTest extends RenderedSiteTestCase
         return $theme === '' ? [] : ['IDNO_THEME' => $theme];
     }
 
-    public function testNoThemeRendersTheTwenty26Golden(): void
+    public function testWithNoThemeTheBuiltInLooksGoldenPagesAreDrawn(): void
     {
         $paths = $this->seedSite();
 

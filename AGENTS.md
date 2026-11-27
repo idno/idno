@@ -301,8 +301,8 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
   on private sites: no theme, a stored `Twenty26` (resolved, never saved or announced) and a retired theme (saved as no theme and
   announced once), a pinned theme, `?_t=modern` (the default type), `?_t=classic` and traversal types (refused, in any letter case: on a file
   system that ignores case `CLASSIC` is the directory), a third-party plugin's `templates/modern/` file (still wins; one deprecation
-  line a request) and a theme in `Themes/` (its `default/` override and `[extensions]`), a hostile webmention author, the drafts page
-  and the drafts page. The Twig templates of core and the bundled plugins are proven by the golden pages and by the tests that pin
+  line a request) and a theme in `Themes/` (its `default/` override and `[extensions]`), a hostile webmention author and the drafts page.
+  The Twig templates of core and the bundled plugins are proven by the golden pages and by the tests that pin
   what a golden does not draw; the `.tpl.php` files they replaced are gone, and nothing compares a Twig file with another rendering.
   `Tests/Unit/Templating/CoreTemplatesAreTwigTest` holds the end state: no `.tpl.php` is left under a `default`, `email` or `email-text`
   directory of core or a bundled plugin, and a locator over core and every bundled plugin resolves a Twig file for every name that has one there.
@@ -1356,7 +1356,7 @@ for classes that extend `PageShell`, and holds each to the rule); it is `Idno\Pa
   listings built on it, the home page, the profile, a feed, the drafts page) skips it, because `EntityRepository::hydrate()` and `DataConcierge::rowToEntity()` give nothing for a class that does not exist; `getByUUID()` and
   `getByID()` give false, so its address `/view/<id>` is the 410 page; a count (`countFromAll()`, the drafts page's total) still counts the record, as it counts any record whose class is gone. A copy of a 1.x database stores its
   `type` as the class name (no alias is declared for the removed classes: `AttributeTypeMap::typeFor()` gives the name back). Pinned by `Tests/Kernel/RecordsOfClassesThatNoLongerExistTest` (rows of each removed class in both collections;
-  the listings, pages and address above; the rows and the dump) and the copier's test of a 1.x `reader` row. The declared indexes `feed_url` on the three classes and
+  the listings, pages and the record's address; the rows and the dump) and the copier's test of a 1.x `reader` row. The declared indexes `feed_url` on the three classes and
   the entity-level ones (`slug`, `shorturl`, `url`, `canonical`) those classes carried into `reader` are not declared any more, and an index is never dropped: a database made by an earlier build keeps `ix_feed_url`, `ix_slug` and
   the others on `idno_reader` (unused), and a database made now has only `access` there (the rig's databases need recreating, `composer test:down` then `test:up`, for a fresh one; `UpgradeCommandTest::CORE_INDEXES` and
   `EntityAliasesTest` expect `reader` to hold `access` alone). A third-party plugin that extends or names one of the deleted classes stops the site booting until it is disabled.
@@ -3748,7 +3748,7 @@ required. The classes `Idno\Core\AsynchronousQueue` and `Idno\Core\SynchronousQu
   tables come from the migrations only; `MessengerRig` builds the transport and bus as the config does),
   `Tests/Kernel/MessengerConfigurationTest` and `QueueAdaptersTest` (the container and the legacy
   adapters; the test container exposes the private transports and bus through `idno.test.*` aliases in
-  `config/services_test.php`), `Tests/Kernel/QueueShimTest` (the adapter and the deleted classes),
+  `config/services_test.php`), `Tests/Kernel/QueueShimTest` (the adapter),
   `Tests/Queue/LegacyQueueDrainTest` (a SQLite file and a private MySQL or MariaDB database, two drains in
   subprocesses: `Tests/Queue/drain.php`), `AbandonedMessagesTest`, `QueueWorkCommandTest` and the
   black-box `QueuedDelivery*Test` classes.

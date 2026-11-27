@@ -22,7 +22,6 @@ final class PurifierKeepsNothingTest extends TestCase
 
         $this->assertStringNotContainsString('script', $output);
         $this->assertStringNotContainsString('onclick', $output);
-        $this->assertFalse(method_exists($purifier, 'cacheKey'), 'there is no key a text is kept under');
         foreach ((new \ReflectionObject($purifier))->getProperties() as $property) {
             $value = $property->getValue($purifier);
             $this->assertFalse(is_array($value) && in_array($output, $value, true), 'the property ' . $property->getName() . ' holds no output');

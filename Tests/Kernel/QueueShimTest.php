@@ -18,8 +18,7 @@ use Tests\Unit\Queue\CollectingLogger;
 
 /**
  * The adapter behind `Idno::site()->queue()` (MessengerEventQueue): what enqueue() sends when the
- * site's queue is asynchronous, what it does when it is not, how the `event_queue` setting is read,
- * and that nothing bundled names the two classes that were deleted. The adapter is built here over
+ * site's queue is asynchronous, what it does when it is not, and how the `event_queue` setting is read. The adapter is built here over
  * a bus that records, and (once) over the container's real bus, the site's queue table and the
  * rig's own site.
  */

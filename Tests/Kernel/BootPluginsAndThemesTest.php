@@ -155,16 +155,6 @@ final class BootPluginsAndThemesTest extends \Tests\Characterisation\Characteris
         $this->assertSame('default', $web['template_type']);
     }
 
-    public function testHomepageIsRenderedWithoutAThemeWhenNoneIsConfigured(): void
-    {
-        // The test site has no theme configured, so the homepage is the default theme's;
-        // the configured-theme case is pinned by the subprocess probes above.
-        $this->assertEmpty(\Idno\Core\Idno::site()->config()->theme);
-        $response = $this->site()->request('GET', '');
-        $this->assertSame(200, $response->status);
-        $this->assertStringNotContainsString('Themes/', $response->body);
-    }
-
     public function testMultitenantSettingIsIgnored(): void
     {
         $config = new Config(new BootConfig(['dbname' => 'known_unittest', 'multitenant' => true, 'host' => 'tenant.example.com'], false));

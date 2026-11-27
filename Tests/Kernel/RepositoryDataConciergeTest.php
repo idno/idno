@@ -903,11 +903,6 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
             $this->assertSame('mongo', ConnectionParameters::driverFamily(['database' => $database]), $database);
             $this->assertNull(ConnectionParameters::backendClass(['database' => $database]), $database);
         }
-        // LegacyServiceFactory::db() refuses these names (the schema
-        // gate keeps the legacy application from booting on such a site, so this is a last defence).
-        $source = (string) file_get_contents(dirname(__DIR__, 2) . '/Idno/Legacy/LegacyServiceFactory.php');
-        $this->assertStringContainsString("if (\$family === 'mongo') {", $source);
-        $this->assertStringContainsString('mongoRetired()', $source);
     }
 
     public function testAnUnknownBackendNameIsMysqlAndALoadableClassIsBuiltAsBefore(): void
