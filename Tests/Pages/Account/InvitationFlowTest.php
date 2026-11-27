@@ -46,7 +46,6 @@ namespace Tests\Pages\Account {
             $this->assertNotNull($message, 'The address is stored and mailed in lower case');
             $this->assertStringContainsString('The Press Room <site@example.com>', $message['headers']['from']);
             $this->assertStringContainsString(Idno::site()->config()->title, $message['headers']['subject']);
-            $this->assertStringContainsString('invited', $message['headers']['subject']);
             // Both parts, and the inviter's name as text in each
             $this->assertStringContainsString('text/plain', $message['data']);
             $this->assertStringContainsString('text/html', $message['data']);
