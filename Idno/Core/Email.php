@@ -164,6 +164,22 @@ namespace Idno\Core {
         }
 
         /**
+         * Runs the writing of a mail in the SITE's language (its `language` setting, else en_US), never the language of the request that
+         * caused the mail: a stranger who asks for someone's reset must not choose the language of that person's mail. The language of the
+         * request is back afterwards, also when the work throws, so the page that answers the requester is unchanged.
+         *
+         * @param  callable $work
+         * @return mixed
+         */
+        private static function inSiteLanguage(callable $work)
+        {
+            $settings = \Idno\Core\Idno::site()->config()->config;
+            $language = is_array($settings) && is_string($settings['language'] ?? null) ? $settings['language'] : '';
+
+            return \Idno\Core\Idno::site()->language()->inLocale($language, $work);
+        }
+
+        /**
          * Text for a mail header (a subject, a name): one line, no control characters, so nothing a person typed can start a
          * header of its own.
          *
@@ -266,17 +282,19 @@ namespace Idno\Core {
          */
         function setHTMLBodyFromTemplate($template_name, $vars = array(), array $shellVars = [])
         {
-            $t = clone \Idno\Core\Idno::site()->template();
-            $t->setTemplateType('email');
-            \Idno\Mail\MailDesign::beginDescribing();
-            try {
-                $body        = $t->__($vars + ['mail_address' => static::siteAddress()])->draw($template_name);
-                $this->about = \Idno\Mail\MailDesign::takeDescription();
-            } finally {
+            return static::inSiteLanguage(function () use ($template_name, $vars, $shellVars) {
+                $t = clone \Idno\Core\Idno::site()->template();
+                $t->setTemplateType('email');
                 \Idno\Mail\MailDesign::beginDescribing();
-            }
+                try {
+                    $body        = $t->__($vars + ['mail_address' => static::siteAddress()])->draw($template_name);
+                    $this->about = \Idno\Mail\MailDesign::takeDescription();
+                } finally {
+                    \Idno\Mail\MailDesign::beginDescribing();
+                }
 
-            return $this->setHTMLBody($body, true, $shellVars + $this->about);
+                return $this->setHTMLBody($body, true, $shellVars + $this->about);
+            });
         }
 
         /**
@@ -309,11 +327,13 @@ namespace Idno\Core {
          */
         function setTextBodyFromTemplate($template_name, $vars = array(), array $shellVars = [])
         {
-            $t = clone \Idno\Core\Idno::site()->template();
-            $t->setTemplateType('email-text');
-            $body = $t->__($vars + ['mail_address' => static::siteAddress()])->draw($template_name);
+            return static::inSiteLanguage(function () use ($template_name, $vars, $shellVars) {
+                $t = clone \Idno\Core\Idno::site()->template();
+                $t->setTemplateType('email-text');
+                $body = $t->__($vars + ['mail_address' => static::siteAddress()])->draw($template_name);
 
-            return $this->setTextBody($body, true, $shellVars + $this->about);
+                return $this->setTextBody($body, true, $shellVars + $this->about);
+            });
         }
 
         /**
@@ -366,24 +386,26 @@ namespace Idno\Core {
          */
         static function drawMail($template_name, array $vars = [])
         {
-            $t = clone \Idno\Core\Idno::site()->template();
-            $t->setTemplateType('email');
-            \Idno\Mail\MailDesign::beginDescribing();
-            try {
-                $html  = (string)$t->__($vars + ['mail_address' => static::siteAddress()])->draw($template_name);
-                $about = \Idno\Mail\MailDesign::takeDescription();
-            } finally {
+            return static::inSiteLanguage(function () use ($template_name, $vars) {
+                $t = clone \Idno\Core\Idno::site()->template();
+                $t->setTemplateType('email');
                 \Idno\Mail\MailDesign::beginDescribing();
-            }
-            $t = clone \Idno\Core\Idno::site()->template();
-            $t->setTemplateType('email-text');
-            $text = (string)$t->__($vars + ['mail_address' => static::siteAddress()])->draw($template_name);
+                try {
+                    $html  = (string)$t->__($vars + ['mail_address' => static::siteAddress()])->draw($template_name);
+                    $about = \Idno\Mail\MailDesign::takeDescription();
+                } finally {
+                    \Idno\Mail\MailDesign::beginDescribing();
+                }
+                $t = clone \Idno\Core\Idno::site()->template();
+                $t->setTemplateType('email-text');
+                $text = (string)$t->__($vars + ['mail_address' => static::siteAddress()])->draw($template_name);
 
-            return [
-                'subject' => $about['subject'],
-                'html'    => static::wrapHtml($html, ['title' => $about['subject'], 'preheader' => $about['preheader'], 'reason' => $about['reason']]),
-                'text'    => $text === '' ? '' : static::wrapText($text, ['reason' => $about['reason']]),
-            ];
+                return [
+                    'subject' => $about['subject'],
+                    'html'    => static::wrapHtml($html, ['title' => $about['subject'], 'preheader' => $about['preheader'], 'reason' => $about['reason']]),
+                    'text'    => $text === '' ? '' : static::wrapText($text, ['reason' => $about['reason']]),
+                ];
+            });
         }
 
         /**
@@ -392,21 +414,22 @@ namespace Idno\Core {
          */
         private static function wrapHtml(string $body, array $shellVars): string
         {
-            $t = clone \Idno\Core\Idno::site()->template();
-            $t->setTemplateType('email');
-            // The layout is the site's own (its `language` setting, English when it has none), never the browser's of whoever asked for the mail:
-            // a stranger who asks for someone's reset must not choose how that person's mail is laid out
-            $code = preg_replace('/[^A-Za-z0-9-]/', '', str_replace('_', '-', (string)\Idno\Core\Idno::site()->config()->language));
-            $code = $code ?: 'en';
-            $vars = $shellVars + [
-                'title'     => '',
-                'preheader' => '',
-                'reason'    => '',
-                'lang'      => $code,
-                'dir'       => in_array(strtolower(substr($code, 0, 2)), ['ar', 'fa', 'he', 'ur'], true) ? 'rtl' : 'ltr',
-            ];
+            return static::inSiteLanguage(function () use ($body, $shellVars) {
+                $t = clone \Idno\Core\Idno::site()->template();
+                $t->setTemplateType('email');
+                // The language of the mail: the site's (see inSiteLanguage()), which is the one the words of the mail were written in
+                $code = preg_replace('/[^A-Za-z0-9-]/', '', str_replace('_', '-', (string)\Idno\Core\Idno::site()->language()->getLanguage()));
+                $code = $code ?: 'en';
+                $vars = $shellVars + [
+                    'title'     => '',
+                    'preheader' => '',
+                    'reason'    => '',
+                    'lang'      => $code,
+                    'dir'       => in_array(strtolower(substr($code, 0, 2)), ['ar', 'fa', 'he', 'ur'], true) ? 'rtl' : 'ltr',
+                ];
 
-            return (string)$t->__(array_merge(['body' => $body, 'mail_address' => static::siteAddress()], $vars))->draw('shell');
+                return (string)$t->__(array_merge(['body' => $body, 'mail_address' => static::siteAddress()], $vars))->draw('shell');
+            });
         }
 
         /**
@@ -415,10 +438,12 @@ namespace Idno\Core {
          */
         private static function wrapText(string $body, array $shellVars): string
         {
-            $t = clone \Idno\Core\Idno::site()->template();
-            $t->setTemplateType('email-text');
+            return static::inSiteLanguage(function () use ($body, $shellVars) {
+                $t = clone \Idno\Core\Idno::site()->template();
+                $t->setTemplateType('email-text');
 
-            return (string)$t->__(['body' => $body, 'mail_address' => static::siteAddress(), 'reason' => (string)($shellVars['reason'] ?? '')])->draw('shell');
+                return (string)$t->__(['body' => $body, 'mail_address' => static::siteAddress(), 'reason' => (string)($shellVars['reason'] ?? '')])->draw('shell');
+            });
         }
 
         /**

@@ -17,6 +17,14 @@ namespace Idno\Core {
         private $translations = [];
 
         /**
+         * Every translation that was registered, whatever its language (`$translations` holds those that can provide the current one),
+         * so that work can be done in another language (see inLocale()).
+         *
+         * @var Translation[]
+         */
+        private $registered = [];
+
+        /**
          * Current language
          *
          * @var type
@@ -95,9 +103,43 @@ namespace Idno\Core {
          */
         public function register(Translation $translation)
         {
+            $this->registered[] = $translation;
             if ($translation->canProvide($this->getLanguage())) {
                 //$this->addTranslations($translation->getStrings());
                 $this->translations[] = $translation;
+            }
+        }
+
+        /**
+         * Runs a piece of work with another language and puts the current one back afterwards, also when the work throws. For what is
+         * written for somebody else than whoever is asking: a mail is in the site's language, not in the language of the request that caused it.
+         *
+         * @param  string   $locale
+         * @param  callable $work
+         * @return mixed What the work returned
+         */
+        public function inLocale($locale, callable $work)
+        {
+            $locale = LocaleNegotiator::normalise((string) $locale, 'en_US');
+            if ($locale === $this->language) {
+                return $work();
+            }
+            $saved              = [$this->language, $this->translations];
+            $this->language     = $locale;
+            $this->translations = [];
+            foreach ($this->registered as $translation) {
+                if ($translation->canProvide($locale)) {
+                    $this->translations[] = $translation;
+                }
+            }
+            try {
+                return $work();
+            } finally {
+                [$this->language, $this->translations] = $saved;
+                // A catalogue remembers the language it was last asked about: ask it about the current one again
+                foreach ($this->translations as $translation) {
+                    $translation->canProvide($this->language);
+                }
             }
         }
 

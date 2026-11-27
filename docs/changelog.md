@@ -18,6 +18,11 @@ These changes are on the `dev` branch and will be part of the next release.
 * Every other page can be fetched as Markdown too, with `?_t=markdown` or `?_t=md`: the home page, profiles, tags and searches list their posts in full
 * Link previews are now fetched by the server instead of the browser
 * The language tools (formerly the separate known-language-tools package) are part of core
+* Every mail the site sends (password reset, invitation, test, import, export, error alert) has one shell and one set of parts in Idno 2026's look, with a preview line, a dark-mode variant and a footer saying why the reader got it; subjects now name the site (for example "Reset your password for <site>")
+* Links in a mail are built from the `url` setting as written, so a reset asked for over plain http still mails an https link; a site with no `url` keeps using the address detected from the request, so set `url` in `config.ini`
+* A mail is written in the site's language (its `language` setting, else English), not in the language of whoever caused it
+* The email settings page has From name and Reply-To fields, checks what is typed (a bad host or port is not saved and the field says so), fills in the usual port of the security chosen when the port is left empty, names the mail settings that `config.ini` pins, and never shows the saved SMTP password (leave the field empty to keep it); a site that stored a host with no port keeps sending to port 25 until the form is saved
+* The test email says why it failed (login refused, server not found, certificate, ...) with the mail server's own reply and without the user name or password
 * MongoDB is no longer supported as a database. `php bin/console idno:import:mongo` moves a MongoDB site to MySQL, MariaDB or SQLite
 * TinyMCE upgraded to version 8
 * Security: fixes for cross-site scripting, server-side request forgery, an open redirect, access control on uploaded files, and ActivityPub actor spoofing

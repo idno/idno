@@ -33,6 +33,41 @@ final class PasswordResetMailPageTest extends SmtpSiteTestCase
         $this->assertSame(['alice@example.com'], $this->smtp->connections()[0]['rcptTo']);
     }
 
+    /** A French catalogue of the mail's heading (`Tests\Fixtures\TestCatalogue`): the test environment ships none. */
+    protected function siteEnvironment(): array
+    {
+        return parent::siteEnvironment() + ['IDNO_TEST_TRANSLATIONS' => json_encode(['fr_FR' => ['Reset your password' => 'Réinitialisez votre mot de passe']], JSON_THROW_ON_ERROR)];
+    }
+
+    // A stranger who asks for someone's reset with Accept-Language: fr must not choose the language of that person's mail: it is the site's (English, with no language setting).
+    public function testAResetMailIsWrittenInTheSitesLanguageNotInTheLanguageOfWhoAskedForIt(): void
+    {
+        $this->registerUser('alice');
+        $this->storeSettings(['smtp_host' => '127.0.0.1', 'from_email' => 'site@example.com']);
+        $form = $this->site()->request('GET', 'account/password/');
+
+        $post = $this->site()->request('POST', 'account/password/', ['Cookie' => $this->sessionCookie($form), 'Accept-Language' => 'fr-FR'], $this->formToken($form->body, 'account/password') + ['email' => 'alice@example.com']);
+
+        $this->assertSame(302, $post->status, $this->serverLog());
+        $mail = ReceivedMessage::parse($this->smtp->messages()[0]);
+        $this->assertStringContainsString('Reset your password', (string) $mail->part('text/plain'));
+        $this->assertStringNotContainsString('Réinitialisez', (string) $mail->part('text/plain') . (string) $mail->part('text/html') . (string) $mail->header('Subject'));
+    }
+
+    // A site that has a language setting writes its mails in it, whoever asks.
+    public function testAResetMailIsWrittenInTheLanguageTheSiteIsSetTo(): void
+    {
+        $this->registerUser('alice');
+        $this->storeSettings(['smtp_host' => '127.0.0.1', 'from_email' => 'site@example.com', 'language' => 'fr_FR']);
+        $form = $this->site()->request('GET', 'account/password/');
+
+        $this->site()->request('POST', 'account/password/', ['Cookie' => $this->sessionCookie($form)], $this->formToken($form->body, 'account/password') + ['email' => 'alice@example.com']);
+
+        $mail = ReceivedMessage::parse($this->smtp->messages()[0]);
+        $this->assertStringContainsString('Réinitialisez votre mot de passe', (string) $mail->part('text/plain'));
+        $this->assertStringContainsString('lang="fr', (string) $mail->part('text/html'));
+    }
+
     // A stranger who asks for someone's reset with Accept-Language: ar must not make that person's mail right-to-left: the layout is the site's.
     public function testTheLayoutOfAResetMailIsNotChosenByTheBrowserThatAskedForIt(): void
     {
