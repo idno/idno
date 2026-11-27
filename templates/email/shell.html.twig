@@ -61,7 +61,7 @@
 {% if reason|mail_one_line %}
             {{ reason|mail_one_line }}<br>
 {% endif %}
-            {{ mail_site_name() }}{% if site_url()|http_url %} &middot; <a class="idno-mail-footer" href="{{ site_url()|http_url }}" style="color: {{ mail_colour('footer') }}; text-decoration: underline;">{{ site_url()|http_url|url_host }}</a>{% endif %}
+            {{ mail_site_name() }}{% if mail_url()|http_url %} &middot; <a class="idno-mail-footer" href="{{ mail_url()|http_url }}" style="color: {{ mail_colour('footer') }}; text-decoration: underline;">{{ mail_url()|http_url|url_host }}</a>{% endif %}
 
         </td>
     </tr>

@@ -33,6 +33,21 @@ final class PasswordResetMailPageTest extends SmtpSiteTestCase
         $this->assertSame(['alice@example.com'], $this->smtp->connections()[0]['rcptTo']);
     }
 
+    // A stranger who asks for someone's reset with Accept-Language: ar must not make that person's mail right-to-left: the layout is the site's.
+    public function testTheLayoutOfAResetMailIsNotChosenByTheBrowserThatAskedForIt(): void
+    {
+        $this->registerUser('alice');
+        $this->storeSettings(['smtp_host' => '127.0.0.1', 'from_email' => 'site@example.com']);
+
+        $form = $this->site()->request('GET', 'account/password/');
+        $post = $this->site()->request('POST', 'account/password/', ['Cookie' => $this->sessionCookie($form), 'Accept-Language' => 'ar'], $this->formToken($form->body, 'account/password') + ['email' => 'alice@example.com']);
+
+        $this->assertSame(302, $post->status, $this->serverLog());
+        $html = (string) ReceivedMessage::parse($this->smtp->messages()[0])->part('text/html');
+        $this->assertStringContainsString('dir="ltr"', $html);
+        $this->assertStringNotContainsString('dir="rtl"', $html);
+    }
+
     public function testAnUnknownAddressSendsNothingAndAnswersTheSame(): void
     {
         $this->registerUser('alice');

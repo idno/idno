@@ -1,6 +1,6 @@
 {#- The mail to the addresses of the oops_notify setting when the site hits an error (Logging::oopsAlert()): `title` (the kind of error), `message`, `user`, `agent`, `qs`, `referrer`. The last
     three come from the request as they were sent, and the message can repeat text from it: the parts escape them all. The plain-text twin is templates/email-text/admin/oops. -#}
-{%- set host = (site|default(site_url()))|url_host|default(mail_site_name()) -%}
+{%- set host = (site|default(mail_url()))|url_host|default(mail_site_name()) -%}
 {%- set kind = title|default('')|mail_one_line -%}
 {%- do mail_describe({
     subject: t('Error on %s', [host]) ~ (kind ? ': ' ~ kind : ''),

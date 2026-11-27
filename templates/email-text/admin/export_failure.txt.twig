@@ -3,4 +3,4 @@
 {{- idno_include('parts/heading', {text: t('Your export did not finish')}) -}}
 {{- idno_include('parts/paragraph', {format: t_format('The archive of %s could not be made.'), values: [site]}) -}}
 {{- idno_include('parts/paragraph', {text: t("You can try the export again. If it fails again, the site's error log may say why.")}) -}}
-{{- idno_include('parts/button', {label: t('Try the export again'), url: site_url() ~ 'admin/export/'}) -}}
+{{- idno_include('parts/button', {label: t('Try the export again'), url: mail_url() ~ 'admin/export/'}) -}}

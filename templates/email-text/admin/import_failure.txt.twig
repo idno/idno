@@ -9,4 +9,4 @@
 {{- idno_include('parts/paragraph', {format: t_format('Some or all of the file you uploaded to %s could not be imported.'), values: [site]}) -}}
 {{- idno_include('parts/paragraph', {text: t("Some posts may already have been imported. Check your posts before you import the file again, or it may add them twice. If it fails again, the site's error log may say why.")}) -}}
 {%- endif -%}
-{{- idno_include('parts/button', {label: t('Try the import again'), url: site_url() ~ 'admin/import/'}) -}}
+{{- idno_include('parts/button', {label: t('Try the import again'), url: mail_url() ~ 'admin/import/'}) -}}

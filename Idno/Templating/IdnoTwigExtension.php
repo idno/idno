@@ -145,6 +145,7 @@ final class IdnoTwigExtension extends AbstractExtension
             // What a mail is made of (Idno\Mail\MailDesign: pure, so none of these needs the site)
             new TwigFunction('mail_describe', self::mailDescribe(...)),
             new TwigFunction('mail_colour', self::mailColour(...)),
+            new TwigFunction('mail_url', $this->mailUrl(...), ['needs_context' => true]),
             new TwigFunction('mail_site_name', $this->mailSiteName(...)),
             new TwigFunction('mail_font', self::mailFont(...)),
             new TwigFunction('mail_dark_css', self::mailDarkCss(...), $html),
@@ -917,6 +918,19 @@ final class IdnoTwigExtension extends AbstractExtension
     public static function mailColour(string $role, string $property = 'color'): string
     {
         return \Idno\Mail\MailDesign::colour($role, $property);
+    }
+
+    /**
+     * An address on the site for a LINK IN A MAIL: the address the mail adapter handed to the draw (`mail_address`: the site's configured `url` as written, with its own
+     * scheme), else `site_url()`. A mail is read long after the request that made it and by someone else, so its links never take their scheme from that request.
+     *
+     * @param array<string, mixed> $context
+     */
+    public function mailUrl(array $context, string $path = ''): string
+    {
+        $address = $context['mail_address'] ?? null;
+
+        return (is_string($address) && $address !== '' ? $address : $this->helpers->siteUrl()) . $path;
     }
 
     /** The name of the site for a mail: its title on one line, or its host name when it has none */

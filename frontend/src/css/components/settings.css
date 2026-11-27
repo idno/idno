@@ -28,7 +28,7 @@
     margin-top: 0.25rem;
   }
 
-  .idno-input[readonly] {
+  .idno-invite-link .idno-input[readonly] {
     background: var(--color-bg);
     color: var(--color-text-secondary);
   }

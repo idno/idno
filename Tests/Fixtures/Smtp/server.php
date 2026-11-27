@@ -35,6 +35,7 @@ $offerStartTls = (bool) $configuration['offerStartTls'];
 $certificate = $configuration['certificate'];
 $auth = $configuration['auth'];
 $failAt = $configuration['failAt'];
+$rcptReply = (string) ($configuration['rcptReply'] ?? '550 5.1.1 No such user here');
 $parentPid = (int) $configuration['parentPid'];
 
 $events = fopen($directory . '/events.jsonl', 'ab');
@@ -276,7 +277,8 @@ function serve($connection, int $number): void
                 }
                 if ($failAt === 'rcpt') {
                     record(['t' => 'rcpt', 'c' => $number, 'to' => $m[1], 'ok' => false]);
-                    $say('550 5.1.1 No such user here');
+                    global $rcptReply;
+                    $say($rcptReply);
                     break;
                 }
                 $recipients[] = $m[1];

@@ -4,7 +4,7 @@
 {%- set site = mail_site_name() -%}
 {%- set who = inviter|default('')|mail_one_line -%}
 {%- set until = expires|default(0) ? expires|date('j F Y') : '' -%}
-{%- set join = link|default('') ?: (site_url() ~ 'account/register/?email=' ~ (email|default('')|form_urlencode) ~ '&code=' ~ (code|default('')|form_urlencode)) -%}
+{%- set join = link|default('') ?: (mail_url() ~ 'account/register/?email=' ~ (email|default('')|form_urlencode) ~ '&code=' ~ (code|default('')|form_urlencode)) -%}
 {#- What the site says it is, unless that is still the text every new site starts with -#}
 {%- set about = setting('description')|mail_one_line -%}
 {%- if about == 'A social website powered by Idno' -%}{%- set about = '' -%}{%- endif -%}

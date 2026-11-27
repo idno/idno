@@ -136,7 +136,8 @@ namespace Idno\Pages\Admin {
             // The password is never shown, so an empty field means "keep the one you have"
             $password = $this->getInput('smtp_password');
             $password = is_string($password) ? $password : '';
-            if ($password !== '') {
+            // Only spaces is no password: the field is "keep what you have"
+            if (trim($password) !== '') {
                 $config->config['smtp_password'] = $password;
             } elseif ($this->getInput('smtp_password_remove') || $values['smtp_username'] === '') {
                 $config->config['smtp_password'] = '';

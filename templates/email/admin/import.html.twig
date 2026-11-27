@@ -10,4 +10,4 @@
 {% if imported|default(0)|to_int %}
 {{ idno_include('parts/paragraph', {text: (skipped|default(0)|to_int) ? t('%s posts were imported, and %s items in the file were not (pages, attachments, other types, or items that could not be imported).', [imported|to_int, skipped|to_int]) : t('%s posts were imported.', [imported|to_int])}) }}
 {% endif %}
-{{ idno_include('parts/button', {label: t('Visit your site'), url: site_url()}) }}
+{{ idno_include('parts/button', {label: t('Visit your site'), url: mail_url()}) }}

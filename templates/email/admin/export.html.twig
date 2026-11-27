@@ -10,5 +10,5 @@
 {% if unrendered|default(0)|to_int %}
 {{ idno_include('parts/paragraph', {text: t('%s entries could not be rendered and are included as data only.', [unrendered|to_int])}) }}
 {% endif %}
-{{ idno_include('parts/button', {label: t('Get your export'), url: site_url() ~ 'admin/export/'}) }}
+{{ idno_include('parts/button', {label: t('Get your export'), url: mail_url() ~ 'admin/export/'}) }}
 {{ idno_include('parts/paragraph', {muted: true, text: t('The archive is a full copy of the site, so keep it somewhere safe.')}) }}

@@ -29,7 +29,7 @@ namespace Tests\Fixtures\Smtp;
  */
 final class ScriptedSmtpServer
 {
-    private const OPTIONS = ['implicitTls', 'offerStartTls', 'certificate', 'pki', 'auth', 'failAt'];
+    private const OPTIONS = ['implicitTls', 'offerStartTls', 'certificate', 'pki', 'auth', 'failAt', 'rcptReply'];
 
     /** Seconds to wait for the server to listen. */
     private const START_SECONDS = 10;
@@ -45,7 +45,7 @@ final class ScriptedSmtpServer
     }
 
     /**
-     * @param array{implicitTls?: bool, offerStartTls?: bool, certificate?: 'valid-for-localhost'|'self-signed'|null, pki?: TestPki|null, auth?: array{user: string, pass: string}|null, failAt?: string|null} $options
+     * @param array{implicitTls?: bool, offerStartTls?: bool, certificate?: 'valid-for-localhost'|'self-signed'|null, pki?: TestPki|null, auth?: array{user: string, pass: string}|null, failAt?: string|null, rcptReply?: string} $options
      */
     public static function start(array $options = []): self
     {
@@ -54,7 +54,7 @@ final class ScriptedSmtpServer
                 throw new \InvalidArgumentException('Unknown option "' . $key . '".');
             }
         }
-        $options += ['implicitTls' => false, 'offerStartTls' => false, 'certificate' => null, 'pki' => null, 'auth' => null, 'failAt' => null];
+        $options += ['implicitTls' => false, 'offerStartTls' => false, 'certificate' => null, 'pki' => null, 'auth' => null, 'failAt' => null, 'rcptReply' => '550 5.1.1 No such user here'];
         if ($options['failAt'] !== null && !in_array($options['failAt'], ['connect', 'auth', 'rcpt', 'data', 'hang', 'hangAtStartTls'], true)) {
             throw new \InvalidArgumentException('Unknown failAt "' . (string) $options['failAt'] . '".');
         }
@@ -77,6 +77,7 @@ final class ScriptedSmtpServer
             'certificate' => $certificate,
             'auth' => $options['auth'],
             'failAt' => $options['failAt'],
+            'rcptReply' => (string) $options['rcptReply'],
             'parentPid' => getmypid(),
         ], JSON_THROW_ON_ERROR));
 

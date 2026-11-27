@@ -3862,7 +3862,7 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   `mail_emphasise`, are in `IdnoTwigExtensionTest::SAFE_FUNCTIONS`). `Email::setBodyFromTemplate($name, $vars)` writes both bodies and the subject the template names;
   `Email::drawMail()` returns the three without a message (the goldens use it); `setHTMLBodyFromTemplate()` and `setTextBodyFromTemplate()` remain for a caller that sets its own
   subject (a third-party `.tpl.php` template still wins). A person's words are one line in a part (`mail_one_line`: a line break cannot start a line of the mail's own), and every
-  link is built from `site_url()`, the configured address, never the request's host. Ports: `MailTransportDsn` is unchanged, so a stored host with no port still means port 25; only
+  link is built with `mail_url()` from `Email::siteAddress()`: the site's CONFIGURED `url` as written, with its own scheme (`Email` hands it to every draw as the variable `mail_address`; `site_url()` keeps its meaning for web pages and swaps the scheme to the request's), never the request's host or scheme, so a reset asked for over plain http still mails an https link. With no `url` configured the site detects its address from the request and the mail uses that, as it always did: set `url` for the guarantee (`MailFlowsTest::testALinkInAMailIsBuiltFromTheConfiguredAddressWhateverRequestAskedForTheMail`). The shell's `lang` and `dir` come from the site's `language` setting (English when there is none), never from the browser of whoever caused the mail. Ports: `MailTransportDsn` is unchanged, so a stored host with no port still means port 25; only
   the email settings form fills in the usual port of the security chosen (587, 465, 25) when it is saved with the port empty.
   The mail templates are Twig: `templates/email/**/*.html.twig` (the shell `shell.html.twig`, the parts and the eight bodies) and
   `templates/email-text/**/*.txt.twig`, drawn as every ported template is (a third-party `.tpl.php` mail template still wins,
@@ -3870,7 +3870,7 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   newlines with `{%-`/`-%}` and is compared with its original byte for byte (a `{{ }}` does not eat the newline that follows
   it, as PHP's `?>` does, so a text template has one newline fewer than the original source where an echo ended a line). The HTML
   parts escape every value from outside. The shell has no postal address and no request-derived tracking link; the mail
-  templates use only `site_url()`, `site_title()`, `setting('description')`, `t()`/`t_html()`/`t_format()` and the pure `mail_*` functions and filters, so they
+  templates use only `mail_url()`, `site_title()`, `setting('description')`, `t()`/`t_html()`/`t_format()` and the pure `mail_*` functions and filters, so they
   draw in a console process with no request, no session and no logged-in user (`TemplateEscapingTest` draws them in a
   console subprocess). Pinned by `TemplateEscapingTest::testTheOopsMailEscapesRequestValues`, `testAnInviteEscapesTheInvitersName`,
   `testATextMailIsNeverHtmlEscaped`, `testALineBreakInAnInvitersNameCannotStartALineOfTheMail` and `MailFlowsTest::testALinkInAMailIsBuiltFromTheConfiguredAddressAndNotFromTheRequest`;
@@ -6018,6 +6018,7 @@ no installer writes one.
   configures it, fetched with `Webservice::safeSend()`, and escaped where it is printed.
   `Tests/Pages/Admin/WelcomePageTest.php` checks this (the page a new administrator lands on, `/admin/welcome/`, makes no request and adds no message).
 - Known limits of the security model (stated plainly; none is fixed by the authentication changes):
+  - The administrator's test mail and the email settings let an administrator point the site's mail at any host and port, and the kinds of failure the test mail reports (found, refused, no answer, certificate, STARTTLS, login refused) tell a port scan of the server's network apart: administrator-only, two form-token POSTs (save, test) and up to 30 s a probe.
   - The webmention endpoint has no rate limit: an anonymous sender can make the site fetch one public page per POST that names a post a visitor may see (at most six requests: the redirects are followed, each hop is checked), and a mention that changes something is saved and, for a post that is itself a reply, forwarded to its reply targets.
   - A WebSub subscription made before the site sent `hub.secret` (or to a hub whose address is plain http, which WebSub forbids sending a secret to) has no secret, so its deliveries are not signed: anyone who knows a member's id and the id
     of a user they follow (both appear in public data) can hand the listeners of `websub/received` content for it (bounded in size, and never acted on by core). Unfollowing and following again makes a new subscription with a secret.

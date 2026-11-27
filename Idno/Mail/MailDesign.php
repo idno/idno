@@ -7,8 +7,9 @@ namespace Idno\Mail;
 /**
  * What every mail the site sends is made of, apart from the words: its colours, its text helpers and what a
  * mail's template says about the mail it is (the line a mail client shows beside the subject, and why the
- * reader got it). Pure: nothing here reads the site, so the Twig templates of `email` and `email-text` reach it
- * through functions of the template extension and a unit test needs nothing.
+ * reader got it). Nothing here reads the site or the request (no legacy dependency), so the Twig templates of `email` and
+ * `email-text` reach it through functions of the template extension and a unit test needs nothing; the one state is a static
+ * store, what a template says with describe(), which the mail adapter resets before and after each draw.
  *
  * A mail client shows a mail in one of four ways: with the colours it has, with the dark ones (it honours
  * prefers-color-scheme), with every colour turned over, or with only the light backgrounds and dark text turned

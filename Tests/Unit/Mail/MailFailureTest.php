@@ -61,6 +61,15 @@ final class MailFailureTest extends TestCase
         }
     }
 
+    // A reply with a right-to-left override or an isolate would reorder the words the administrator reads around it.
+    public function testDirectionControlsInTheServersReplyAreDropped(): void
+    {
+        $e = new TransportException('Expected response code "250" but got code "550", with message "550 no ' . "\u{202E}" . 'such' . "\u{2066}" . ' user' . "\u{200F}" . "\u{061C}" . '".', 550);
+
+        $this->assertSame('550 no such user', MailFailure::reply($e, '', ''));
+    }
+
+    // A hostile server's very long reply must not flood the administrator's page.
     public function testAVeryLongReplyIsCutShort(): void
     {
         $e = new TransportException('Expected response code "250" but got code "554", with message "' . str_repeat('x', 2000) . '".', 554);

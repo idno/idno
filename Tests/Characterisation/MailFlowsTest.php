@@ -123,32 +123,39 @@ final class MailFlowsTest extends CharacterisationTestCase
     }
 
     /**
-     * A link in a mail is built from the address the site is configured with, never from the request that happens to send it (a request's
-     * Host header is whatever the sender chose, and a queue worker has no request): a reset link that named another host would hand the
-     * reset code to it.
+     * A site configured at https whose reset is asked for over plain http must mail an https link: the scheme of a mail link is the configured
+     * address's, not the request's (a stranger who asks for a reset over http would otherwise make the reset code travel in the clear when
+     * the member clicks it).
      */
-    public function testALinkInAMailIsBuiltFromTheConfiguredAddressAndNotFromTheRequest(): void
+    public function testALinkInAMailIsBuiltFromTheConfiguredAddressWhateverRequestAskedForTheMail(): void
     {
-        $previous = [$_SERVER['REQUEST_URI'] ?? null, $_SERVER['HTTP_HOST'] ?? null];
-        $_SERVER['REQUEST_URI'] = '/account/password/?x=1';
-        $_SERVER['HTTP_HOST'] = 'evil.example';
+        $config = Idno::site()->config();
+        $saved = [$config->url, $config->ini_config['url'] ?? null, $_SERVER['REQUEST_METHOD'] ?? null, $_SERVER['HTTPS'] ?? null, $_SERVER['HTTP_X_FORWARDED_PROTO'] ?? null];
+        $config->url = 'https://configured.example/';
+        $config->ini_config['url'] = 'https://configured.example/';
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+        unset($_SERVER['HTTPS'], $_SERVER['HTTP_X_FORWARDED_PROTO']);
         try {
             $mail = \Idno\Core\Email::drawMail('account/password', ['email' => 'someone@example.net', 'code' => 'code-1234']);
         } finally {
-            foreach (['REQUEST_URI', 'HTTP_HOST'] as $i => $key) {
-                if ($previous[$i] === null) {
+            $config->url = $saved[0];
+            if ($saved[1] === null) {
+                unset($config->ini_config['url']);
+            } else {
+                $config->ini_config['url'] = $saved[1];
+            }
+            foreach (['REQUEST_METHOD' => $saved[2], 'HTTPS' => $saved[3], 'HTTP_X_FORWARDED_PROTO' => $saved[4]] as $key => $value) {
+                if ($value === null) {
                     unset($_SERVER[$key]);
                 } else {
-                    $_SERVER[$key] = $previous[$i];
+                    $_SERVER[$key] = $value;
                 }
             }
         }
 
-        $site = Idno::site()->config()->getDisplayURL();
-        $this->assertStringContainsString('href="' . $site . 'account/password/reset/?email=someone%40example.net&amp;code=code-1234"', $mail['html']);
-        $this->assertStringContainsString($site . 'account/password/reset/?email=someone%40example.net&code=code-1234', $mail['text']);
-        $this->assertStringNotContainsString('evil.example', $mail['html'] . $mail['text']);
-        $this->assertStringNotContainsString('x=1', $mail['html'] . $mail['text'], 'no link is built from the path of the request');
+        $this->assertStringContainsString('href="https://configured.example/account/password/reset/?email=someone%40example.net&amp;code=code-1234"', $mail['html']);
+        $this->assertStringContainsString('https://configured.example/account/password/reset/?email=someone%40example.net&code=code-1234', $mail['text']);
+        $this->assertStringNotContainsString('http://configured.example', $mail['html'] . $mail['text']);
     }
 
     public function testThePasswordResetMail(): void

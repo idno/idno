@@ -73,7 +73,10 @@ final class MailFailure
      */
     public static function reply(\Throwable $e, string $user, string $password): string
     {
-        $reply = trim(preg_replace('/\s+/u', ' ', self::scrub(self::rawReply($e->getMessage()), $user, $password)) ?? '');
+        $reply = self::scrub(self::rawReply($e->getMessage()), $user, $password);
+        // Direction controls and isolates would reorder the words the administrator reads around the reply
+        $reply = preg_replace('/[\x{200E}\x{200F}\x{061C}\x{202A}-\x{202E}\x{2066}-\x{2069}]/u', '', $reply) ?? '';
+        $reply = trim(preg_replace('/\s+/u', ' ', $reply) ?? '');
         if (mb_strlen($reply) > self::REPLY_LENGTH) {
             $reply = mb_substr($reply, 0, self::REPLY_LENGTH) . '...';
         }

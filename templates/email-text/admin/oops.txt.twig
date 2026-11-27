@@ -1,5 +1,5 @@
 {#- The plain-text twin of templates/email/admin/oops. -#}
-{%- set host = (site|default(site_url()))|url_host|default(mail_site_name()) -%}
+{%- set host = (site|default(mail_url()))|url_host|default(mail_site_name()) -%}
 {%- set kind = title|default('')|mail_one_line -%}
 {{- idno_include('parts/heading', {text: t('An error occurred on %s', [host])}) -}}
 {%- if kind -%}

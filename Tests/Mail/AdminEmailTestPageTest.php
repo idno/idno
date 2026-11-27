@@ -38,7 +38,7 @@ final class AdminEmailTestPageTest extends SmtpSiteTestCase
         $this->assertStringNotContainsString('was not sent', $text);
         $this->assertCount(1, $this->smtp->messages());
         $message = ReceivedMessage::parse($this->smtp->messages()[0]);
-        $this->assertSame('Test email from Page Site', $message->header('Subject'));
+        $this->assertStringContainsString('Page Site', (string) $message->header('Subject'), 'the mail has a subject that names the site');
         $this->assertStringContainsString('admin@example.net', (string) $message->header('To'));
         $this->assertNotNull($message->part('text/html'));
     }

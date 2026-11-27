@@ -89,6 +89,19 @@ final class AdminEmailSettingsTest extends SmtpSiteTestCase
         $this->assertSame('', $this->stored()['password']);
     }
 
+    // A browser or script that sends the password field as an array, or only spaces, must not wipe or replace the stored mail password.
+    public function testAPasswordPostedAsAnArrayOrAsSpacesKeepsTheStoredPassword(): void
+    {
+        $cookie = $this->registerUser('alice');
+        $this->storePassword();
+
+        $this->assertSame(302, $this->save($cookie, ['smtp_password' => ['x']] + self::FIELDS)->status);
+        $this->assertSame(self::PASSWORD, $this->stored()['password'], 'an array');
+
+        $this->assertSame(302, $this->save($cookie, ['smtp_password' => '   '] + self::FIELDS)->status);
+        $this->assertSame(self::PASSWORD, $this->stored()['password'], 'spaces');
+    }
+
     // A host typed with its scheme or a port is a mail setup that silently stops sending: the form refuses it and names the field.
     public function testAHostWithASchemeOrAPortIsNotSavedAndTheFieldSaysSo(): void
     {

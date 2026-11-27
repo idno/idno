@@ -1,4 +1,4 @@
 {#- The end of every plain-text mail: why the reader got it, and which site sent it. `body` (the mail), `reason`. Plain text: nothing is escaped. -#}
 {{- body|trim(" \t\r\n", 'right') ~ "\n\n-- \n" -}}
 {%- if reason|mail_one_line -%}{{- mail_wrap(reason|mail_one_line) ~ "\n" -}}{%- endif -%}
-{{- mail_site_name() ~ "\n" ~ site_url() ~ "\n" -}}
+{{- mail_site_name() ~ "\n" ~ mail_url() ~ "\n" -}}

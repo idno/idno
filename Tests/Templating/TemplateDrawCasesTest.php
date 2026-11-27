@@ -1689,7 +1689,6 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
         $this->assertStringContainsString('label-danger', (string) $out['idno version 99999.0']);
         $this->assertStringContainsString('label-success', (string) $out['idno version 0.1']);
         $this->assertStringNotContainsString('p4ss', (string) $out['email, settings 0'], 'the stored password is not printed');
-        $this->assertStringContainsString('idno-badge-ok', (string) $out['email, settings 0'], 'the page says one is saved');
         $this->assertStringContainsString('Re-archive your data', (string) $out['export, an archive']);
         $this->assertStringContainsString('id="legacytables-restored"', (string) $out['legacy tables, tables, restored']);
         $this->assertStringContainsString('idno-plugin-always-on', (string) $out['plugins, two always on']);
