@@ -1443,8 +1443,9 @@ it should be tested using the existing test suite. New tests MUST always be writ
 for new code, and existing tests MUST always pass. When there are architectural changes, 
 the existing tests MUST be updated, and appropriate edits MUST be made to AGENTS.md.
 
-Tests are for what the site has now, and a test class is named for the thing it tests. When
-a feature is removed, delete the tests that exercised it; don't add a test that it is gone
-(that its addresses answer 404, that its classes do not exist) or one that goes on looking
-for traces of it. If the removal shows that something that stays had no tests, add them
-under that thing's name.
+Add tests sparingly: the suite is run on every change and each test costs time for ever. A
+test is for behaviour the site has now that could plausibly break, and its class is named
+for the thing it tests. Don't write a test that a removed feature is gone (that its addresses
+answer 404, that its classes do not exist), one that goes on looking for traces of it, or one
+that enforces a name or scans the files for an old one. When a feature is removed, delete the
+tests that exercised it.
