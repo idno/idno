@@ -39,9 +39,43 @@ final class AccountRegistry
     /// The most accounts that can be closed at once: each adds a value to the exclusion every visitor's listing carries, and a statement can hold only so many
     public const MAX_CLOSED = 500;
 
+    /**
+     * Whether no more accounts can be closed. A full set is cleaned first (pruneDead()), so entries of accounts that are gone can never keep it full.
+     */
     public static function closedIsFull(): bool
     {
+        if (count(self::closed()) < self::MAX_CLOSED) {
+            return false;
+        }
+        try {
+            self::pruneDead();
+        } catch (\Throwable $e) {
+            Idno::site()->logging()->warning('The stored set of closed accounts could not be cleaned: ' . get_class($e));
+        }
+
         return count(self::closed()) >= self::MAX_CLOSED;
+    }
+
+    /**
+     * Drops from the stored set the uuids that have no account record (an account that was deleted whose uuid could not be taken out at the time), so a stale
+     * entry heals itself.
+     */
+    public static function pruneDead(): void
+    {
+        self::change(static function (Config $config): void {
+            $config->closed_accounts = self::alive(self::listOf($config->closed_accounts));
+        });
+    }
+
+    /**
+     * @param  list<string> $uuids
+     * @return list<string> those that have a record (read from the store, whoever is asking: at most MAX_CLOSED lookups, made only when the set is written)
+     */
+    private static function alive(array $uuids): array
+    {
+        $store = Idno::container()->get(\Idno\Storage\RecordStore::class);
+
+        return array_values(array_filter($uuids, static fn (string $uuid): bool => $store->findByUuid('entities', $uuid) !== null));
     }
 
     /**
@@ -55,14 +89,14 @@ final class AccountRegistry
             if (!in_array($uuid, $closed, true)) {
                 $closed[] = $uuid;
             }
-            $config->closed_accounts = $closed;
+            $config->closed_accounts = self::alive($closed);
         });
     }
 
     public static function unmarkClosed(string $uuid): void
     {
         self::change(static function (Config $config) use ($uuid): void {
-            $config->closed_accounts = array_values(array_diff(self::listOf($config->closed_accounts), [$uuid]));
+            $config->closed_accounts = self::alive(array_values(array_diff(self::listOf($config->closed_accounts), [$uuid])));
         });
     }
 
@@ -103,7 +137,11 @@ final class AccountRegistry
         $reserved->display = $handle;
         $reserved->account_uuid = $uuid;
         $reserved->owner = '';
-        $reserved->save(true);
+        // A slug of its own: the handle as a slug would take the slug of the next article with that title ("news" deleted, the next "News" is "news-1")
+        $reserved->slug = 'reserved-handle-' . bin2hex(random_bytes(8));
+        if ($reserved->save(true) === false) {
+            throw new \RuntimeException('The handle could not be reserved.');
+        }
     }
 
     /**

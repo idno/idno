@@ -123,8 +123,8 @@ class Delivery
                 }
             }
         }
-        // The follower records are removed only once the deliveries are handed over (queued, or with the synchronous queue actually run): if the hand-over is
-        // lost they are still there for a retry
+        // The follower records are removed only once the deliveries are handed over (queued, or with the synchronous queue actually run): if a queue write
+        // fails they are kept, and nothing sends the Delete again (with the synchronous queue "handed over" means attempted)
         $userUuid = $user->getUUID();
         $handOver = static function () use ($send, $userUuid, &$queued): void {
             $all = true;

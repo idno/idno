@@ -1556,10 +1556,20 @@ namespace Idno\Entities {
                 return $outcome;
             } finally {
                 if ($removed) {
+                    // Each on its own: a failure of one never loses the other or turns a deletion that worked into an error (a stale entry of the closed set is
+                    // dropped by the next write of the set)
                     if ($handle !== '') {
-                        \Idno\Core\AccountRegistry::reserveHandle($handle, $uuid); // (first: a process that stops between the two leaves the handle kept back)
+                        try {
+                            \Idno\Core\AccountRegistry::reserveHandle($handle, $uuid); // (first: a process that stops between the two leaves the handle kept back)
+                        } catch (\Throwable $e) {
+                            \Idno\Core\Idno::site()->logging()->warning('The handle of a deleted account could not be reserved: ' . get_class($e));
+                        }
                     }
-                    \Idno\Core\AccountRegistry::unmarkClosed($uuid);
+                    try {
+                        \Idno\Core\AccountRegistry::unmarkClosed($uuid);
+                    } catch (\Throwable $e) {
+                        \Idno\Core\Idno::site()->logging()->warning('A deleted account could not be taken out of the stored set of closed accounts: ' . get_class($e));
+                    }
                 } else {
                     $this->account_removing_until = 0;
                     $this->account_removing_by    = '';

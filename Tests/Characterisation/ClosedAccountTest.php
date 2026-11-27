@@ -293,21 +293,73 @@ final class ClosedAccountTest extends PrivateSiteTestCase
 
     /**
      * Catches the closed set growing past what a listing's query can hold (the placeholder limits of the databases), which would fail every visitor's query or
-     * expose the posts: past the bound no account is closed, and the administrator is told, and the account is not changed.
+     * expose the posts: with the set full of accounts that exist, deleting one more through the path an administrator takes changes nothing and the member is
+     * still there and is not closed.
      */
     public function testNoMoreAccountsAreClosedWhenTheClosedSetIsFull(): void
     {
         $this->prepare();
         $this->addUser('mia');
         $result = $this->runInSite(<<<'PHP'
+        $store = \Idno\Core\Idno::container()->get(\Idno\Storage\RecordStore::class);
+        $uuids = [];
+        foreach (range(1, \Idno\Core\AccountRegistry::MAX_CLOSED) as $n) {
+            $uuid = 'https://x.example/view/live' . $n;
+            $store->save('entities', ['_id' => 'live' . $n, 'uuid' => $uuid, 'entity_subtype' => 'Idno\\Common\\Entity', 'owner' => '', 'created' => time()]);
+            $uuids[] = $uuid;
+        }
         $config = \Idno\Core\Idno::site()->config();
-        $config->closed_accounts = array_map(static fn ($n) => 'https://x.example/view/' . $n, range(1, \Idno\Core\AccountRegistry::MAX_CLOSED));
+        $config->closed_accounts = $uuids;
         $config->save();
         $mia = \Idno\Entities\User::getByHandle('mia');
-        $closed = $mia->close();
-        return [$closed, \Idno\Entities\User::getByHandle('mia')->isClosed()];
+        $deleted = $mia->delete();
+        return [$deleted, \Idno\Entities\User::getByHandle('mia') instanceof \Idno\Entities\User && !\Idno\Entities\User::getByHandle('mia')->isClosed()];
         PHP);
-        $this->assertSame([false, false], $result);
+        $this->assertSame([false, true], $result);
+    }
+
+    /**
+     * Catches a site owner being unable to delete anyone ("Too many accounts are being deleted at once") because the closed set is full of entries of accounts
+     * that are already gone: the entries without a record are dropped, and the deletion goes through.
+     */
+    public function testAClosedSetFullOfDeadEntriesDoesNotRefuseADeletion(): void
+    {
+        $this->prepare();
+        $this->addUser('mia');
+        $this->runInSite(<<<'PHP'
+        $config = \Idno\Core\Idno::site()->config();
+        $config->closed_accounts = array_map(static fn ($n) => 'https://x.example/view/dead' . $n, range(1, \Idno\Core\AccountRegistry::MAX_CLOSED));
+        $config->save();
+        return true;
+        PHP);
+        $this->deleteThrough('mia');
+        $this->assertFalse($this->exists('mia'), 'the account is gone');
+        $this->assertSame([], $this->runInSite('return \Idno\Core\AccountRegistry::closed();'), 'and the dead entries went with it');
+    }
+
+    /**
+     * Catches a deletion that worked being reported as a failure, and a dead uuid left in the closed set for good (every visitor's listing then carries it),
+     * when keeping the handle back fails at the end: the account is still answered 'removed', the uuid leaves the set, and the next write of the set drops a
+     * dead uuid an earlier failure left.
+     */
+    public function testAFailureAtTheEndOfARemovalStillAnswersRemovedAndLeavesNoDeadUuidInTheSet(): void
+    {
+        $this->prepare();
+        $this->addUser('mia');
+        $result = $this->runInSite(<<<'PHP'
+        \Idno\Core\Idno::site()->events()->addListener('save', static function ($event) {
+            if ($event->data()['object'] instanceof \Idno\Entities\ReservedHandle) {
+                throw new \RuntimeException('refused');
+            }
+        });
+        $config = \Idno\Core\Idno::site()->config();
+        $config->closed_accounts = ['https://x.example/view/dead-from-before'];
+        $config->save();
+        $mia = \Idno\Entities\User::getByHandle('mia');
+        $outcome = $mia->removeAccount(100, 30.0);
+        return [$outcome, \Idno\Core\AccountRegistry::closed()];
+        PHP, true);
+        $this->assertSame(['removed', []], $result);
     }
 
     /**
@@ -324,6 +376,8 @@ final class ClosedAccountTest extends PrivateSiteTestCase
         return true;
         PHP);
         $this->assertNull($this->runInSite('return \Idno\Core\Idno::site()->config()->reserved_handles;'), 'nothing of it is in the settings');
+        // a deleted member "gone1" must not take the slug of the next article titled "Gone1"
+        $this->assertStringStartsWith('reserved-handle-', (string) $this->runInSite('return \Idno\Entities\ReservedHandle::forKey("gone1")->getSlug();'));
         $first = $this->site()->request('GET', 'admin/users', ['Cookie' => $this->admin])->body;
         $second = $this->site()->request('GET', 'admin/users?reserved_offset=25', ['Cookie' => $this->admin])->body;
 
