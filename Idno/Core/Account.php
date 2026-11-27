@@ -23,7 +23,7 @@ namespace Idno\Core {
 
             // Basic registration; this is now always present, but the page will reject the user if registration
             // is closed and a valid invitation code hasn't been provided
-            Idno::site()->routes()->addRoute('/account/register/?', '\Idno\Pages\Account\Register', true);
+            Idno::site()->routes()->addRoute('/account/register/?', \Idno\Legacy\ControllerRoute::class, true);
 
             // Password requests
             Idno::site()->routes()->addRoute('/account/password/?', '\Idno\Pages\Account\Password', true);

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Unit\Http\Page;
 
 use Idno\Http\Page\DrawnPage;
+use Idno\Http\Page\ExactShellDrawer;
 use Idno\Http\Page\PageContext;
 use Idno\Http\Page\PageRedirect;
 use Idno\Http\Page\PageDrawer;
@@ -385,5 +386,54 @@ final class PageRendererTest extends TestCase
         $response = $this->renderer->redirect($this->context());
 
         $this->assertSame('https://example.com/', $response->headers->get('Location'));
+    }
+
+    /**
+     * Catches: a page under /account/ that a visitor sees (the registration page) drawn by the ordinary drawer, which puts an address under /account/ in
+     * the settings shell meant for members, or answered with a length the page it replaced never sent.
+     */
+    public function testAnExactShellIsDrawnByTheExactDrawerAndSaysNoLength(): void
+    {
+        $exact = new class implements ExactShellDrawer {
+            /** @var list<array{0: array<string, mixed>, 1: int, 2: string}> */
+            public array $pages = [];
+
+            public function drawPageInExactShell(array $vars, int $status, string $shell): DrawnPage
+            {
+                $this->pages[] = [$vars, $status, $shell];
+
+                return new DrawnPage('exact', [['Access-Control-Allow-Origin', '*']]);
+            }
+
+            public function drawTemplateOnACopy(string $name, array $vars): string
+            {
+                return 'copy:' . $name . ':' . json_encode($vars);
+            }
+        };
+        $renderer = new PageRenderer($this->drawer, new class implements TemplateTranslation {
+            public function translate(string $text, array $subs = []): string
+            {
+                return $text;
+            }
+        }, $exact);
+
+        $response = $renderer->pageInExactShell($this->context(), ['title' => 'A'], 403);
+
+        $this->assertSame('exact', $response->getContent());
+        $this->assertSame(403, $response->getStatusCode());
+        $this->assertFalse($response->headers->has('Content-Length'));
+        $this->assertSame([[['title' => 'A'], 403, 'shell']], $exact->pages);
+        $this->assertSame([], $this->drawer->pages, 'the ordinary drawer drew nothing');
+        $this->assertSame('copy:x:{"a":1}', $renderer->templateOnACopy('x', ['a' => 1]));
+    }
+
+    /**
+     * Catches: a renderer built without the exact drawer quietly drawing a registration page in the ordinary shell: it refuses.
+     */
+    public function testWithoutAnExactShellDrawerThePageIsRefused(): void
+    {
+        $this->expectException(\LogicException::class);
+
+        $this->renderer->pageInExactShell($this->context(), []);
     }
 }

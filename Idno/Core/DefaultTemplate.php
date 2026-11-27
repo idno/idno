@@ -227,11 +227,13 @@ namespace Idno\Core {
          * @param  string        $shell       Optional override of the page shell template to be used
          * @param  callable|null $sendHeaders Given the headers at the moment `drawPage()` sent them (after the session is closed, before the shell is
          *                                    drawn), for a caller that sends them to see what the draw does to them (`header_remove()`)
+         * @param  bool          $exactShell  Draw a page of the `default` type in the shell named, whatever its address (a page under `/account/` that a visitor
+         *                                    sees); every other type is chosen as for any page
          * @return array{body: string, headers: list<array{0: string, 1: string}>}
          */
-        function renderPage(int $status, $shell = 'shell', ?callable $sendHeaders = null)
+        function renderPage(int $status, $shell = 'shell', ?callable $sendHeaders = null, bool $exactShell = false)
         {
-            $shell = $this->shellForPage($shell);
+            $shell = $this->shellForPage($shell, $exactShell);
 
             $this->messages = \Idno\Core\Idno::site()->session()->getAndFlushMessages();
 
@@ -274,10 +276,13 @@ namespace Idno\Core {
          * type. JSONP keeps the override, as it always had: its shell is a script that any site can load, and these pages hold
          * the account's and the site's settings, so they are never drawn as one.
          */
-        private function shellForPage($shell)
+        private function shellForPage($shell, bool $exactShell = false)
         {
             $this->settingsShellAsJsonp = false;
             $type = strtolower((string) $this->getTemplateType());
+            if ($exactShell && $type === 'default') {
+                return $shell;
+            }
             if (in_array($type, ['default', 'jsonp'], true)) {
                 $current = null;
                 $overridden = false;

@@ -18,6 +18,7 @@ final class PageRenderer
     public function __construct(
         private readonly PageDrawer $drawer,
         private readonly TemplateTranslation $translation,
+        private readonly ?ExactShellDrawer $exactShell = null,
     )
     {
     }
@@ -30,11 +31,44 @@ final class PageRenderer
      */
     public function page(PageContext $context, array $vars, int $status = 200, string $shell = 'shell'): Response
     {
+        return $this->respond($context, $status, fn (int $status): DrawnPage => $this->drawer->drawPage($vars, $status, $shell), true);
+    }
+
+    /**
+     * The page in the shell named, whatever its address: for a page under `/account/` that a visitor sees (the registration page), which `page()` would
+     * draw in the settings shell, and which the legacy page drew by itself (`echo`, then `exit`): the answer says no length, as that one did. Every other template type is chosen as for any page, JSONP included (answered as HTML there, never as a script).
+     *
+     * @param array<string, mixed> $vars the template variables (`title`, `body`, ...)
+     */
+    public function pageInExactShell(PageContext $context, array $vars, int $status = 200, string $shell = 'shell'): Response
+    {
+        $exact = $this->exactShell ?? throw new \LogicException('This renderer was built with no ExactShellDrawer.');
+
+        return $this->respond($context, $status, fn (int $status): DrawnPage => $exact->drawPageInExactShell($vars, $status, $shell), false);
+    }
+
+    /**
+     * One template drawn so that its variables are on no object a page prints (see `ExactShellDrawer::drawTemplateOnACopy()`): for a value that is a
+     * credential.
+     *
+     * @param array<string, mixed> $vars
+     */
+    public function templateOnACopy(string $name, array $vars): string
+    {
+        return ($this->exactShell ?? throw new \LogicException('This renderer was built with no ExactShellDrawer.'))->drawTemplateOnACopy($name, $vars);
+    }
+
+    /**
+     * @param \Closure(int): DrawnPage $draw
+     * @param bool                      $withLength whether the answer says its length: a page a legacy page drew directly (`echo`, then `exit`) never did
+     */
+    private function respond(PageContext $context, int $status, \Closure $draw, bool $withLength): Response
+    {
         if ($status === 200 && $context->status() !== 200) {
             $status = $context->status();
         }
         $context->setStatus($status);
-        $drawn = $this->drawer->drawPage($vars, $status, $shell);
+        $drawn = $draw($status);
         // A status the draw set itself is the answer's, as it was the process's
         if ($drawn->status !== null) {
             $status = $drawn->status;
@@ -49,7 +83,9 @@ final class PageRenderer
             $response->setStatusCode(PageRedirect::statusWithLocation($status));
         }
         // What a legacy page sent (`Bonita\Templates::drawPage()`): the length of what it drew, in bytes (a HEAD answer keeps it)
-        $response->headers->set('Content-Length', (string) strlen($drawn->body));
+        if ($withLength) {
+            $response->headers->set('Content-Length', (string) strlen($drawn->body));
+        }
 
         return $response;
     }

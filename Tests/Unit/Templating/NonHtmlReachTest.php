@@ -108,9 +108,9 @@ final class NonHtmlReachTest extends TestCase
     {
         $drawn = new \ReflectionMethod(self::class, 'drawnNames');
         $php = "return \$this->renderer->page(\$context, ['title' => 'A', 'body' => \$this->renderer->template('pages/example', ['a' => 1])]);"
-            . " \$site->template()->draw('pages/other'); \$x = \$t->template(); \$y = \$r->template(\$name, []);";
+            . " \$site->template()->draw('pages/other'); \$x = \$t->template(); \$y = \$r->template(\$name, []); \$z = \$r->templateOnACopy('pages/copied', []);";
 
-        $this->assertSame(['pages/other', 'pages/example'], $drawn->invoke(null, $php));
+        $this->assertSame(['pages/other', 'pages/example', 'pages/copied'], $drawn->invoke(null, $php));
     }
 
     public function testEveryTemplateANonHtmlTypeReachesIsAPhpFileOutsideDefault(): void
@@ -322,8 +322,9 @@ final class NonHtmlReachTest extends TestCase
             }
         }
         // A template a page service draws through the page renderer: `$renderer->template('pages/x', [...])`, which is what its `body` is made of
-        // (`$renderer->page($context, ['title' => ..., 'body' => $renderer->template('pages/x', [])])`)
-        if (preg_match_all('/->template\(\s*[\'"]([A-Za-z0-9_\/-]+)[\'"]\s*,/', $php, $matches) > 0) {
+        // (`$renderer->page($context, ['title' => ..., 'body' => $renderer->template('pages/x', [])])`), or on a copy of the template object
+        // (`templateOnACopy()`, for a body whose variables are credentials)
+        if (preg_match_all('/->template(?:OnACopy)?\(\s*[\'"]([A-Za-z0-9_\/-]+)[\'"]\s*,/', $php, $matches) > 0) {
             foreach ($matches[1] as $name) {
                 if (!str_ends_with($name, '/')) {
                     $names[] = $name;

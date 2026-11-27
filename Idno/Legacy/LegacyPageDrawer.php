@@ -7,6 +7,7 @@ namespace Idno\Legacy;
 use Idno\Core\Idno;
 use Idno\Http\Page\AddedHeaders;
 use Idno\Http\Page\DrawnPage;
+use Idno\Http\Page\ExactShellDrawer;
 use Idno\Http\Page\PageDrawer;
 use Idno\Templating\ShellHeaders;
 
@@ -15,7 +16,7 @@ use Idno\Templating\ShellHeaders;
  * (`$t->__([...])->draw(...)`, `->drawPage()`), over the legacy application. Built when the page renderer is; it reads the
  * application only when something is drawn.
  */
-final class LegacyPageDrawer implements PageDrawer
+final class LegacyPageDrawer implements PageDrawer, ExactShellDrawer
 {
     public function __construct(private readonly HeaderQueue $php = new PhpHeaders())
     {
@@ -69,7 +70,24 @@ final class LegacyPageDrawer implements PageDrawer
         return (string) Idno::site()->template()->__($vars)->draw($name);
     }
 
+    public function drawTemplateOnACopy(string $name, array $vars): string
+    {
+        $template = Idno::site()->template();
+
+        return (string) $template->withVars(array_merge($template->vars, $vars))->draw($name);
+    }
+
     public function drawPage(array $vars, int $status, string $shell = 'shell'): DrawnPage
+    {
+        return $this->draw($vars, $status, $shell, false);
+    }
+
+    public function drawPageInExactShell(array $vars, int $status, string $shell): DrawnPage
+    {
+        return $this->draw($vars, $status, $shell, true);
+    }
+
+    private function draw(array $vars, int $status, string $shell, bool $exactShell): DrawnPage
     {
         $template = Idno::site()->template()->__($vars);
         // PHP keeps a list of the headers `header()` sets under a web server (not the CLI), and refuses them once the output has begun
@@ -90,7 +108,7 @@ final class LegacyPageDrawer implements PageDrawer
                 foreach ($headers as [$name, $value]) {
                     $php->send($name . ': ' . $value, ShellHeaders::replaces($name));
                 }
-            } : null);
+            } : null, $exactShell);
             // A status the draw set (`http_response_code()` in a template or a shell) is the answer's
             $set = $this->php->status();
             // The type's headers are those of the status the page ends with: a draw that set another one (an error the type has a form for) is

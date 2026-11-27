@@ -44,7 +44,7 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         'Config' => ['BootConfig.php'],
         // FrontController: static methods only, used by index.php before the container exists. Client/: the
         // HTTP client factory and the bounded body reader, static helpers (the clients are wired below).
-        'Http' => ['Client', 'FrontController.php', 'Page/AddedHeaders.php', 'Page/ConditionalRequest.php', 'Page/DrawnPage.php', 'Page/HttpDate.php', 'Page/SitePage.php', 'Page/PageContext.php', 'Page/PageError.php', 'Page/PageNotModified.php', 'Page/PageRedirect.php', 'Page/RoutedByLegacyTable.php', 'RedirectTarget.php', 'TrustedProxies.php', 'Controller/File/ByteRange.php', 'Controller/File/FileCaching.php', 'Controller/File/FileLookup.php', 'Controller/File/FileOutcome.php', 'Controller/File/FileStream.php', 'Controller/File/ServedFile.php', 'Controller/WebSub/PendingList.php', 'Webmention/ReceivedWebmention.php', 'Webmention/TargetHosts.php', 'Webmention/WebmentionTarget.php'],
+        'Http' => ['Client', 'FrontController.php', 'Page/AddedHeaders.php', 'Page/ConditionalRequest.php', 'Page/DrawnPage.php', 'Page/HttpDate.php', 'Page/SitePage.php', 'Page/PageContext.php', 'Page/PageError.php', 'Page/PageNotModified.php', 'Page/PageRedirect.php', 'Page/RoutedByLegacyTable.php', 'RedirectTarget.php', 'TrustedProxies.php', 'Controller/Account/NewAccount.php', 'Controller/Account/RegistrationAdmission.php', 'Controller/Account/RegistrationInvitation.php', 'Controller/File/ByteRange.php', 'Controller/File/FileCaching.php', 'Controller/File/FileLookup.php', 'Controller/File/FileOutcome.php', 'Controller/File/FileStream.php', 'Controller/File/ServedFile.php', 'Controller/WebSub/PendingList.php', 'Webmention/ReceivedWebmention.php', 'Webmention/TargetHosts.php', 'Webmention/WebmentionTarget.php'],
         // Takes the kernel (so cannot be a container service); functions.php is not a class.
         'Console' => ['Application.php', 'functions.php'],
         // Value and helper classes (a query tree and its nodes, an entity query, the record index
@@ -393,6 +393,8 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
     // when the renderer is, and touches the legacy application only when a page is drawn.
     $services->set(\Idno\Legacy\LegacyPageDrawer::class);
     $services->alias(\Idno\Http\Page\PageDrawer::class, \Idno\Legacy\LegacyPageDrawer::class);
+    // (the same drawer, for the pages under /account/ that a visitor sees: the site's own shell, and a body drawn on a copy)
+    $services->alias(\Idno\Http\Page\ExactShellDrawer::class, \Idno\Legacy\LegacyPageDrawer::class);
     // The headers PHP holds for a response, and the rule that makes a site page's the ones a legacy page sends (kernel.response)
     $services->set(\Idno\Legacy\PhpHeaders::class);
     $services->alias(\Idno\Legacy\HeaderQueue::class, \Idno\Legacy\PhpHeaders::class);
@@ -417,6 +419,9 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
     // The login page and the logout, over the legacy session and finders
     $services->set(\Idno\Legacy\LegacySignIn::class);
     $services->alias(\Idno\Http\Controller\Session\SignIn::class, \Idno\Legacy\LegacySignIn::class);
+    // The registration page, over the legacy session, finders and invitations
+    $services->set(\Idno\Legacy\LegacyRegistrations::class);
+    $services->alias(\Idno\Http\Controller\Account\Registrations::class, \Idno\Legacy\LegacyRegistrations::class);
     // The stored files, over the legacy file store and session: the file page's service takes the interface
     $services->set(\Idno\Legacy\LegacyStoredFiles::class);
     $services->alias(\Idno\Http\Controller\File\StoredFiles::class, \Idno\Legacy\LegacyStoredFiles::class);

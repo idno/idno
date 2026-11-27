@@ -38,7 +38,27 @@ final class RegistrationAnswersTest extends SignInSiteCase
 
     protected const GROUP = 'registration';
 
-    private const CHANGED = [];
+    private const HOST_WHY = 'a request with a malformed Host is served by the legacy router, which has no page for the address now: its 404 page (the legacy page drew the form, and a POST made the account)';
+
+    private const METHOD_WHY = 'a method the page does not take is the legacy router\'s 404 page, as for every page that moved to a controller (the legacy page answered the 403 of a missing token, or the redirect home of a page with no handler)';
+
+    private const XHR_WHY = 'a script\'s POST with a missing or wrong form token is the site\'s 403 page: the lifecycle\'s rule for every site page (the legacy page forwarded, which a script\'s request cannot follow, so it answered an empty 200)';
+
+    /**
+     * The cases the page that replaced the legacy one answers differently ON PURPOSE, with why: the recordings are the legacy page's and are kept as they
+     * were, and the test of each asserts the answer of the page that serves it now.
+     */
+    private const CHANGED = [
+        'form-open-xhr' => 'an XHR GET gets the headers of the same request that is not XHR',
+        'form-open-jsonp' => 'a JSONP request of an /account page is answered as the HTML settings page, as every /account page is, never as a script any site can load (the legacy page drew the JSONP shell itself)',
+        'form-open-malformed-host' => self::HOST_WHY,
+        'register-post-malformed-host' => self::HOST_WHY,
+        'register-put-visitor' => self::METHOD_WHY,
+        'register-put-visitor-with-token' => self::METHOD_WHY,
+        'register-delete-visitor' => self::METHOD_WHY,
+        'register-delete-visitor-with-token' => self::METHOD_WHY,
+        'register-post-xhr-no-token' => self::XHR_WHY,
+    ];
 
     private const NEW_PASSWORD = 'a-new-passphrase-77';
 
@@ -345,6 +365,75 @@ final class RegistrationAnswersTest extends SignInSiteCase
         $this->assertSame($accepted, $made, $names['answer'] . ($accepted ? ' makes an account' : ' makes no account'));
     }
 
+    /**
+     * Catches: the form of an XHR request answered with the legacy router's second `Cache-Control` line where every page a controller serves gets the
+     * lines of the same request that is not XHR; and the form changing with it.
+     */
+    public function testAnXhrGetOfTheFormGetsTheHeadersOfTheSameRequestThatIsNotXhr(): void
+    {
+        $this->seedRegistration();
+        $answer = $this->site()->request('GET', '/account/register', ['X-Requested-With' => 'XMLHttpRequest']);
+        $plain = $this->site()->request('GET', '/account/register');
+        $s = $this->scrubViewers();
+        [$answeredHeaders, $answeredBody] = explode("\n\n", self::normalise(self::withoutLastModified($s($answer)), $this->baseUrl()), 2);
+        [$plainHeaders] = explode("\n\n", self::normalise(self::withoutLastModified($s($plain)), $this->baseUrl()), 2);
+        $this->assertSame($plainHeaders, $answeredHeaders);
+        $this->assertSame(explode("\n\n", (string) file_get_contents(self::recordedAnswersDirectory() . '/registration/form-open-xhr.txt'), 2)[1], $answeredBody, 'the form is what it was');
+        $this->assertCount(1, $answer->lines('cache-control'));
+    }
+
+    /**
+     * Catches: a script's POST with no form token (or a wrong one) forwarded where a script cannot follow (an empty 200 that looks like success) instead
+     * of refused with the site's 403 page, and an account being made by it.
+     */
+    public function testAScriptsPostWithoutAFormTokenIsRefusedAndRegistersNobody(): void
+    {
+        $this->seedRegistration();
+        $before = $this->handles();
+        [$cookie] = $this->visitorSession();
+        $answer = $this->site()->request('POST', '/account/register', ['Cookie' => $cookie, 'X-Requested-With' => 'XMLHttpRequest'], self::dana());
+        $this->assertSame(403, $answer->status);
+        $this->assertNull($answer->header('Location'));
+        $this->assertSame($before, $this->handles());
+    }
+
+    /**
+     * Catches: the registration page answering `?_t=jsonp` with a script any site can load (the JSONP shell) where every page under /account is answered as
+     * the HTML settings page; and the form leaving its answer to a callback.
+     */
+    public function testAJsonpRequestIsAnsweredAsHtmlNeverAsAScript(): void
+    {
+        $this->seedRegistration();
+        $answer = $this->site()->request('GET', '/account/register?_t=jsonp&callback=f');
+        $this->assertSame(200, $answer->status);
+        $this->assertStringStartsWith('text/html', (string) $answer->header('Content-Type'));
+        $this->assertStringContainsString('name="handle"', $answer->body, 'the form');
+        $this->assertStringNotContainsString('f(', substr($answer->body, 0, 3));
+    }
+
+    /**
+     * Catches: a method the page does not take (a PUT or DELETE) or a request with a malformed Host being given the registration page again: the answer is
+     * the site's 404 page, as for every address no page takes, and it makes no account.
+     */
+    public function testOtherMethodsAndAMalformedHostAreTheRoutersNotFoundPage(): void
+    {
+        $this->seedRegistration();
+        [$cookie, $token] = $this->visitorSession();
+        $x = ['name' => 'x'];
+        $cases = [
+            'GET with a malformed Host' => $this->site()->request('GET', '/account/register', ['Host' => 'bad host!']),
+            'PUT' => $this->site()->request('PUT', '/account/register', [], $x),
+            'PUT with a token' => $this->site()->request('PUT', '/account/register?__bTk=' . $token, ['Cookie' => $cookie], $x),
+            'DELETE' => $this->site()->request('DELETE', '/account/register', [], $x),
+            'DELETE with a token' => $this->site()->request('DELETE', '/account/register?__bTk=' . $token, ['Cookie' => $cookie], $x),
+        ];
+        foreach ($cases as $case => $answer) {
+            $this->assertSame(404, $answer->status, $case);
+            $this->assertStringContainsString("We couldn't find it", html_entity_decode($answer->body, ENT_QUOTES), $case);
+            $this->assertNull($answer->header('Location'), $case);
+        }
+    }
+
     public function testTheFormOnASiteOpenToRegistration(): void
     {
         $this->seedRegistration();
@@ -571,8 +660,9 @@ final class RegistrationAnswersTest extends SignInSiteCase
             [$cookie, $token] = $this->visitorSession();
             $answer = $this->site()->request('POST', '/account/register', ['Cookie' => $cookie, 'Host' => 'bad host!'], ['__bTk' => $token] + self::dana());
             $this->answer('register-post-malformed-host', $answer, $this->scrubWithNonce($token));
-            // a defect: the legacy router serves the registration of a request whose Host Symfony refused, and makes the account
-            $this->assertTrue($seen($before, $this->handles()), 'a request with a malformed Host makes an account');
+            // (the legacy router served the registration of a request whose Host Symfony refused, and made the account: it is the 404 page now)
+            $this->assertSame(404, $answer->status);
+            $this->assertFalse($seen($before, $this->handles()), 'a request with a malformed Host makes no account');
             $this->putBack(true);
 
             // the other methods, by a visitor with the token in the address and with none
