@@ -21,14 +21,15 @@ final class TrustedProxiesSiteTest extends PrivateSiteTestCase
     }
 
     /**
-     * The session cookie the login page sets, asked through a server of the test with the given trusted proxies.
+     * The session cookie the login page sets, asked of the test's own server (no setting) or of one with the given
+     * trusted proxies.
      *
      * @param array<string, string> $headers
      */
     private function loginPageCookie(string $trustedProxies, array $headers): string
     {
-        $url = $this->startExtraServer($trustedProxies === '' ? ['IDNO_TEST_NOTHING' => '1'] : ['IDNO_TRUSTED_PROXIES' => $trustedProxies]);
-        $header = (string) (new HttpSiteClient($url))->request('GET', 'session/login', $headers)->header('Set-Cookie');
+        $client = $trustedProxies === '' ? $this->site() : new HttpSiteClient($this->startExtraServer(['IDNO_TRUSTED_PROXIES' => $trustedProxies]));
+        $header = (string) $client->request('GET', 'session/login', $headers)->header('Set-Cookie');
         $name = (string) Idno::site()->config()->sessionname;
         $start = strpos($header, $name . '=');
         $this->assertNotFalse($start, 'a session cookie in: ' . $header);
@@ -38,25 +39,37 @@ final class TrustedProxiesSiteTest extends PrivateSiteTestCase
 
     public function testWithoutTheSettingAForwardedHttpsRequestIsSecureAsBefore(): void
     {
+        // Catches: an upgraded site behind a proxy that sets nothing losing its Secure session cookie.
         // An upgraded site behind a proxy sets nothing: its members must keep the Secure cookie.
         $this->assertMatchesRegularExpression('/;\s*secure\b/i', $this->loginPageCookie('', ['X-Forwarded-Proto' => 'https']));
     }
 
     public function testWithTheSettingAForwardedHeaderFromAStrangerIsIgnored(): void
     {
+        // Catches: a visitor claiming https for a plain-http request and getting a Secure cookie (and an API key over http).
         $this->assertDoesNotMatchRegularExpression('/;\s*secure\b/i', $this->loginPageCookie('192.0.2.1', ['X-Forwarded-Proto' => 'https']));
     }
 
     public function testWithTheSettingTheTrustedProxyIsBelieved(): void
     {
+        // Catches: naming the proxy switching https detection off for the requests it forwards.
         $this->assertMatchesRegularExpression('/;\s*secure\b/i', $this->loginPageCookie('127.0.0.1', ['X-Forwarded-Proto' => 'https']));
     }
 
     public function testABadSettingStopsTheSiteWithAMessageNamingIt(): void
     {
+        // Catches: a mistyped proxy list being ignored, which would leave the site believing nobody (or everybody) in silence.
         [$exit, , $stderr] = $this->consoleWith(['IDNO_TRUSTED_PROXIES' => '10.0.0.0/0'], 'list');
 
         $this->assertSame(1, $exit);
         $this->assertStringContainsString('trusted_proxies', $stderr);
+    }
+
+    public function testABadSettingIsAServerErrorOverHttpAndNeverASiteThatTrustsNobodyInSilence(): void
+    {
+        // Catches: the boot swallowing the refusal, so a web site with a mistyped proxy list serves pages anyway.
+        $response = (new HttpSiteClient($this->startExtraServer(['IDNO_TRUSTED_PROXIES' => '10.0.0.0/0'])))->request('GET', 'session/login');
+
+        $this->assertSame(500, $response->status);
     }
 }

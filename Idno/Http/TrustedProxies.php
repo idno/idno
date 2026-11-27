@@ -132,6 +132,9 @@ final class TrustedProxies
      * and kept (a web request's server variables do not change), and built again only when one of the
      * variables the rules read has changed (a process that sets them: a test, a script).
      *
+     * @internal for legacy callers (`Page::isSSL()`, `Config`); new code takes its own `Request` and passes it to
+     *           `isSecure()`, and never reads `$_SERVER`
+     *
      * @param array<string, mixed> $server
      */
     public static function requestFor(array $server): Request

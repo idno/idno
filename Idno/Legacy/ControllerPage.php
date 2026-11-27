@@ -339,8 +339,9 @@ final class ControllerPage extends Page
     }
 
     /**
-     * Whether the request was made over HTTPS, as `Page::isSSL()` decides from the process's request (the server's HTTPS
-     * variable, the port, `X-Forwarded-Proto`), read from this page's request.
+     * Whether the request was made over HTTPS, by the rule `Page::isSSL()` follows (`TrustedProxies::isSecure()`: with
+     * the `trusted_proxies` setting, the server's HTTPS variable or a trusted proxy's `X-Forwarded-Proto`; without it,
+     * the HTTPS variable, port 443 or anyone's `X-Forwarded-Proto`), read from this page's request.
      */
     public function isSecure(): bool
     {

@@ -216,6 +216,14 @@ site that sets nothing still behaves, `X-Forwarded-Proto: https` is believed fro
 its secure session cookie, but a visitor can also claim https for their own request. Sites behind a proxy should set it.
 `X-Forwarded-Host` and `X-Forwarded-Prefix` are never believed: the `url` setting decides the site's address.
 
+The proxy must OVERWRITE `X-Forwarded-Proto`, `X-Forwarded-For` and `X-Forwarded-Port`, not append to what the client sent:
+Idno believes the leftmost value, so a proxy that appends lets a client choose it (in nginx, `proxy_set_header
+X-Forwarded-Proto $scheme;` overwrites; `$proxy_add_x_forwarded_for` appends, which is right only for `X-Forwarded-For`
+when the proxy is itself behind another trusted proxy). With the setting on, a connection on port 443 alone no longer
+means https (the web server's `HTTPS` variable, any value but `off`, or the proxy's header does). The word `*` is
+refused here, unlike in `http_allow_private`: name the proxies. An entry `REMOTE_ADDR` trusts whichever address made the
+request, which is everybody, so use it only when the server can be reached through the proxy alone.
+
 **webservice_max_download**<br>
 The most bytes of a response an outgoing request keeps, 10 MB (10485760) by default. A response that declares a
 larger length is refused, and one with no declared length is cut at this size. It is also the largest file the site

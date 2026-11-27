@@ -43,8 +43,9 @@ The queue is carried by Symfony Messenger (the `idno_messages` table of your dat
 If a proxy (a load balancer, nginx, Caddy, a CDN) terminates TLS and talks to Idno over plain http, it must send
 `X-Forwarded-Proto: https`, and Idno should be told which proxies to believe: set `trusted_proxies` in
 `configuration/config.ini` (or `IDNO_TRUSTED_PROXIES` in the environment) to the proxy's address or range, for example
-`trusted_proxies[] = '10.0.0.0/8'`. Then the session cookie is marked Secure, and the site's https checks follow the
-header, only for requests that come from that proxy. Until it is set, Idno believes `X-Forwarded-Proto` from anyone, which
+`trusted_proxies[] = '10.0.0.0/8'`. Then the session cookie is marked Secure, and the site's https address follows the
+header, only for requests that come from that proxy. The proxy must overwrite `X-Forwarded-Proto` with its own value
+(in nginx, `proxy_set_header X-Forwarded-Proto $scheme;`), not append to what the client sent. Until it is set, Idno believes `X-Forwarded-Proto` from anyone, which
 keeps an existing site working but lets any visitor claim that their own request was made over https. Set `url` to the
 address visitors use, with its scheme: it decides the site's address. See "trusted_proxies" in [Configuration](config.md).
 
