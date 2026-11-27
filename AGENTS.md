@@ -166,7 +166,8 @@ Each content plugin has an `Entry.php` entity class that defines
 
 The Bridgy plugin was removed in November 2026: it only knew Twitter and Facebook, which
 Bridgy itself no longer supports, and its callback pages changed a member's settings on a plain
-GET. A site that still lists it as enabled loads without it. Replies and likes that the Bridgy
+GET. A site that still lists it as enabled loads without it, as with any plugin that is not
+installed (`Tests/Core/MissingPluginTest.php`). Replies and likes that the Bridgy
 service sends for a member who signed up there themselves still arrive as ordinary webmentions.
 
 ## ActivityPub Plugin
@@ -892,10 +893,8 @@ something). What existing sites, hubs and plugins hold was kept, and must stay:
   triggered (plugins do, and so does an event that was queued before the upgrade), and keeps a listener that is
   added under both names once. Rename an event by adding it there, never by triggering two events.
 - `docs/install/upgrade.md` ("Names that changed") is the one place that tells the history and lists the
-  deprecated names. `Tests/Core/WebSubNamingTest.php` reads every tracked file and fails if an earlier name
-  is anywhere but the files it lists; `Tests/Core/WebSubCompatibilityTest.php` checks that the earlier class
-  names, event name and the callback address still work, and `Tests/Pages/WebSub/CallbackTest.php` asks the
-  callback over HTTP.
+  deprecated names. `Tests/Core/WebSubCompatibilityTest.php` checks that the earlier class names, event name
+  and the callback address still work, and `Tests/Pages/WebSub/CallbackTest.php` asks the callback over HTTP.
 
 ## Code Style
 
@@ -1419,7 +1418,6 @@ something). What existing sites, hubs and plugins hold was kept, and must stay:
   with its `/service/vendor/messages` page and the `noping` setting. Don't add a notice, news or
   update feed from a fixed host; if one is ever wanted, it must be off until the site's owner
   configures it, fetched with `Webservice::safeSend()`, and escaped where it is printed.
-  `Tests/Pages/Onboarding/VendorMessagesTest.php` checks this.
 - **Never commit** `.env`, `config.ini`, or anything in `configuration/`
 
 ## Git Conventions
