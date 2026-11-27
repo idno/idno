@@ -254,6 +254,9 @@ namespace Idno\Entities {
          */
         static function getByEmail($email)
         {
+            if (!static::isLookupValue($email)) {
+                return false;
+            }
             if ($result = \Idno\Core\Idno::site()->db()->getObjects(get_called_class(), array('email' => $email), null, 1)) {
                 foreach ($result as $row) {
                     return $row;
@@ -345,6 +348,9 @@ namespace Idno\Entities {
          */
         static function getByHandle($handle)
         {
+            if (!static::isLookupValue($handle)) {
+                return false;
+            }
             if ($result = \Idno\Core\Idno::site()->db()->getObjects(get_called_class(), array('handle' => $handle), null, 1)) {
                 foreach ($result as $row) {
                     return $row;
@@ -362,6 +368,9 @@ namespace Idno\Entities {
          */
         static function getByProfileURL($url)
         {
+            if (!static::isLookupValue($url)) {
+                return false;
+            }
             // If user explicitly has a profile url set (generally this means it's a RemoteUser class
             if ($result = \Idno\Core\Idno::site()->db()->getObjects(get_called_class(), array('url' => $url), null, 1)) {
                 foreach ($result as $row) {

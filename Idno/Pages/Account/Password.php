@@ -40,7 +40,7 @@ namespace Idno\Pages\Account {
         {
 
             $this->reverseGatekeeper();
-            $email_address = $this->getInput('email');
+            $email_address = $this->getTextInput('email'); // A text: a field sent as an array is an empty one
 
             if ($user = User::getByEmail($email_address)) {
 

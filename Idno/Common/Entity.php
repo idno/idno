@@ -247,13 +247,36 @@ namespace Idno\Common {
         }
 
         /**
+         * Is this a value one thing can be looked up by: a text, and not an empty one?
+         *
+         * The finders that take an id, an address, a handle or an email address ask this before
+         * they ask the database anything. A value that comes from a request can be an array
+         * (name[]=x, name[$gt]=x, an object in a JSON body), which the database would read as a
+         * condition of the sender's choosing and not as a value; for anything that is no text
+         * the answer is that there is no such thing.
+         *
+         * @param  mixed $value
+         * @return bool
+         */
+        static function isLookupValue($value)
+        {
+            return is_string($value) && $value !== '';
+        }
+
+        /**
          * Retrieve a single record by its database ID
-         * @param string $id
-         * @return Entity
+         * @param string $id A text, or an object with a text form (the id object of a database driver)
+         * @return Entity|false
          */
 
         static function getByID($id)
         {
+            if (is_object($id) && method_exists($id, '__toString')) {
+                $id = (string) $id;
+            }
+            if (!static::isLookupValue($id)) {
+                return false;
+            }
             try {
                 return static::getOneFromAll(array('_id' => \Idno\Core\Idno::site()->db()->processID($id)));
             } catch (\Exception $e) {
@@ -335,6 +358,9 @@ namespace Idno\Common {
 
         static function getByUUID($uuid, $cached = true)
         {
+            if (!static::isLookupValue($uuid)) {
+                return false;
+            }
             if (!empty(self::$entity_cache[$uuid]) && $cached) return self::$entity_cache[$uuid];
             $return = static::getOneFromAll(array('uuid' => $uuid));
             if ($return instanceof Entity) self::$entity_cache[$uuid] = $return;
@@ -351,6 +377,9 @@ namespace Idno\Common {
          */
         static function getByURL($url, $cached = true)
         {
+            if (!static::isLookupValue($url)) {
+                return false;
+            }
             if (isset(self::$entity_cache[$url]) && $cached) return self::$entity_cache[$url];
 
             if (!self::isLocalUUID($url)) {
@@ -1816,6 +1845,9 @@ namespace Idno\Common {
          */
         static function getByShortURL($url)
         {
+            if (!static::isLookupValue($url)) {
+                return false;
+            }
             $url = str_replace(\Idno\Core\Idno::site()->config()->url . 's/', '', $url);
             if (empty($url)) {
                 return false;

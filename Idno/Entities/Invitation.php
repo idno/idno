@@ -207,7 +207,10 @@ namespace Idno\Entities {
          */
         static function allForEmail($email)
         {
-            $email = (string) $email;
+            // An address is a text: anything else (an array from a request, say) has no invitation
+            if (!static::isLookupValue($email)) {
+                return [];
+            }
             $found = [];
             // Earlier versions stored the address as it was typed
             foreach (array_unique([static::normalizeEmail($email), trim($email)]) as $address) {

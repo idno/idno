@@ -25,6 +25,29 @@ Thanks to [Chris Aldich](http://stream.boffosocko.com/2015/upgrading-withknown-o
     * Previous releases of Idno (<0.9.5) used a now deprecated mongo driver. If you are running your site on Mongo, you will first need to make sure that you have installed the new [PHP MongoDB driver](https://secure.php.net/manual/en/set.mongodb.php).
     * Additionally, the 0.9.9 release changed the default database engine, so you'll need to specify ```database = 'MongoDB'``` in your config.ini
 
+## Queries: a field value that is an array
+
+For plugin authors. In the search array of `Entity::get()`, `getOne()`, `getFromX()`, `countFromX()` and the database's
+`getObjects()` / `getRecords()`, a field value that is an array is now a condition only when it is a map of operators
+the database back end supports. Any other array makes the query match nothing, on both back ends.
+
+* **MySQL** understands `$in` (an array of plain values), `$not` (a plain value, or `['$in' => [...]]`), `$lt` and
+  `$gt`. Earlier, an array it did not understand was left out of the query, so the query matched as if the field had
+  not been named: a plain list (`['tags' => ['a', 'b']]`), an empty array, a map with any other key, and an operator
+  with an empty operand (`['$in' => []]`, `['$lt' => 0]`, `['$not' => '']`). Now a list, an empty array and an unknown
+  key match nothing; `['$in' => []]` matches nothing (nothing is in an empty list); and `$lt`, `$gt` and `$not` compare
+  with an empty operand as with any other value. To match one of several values, write `['field' => ['$in' => $values]]`,
+  and leave the field out of the search array when there is nothing to restrict.
+* **MongoDB** hands on the operators `$eq`, `$ne`, `$gt`, `$gte`, `$lt`, `$lte`, `$in`, `$nin`, `$not`, `$exists`,
+  `$type`, `$regex`, `$options`, `$all` and `$size`, and reads the queries inside `$or`, `$and` and `$nor` the same way.
+  A field value that is a plain list or a document (which MongoDB compared with the stored value as a whole) and a
+  field operator outside that list (`$elemMatch`, `$mod`, `$where`) now match nothing.
+* The finders that look one thing up (`Entity::getByID()`, `getByUUID()`, `getByShortURL()`, `User::getByEmail()`,
+  `getByHandle()`, `getByProfileURL()` and the invitation finders) return `false` for a value that is not a string.
+  `getByID()` still takes a database driver's id object.
+* A page that reads one text from the request should use `$this->getTextInput('name')`, which gives an empty string
+  when the field was sent as an array (`name[]=x`).
+
 ## Names that changed
 
 ### WebSub (formerly PubSubHubbub)

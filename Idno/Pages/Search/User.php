@@ -14,7 +14,7 @@ namespace Idno\Pages\Search {
 
             $limit = $this->getInput('limit', 100);
             $offset = $this->getInput('offset', 0);
-            $query = trim($this->getInput('query'));
+            $query = trim($this->getTextInput('query'));
             $sort = $this->getInput('sort', 'created');
             $order = $this->getInput('order', 'desc');
             $template = $this->getInput('template', 'forms/components/usersearch/user');

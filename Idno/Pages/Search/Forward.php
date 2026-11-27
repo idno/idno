@@ -11,13 +11,13 @@ namespace Idno\Pages\Search {
 
         function getContent()
         {
-            $query = $this->getInput('q');
+            $query = $this->getTextInput('q');
             $this->forward(\Idno\Core\Idno::site()->config()->url . '?q=' . urlencode($query));
         }
 
         function postContent()
         {
-            $query = $this->getInput('q');
+            $query = $this->getTextInput('q');
             $this->forward(\Idno\Core\Idno::site()->config()->url . '?q=' . urlencode($query));
         }
 

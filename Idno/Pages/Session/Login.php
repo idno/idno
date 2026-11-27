@@ -18,17 +18,17 @@ namespace Idno\Pages\Session {
             // If we're somehow here but logged in, move to the front page if we're viewing with an HTML template
             if (\Idno\Core\Idno::site()->session()->isLoggedOn() && in_array(\Idno\Core\Idno::site()->template()->getTemplateType(), ['default', 'modern'])) {
 
-                $fwd = $this->getInput('fwd'); // Forward to a new page?
+                $fwd = $this->getTextInput('fwd'); // Forward to a new page?
                 if (empty($fwd)) {
                     $fwd = \Idno\Core\Idno::site()->config()->getDisplayURL();
                 } else {
-                    $fwd = \Idno\Core\Webservice::base64UrlDecode($this->getInput('fwd'));
+                    $fwd = \Idno\Core\Webservice::base64UrlDecode($fwd);
                 }
                 $fwd = self::sanitizeRedirectUrl($fwd);
                 $this->forward($fwd);
             }
 
-            $fwd = \Idno\Core\Webservice::base64UrlDecode($this->getInput('fwd')); // Forward to a new page?
+            $fwd = \Idno\Core\Webservice::base64UrlDecode($this->getTextInput('fwd')); // Forward to a new page?
             if ($fwd == \Idno\Core\Idno::site()->config()->getDisplayURL() . 'session/login') {
                 $fwd = \Idno\Core\Idno::site()->config()->getDisplayURL();
             }
@@ -57,21 +57,24 @@ namespace Idno\Pages\Session {
         function postContent()
         {
 
-            $fwd = $this->getInput('fwd'); // Forward to a new page?
+            $fwd = $this->getTextInput('fwd'); // Forward to a new page?
             if (empty($fwd)) {
                 $fwd = \Idno\Core\Idno::site()->config()->getDisplayURL();
             }
             $fwd = self::sanitizeRedirectUrl($fwd);
 
-            if ($user = \Idno\Entities\User::getByHandle($this->getInput('email'))) {
-            } else if ($user = \Idno\Entities\User::getByEmail($this->getInput('email'))) {
+            // A handle, an address and a password are texts: a field sent as an array is an empty one
+            $email = $this->getTextInput('email');
+
+            if ($user = \Idno\Entities\User::getByHandle($email)) {
+            } else if ($user = \Idno\Entities\User::getByEmail($email)) {
             } else {
-                \Idno\Core\Idno::site()->events()->triggerEvent('login/failure/nouser', array('method' => 'password', 'credentials' => array('email' => $this->getInput('email'))));
+                \Idno\Core\Idno::site()->events()->triggerEvent('login/failure/nouser', array('method' => 'password', 'credentials' => array('email' => $email)));
                 $this->setResponse(401);
             }
 
             if ($user instanceof \Idno\Entities\User) {
-                if ($user->checkPassword(trim($this->getInput('password')))) {
+                if ($user->checkPassword(trim($this->getTextInput('password')))) {
                     \Idno\Core\Idno::site()->events()->triggerEvent('login/success', array('user' => $user)); // Trigger an event for auditing
                     \Idno\Core\Idno::site()->session()->logUserOn($user);
                     $this->forwardToLogin($fwd);

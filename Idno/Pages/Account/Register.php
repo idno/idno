@@ -81,10 +81,11 @@ namespace Idno\Pages\Account {
         function getContent()
         {
             $this->signedOutOnly();
-            $code       = $this->getInput('code');
-            $email      = $this->getInput('email');
-            $onboarding = $this->getInput('onboarding');
-            $set_name   = $this->getInput('set_name');
+            // Texts: a field sent as an array is an empty one
+            $code       = $this->getTextInput('code');
+            $email      = $this->getTextInput('email');
+            $onboarding = !empty($this->getInput('onboarding')); // A flag, which the first-run pages set themselves
+            $set_name   = $this->getTextInput('set_name');
 
             $admission = $this->admission($email, $code);
             if ($admission['problem']) {
@@ -140,14 +141,15 @@ namespace Idno\Pages\Account {
         function postContent()
         {
             $this->signedOutOnly();
-            $name       = $this->getInput('name');
-            $handle     = trim($this->getInput('handle'));
-            $password   = trim($this->getInput('password'));
-            $password2  = trim($this->getInput('password2'));
-            $email      = trim($this->getInput('email'));
-            $code       = $this->getInput('code');
-            $onboarding = $this->getInput('onboarding');
-            $set_name   = $this->getInput('set_name');
+            // Texts: a field sent as an array is an empty one
+            $name       = $this->getTextInput('name');
+            $handle     = trim($this->getTextInput('handle'));
+            $password   = trim($this->getTextInput('password'));
+            $password2  = trim($this->getTextInput('password2'));
+            $email      = trim($this->getTextInput('email'));
+            $code       = $this->getTextInput('code');
+            $onboarding = !empty($this->getInput('onboarding')); // A flag, which the first-run pages set themselves
+            $set_name   = $this->getTextInput('set_name');
 
             $site = \Idno\Core\Idno::site();
             $lang = $site->language();

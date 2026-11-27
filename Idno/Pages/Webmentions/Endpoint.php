@@ -28,8 +28,12 @@ namespace Idno\Pages\Webmentions {
 
             parse_str(trim(file_get_contents("php://input")), $vars);
 
-            // Check that both source and target are non-empty
-            if (!empty($vars['source']) && !empty($vars['target']) && $vars['source'] != $vars['target']) {
+            // Check that both source and target are non-empty, and that each is one address
+            // (source[]=x is an array, and no address)
+            if (!empty($vars['source']) && !empty($vars['target'])
+                && is_string($vars['source']) && is_string($vars['target'])
+                && $vars['source'] != $vars['target']
+            ) {
 
                 $source = $vars['source'];
                 $target = $vars['target'];

@@ -1024,6 +1024,39 @@ something). What existing sites, hubs and plugins hold was kept, and must stay:
   control characters, `Log::MAX_LENGTH` characters), and a report never mails the
   administrators, because its text is the client's. `Tests/Pages/Service/ClientLogAccessTest.php`
   checks this.
+- Request input that is an array: a request can send any field as an array (`name[]=x`,
+  `name[$gt]=x`, an object in a JSON body), and `Page::getInput()` hands it on as it is. A query
+  reads an array as a condition, not as a value, so two rules keep a request from choosing or
+  dropping the condition of a lookup:
+  - **A value from a request is made a text before it reaches a finder or a function that takes
+    a string**: read it with `Page::getTextInput($name, $default = '')` (`Input::text()`), which
+    gives the default for a field that is missing or is no text. Sign in, registration, the
+    password recovery request and reset, the home page's `q` and `types`, `/search/`, Webfinger's
+    `resource`, the webmention endpoint's `source` and `target` and the form token fields all
+    answer an array as they answer an empty or invalid field. Use `getInput()` only for a field
+    that is meant to be a list, and then check each element.
+  - **The finders that look one thing up by a text find nothing for anything else**, before any
+    query: `Entity::getByID()` (which also takes a database driver's id object), `getByUUID()`,
+    `getByURL()`, `getByShortURL()`, `getBySlug()`, `User::getByEmail()`, `getByHandle()`,
+    `getByProfileURL()`, `Invitation::allForEmail()` (and so `getByEmail()`, `check()`,
+    `removeByEmail()`) and `UnfurledUrl::getBySourceURL()` ask `Entity::isLookupValue()`. A new
+    finder of that kind asks it too.
+  - **In a search array, a field value that is an array is a condition only when it is a map made
+    only of operators the back end knows, each with an operand it can use; any other array makes
+    the query match nothing.** It is never left out of the query, which is what MySQL did with a
+    plain list, an empty array, an unknown key and an operator with an empty operand, so that
+    the query matched more than its caller asked for. MySQL (`MySQL::isOperatorMap()`,
+    `build_where_from_array()`): `$in` (an array of plain values; an empty one matches
+    nothing), `$not` (a plain value, or a map holding only `$in`), `$lt`, `$gt` (a plain value,
+    an empty one included); `$or` and `$search` are keys of the search array itself. MongoDB
+    (`Mongo::guardQuery()`, applied to every query before it is sent): the operators in
+    `Mongo::OPERATORS`, and the queries inside `$or`, `$and` and `$nor`; plain values and
+    objects (ids, dates, regular expressions) pass as they are. Code that needs another
+    operator adds it to those lists with a check of its operand; don't work around the rule.
+  `Tests/Data/QueryArrayValueTest.php`, `Tests/Data/MongoQueryGuardTest.php`,
+  `Tests/Entities/FinderValueTest.php`, `Tests/Pages/ArrayInputTest.php` and
+  `Tests/Pages/Account/ArrayInputTest.php` (over HTTP: form fields, the `json` field and JSON
+  bodies) check this.
 - HTML sanitization via HTMLPurifier
 - Template variables and the included file: `Idno\Core\Bonita\Templates::draw()` pushes the
   located `.tpl.php` path onto a private static stack and the scoping closure pops it in the

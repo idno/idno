@@ -327,7 +327,8 @@ namespace Idno\Data {
          */
         function createSearchArray($query)
         {
-            return array('$search' => array($query));
+            // Only text can be searched for: anything else is handed on as it is, and matches nothing
+            return array('$search' => array(is_scalar($query) ? (string) $query : $query));
         }
     }
 }

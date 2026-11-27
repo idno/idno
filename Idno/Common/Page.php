@@ -133,6 +133,26 @@ namespace Idno\Common {
             return null;
         }
 
+        /**
+         * Retrieves an input value that is meant to be one text: a name, an address, a code, a
+         * password, a search query.
+         *
+         * A request can send any field as an array (name[]=x, name[$gt]=x, an object in a JSON
+         * body). getInput() hands that on as it is, and code that expects a text then fails on
+         * it, or passes it to a query, where an array is a condition and not a value. This
+         * gives the text, and the default for a field that is missing or is no text. Use it
+         * for every value that goes to a finder (User::getByEmail(), Entity::getByID() ...) or
+         * to a function that takes a string.
+         *
+         * @param  string $name    Name of the input variable
+         * @param  string $default What a missing field, or one that is no text, gives (default: an empty string)
+         * @return string
+         */
+        function getTextInput($name, $default = '')
+        {
+            return \Idno\Core\Input::text($this->getInput($name), $default);
+        }
+
         function exception($e)
         {
             $this->setResponse(500);
@@ -339,21 +359,21 @@ namespace Idno\Common {
             if (empty($_REQUEST['__bTs'])) {
                 \Idno\Core\Idno::site()->logging()->error("__bTs timestamp is missing");
             } else {
-                $ts = $_REQUEST['__bTs'];
+                $ts = \Idno\Core\Input::text($_REQUEST['__bTs']); // A text: a field sent as an array is logged as an empty one
             }
 
             $ta = "";
             if (empty($_REQUEST['__bTa'])) {
                 \Idno\Core\Idno::site()->logging()->warning("__bTa action is missing");
             } else {
-                $ta = $_REQUEST['__bTa'];
+                $ta = \Idno\Core\Input::text($_REQUEST['__bTa']); // A text: a field sent as an array is logged as an empty one
             }
 
             $tk = "";
             if (empty($_REQUEST['__bTk'])) {
                 \Idno\Core\Idno::site()->logging()->error("__bTk token is missing");
             } else {
-                $tk = $_REQUEST['__bTk'];
+                $tk = \Idno\Core\Input::text($_REQUEST['__bTk']); // A text: a field sent as an array is logged as an empty one
             }
 
             $debug = [
