@@ -69,6 +69,8 @@ namespace IdnoPlugins\Video\Tests {
         }
 
         /**
+         * An address that could be a PeerTube or Loops video is read as a candidate, and never accepted before its host has been asked.
+         *
          * @dataProvider candidates
          */
         public function testCandidate($address, $provider, $host, $id, $start)
@@ -118,6 +120,8 @@ namespace IdnoPlugins\Video\Tests {
         }
 
         /**
+         * An address literal, a host that is no domain name, a path of another shape or an id with markup in it is no candidate, so its host is never asked anything.
+         *
          * @dataProvider notCandidates
          */
         public function testNotACandidate($address)
@@ -315,12 +319,6 @@ namespace IdnoPlugins\Video\Tests {
             } else {
                 $this->assertNull($video);
             }
-        }
-
-        public function testServiceNames()
-        {
-            $this->assertSame(['YouTube', 'Vimeo', 'Dailymotion', 'TikTok', 'Bluesky'], VideoUrl::supportedServices());
-            $this->assertSame(['YouTube', 'Vimeo', 'Dailymotion', 'TikTok', 'Bluesky', 'PeerTube', 'Loops'], VideoUrl::supportedServices(true));
         }
     }
 

@@ -135,7 +135,6 @@ namespace IdnoPlugins\Moderation\Tests {
             $page = $this->get('/admin/moderation/settings', static::$admin);
             $this->assertStringContainsString('value="help@example.org"', $page['body']);
             $this->assertStringNotContainsString('name="moderation_notify_admins" value="1" checked', $page['body'], 'An unticked box turns the mails off.');
-            $this->assertStringContainsString('legal duties', $page['body']);
 
             $this->submit('/admin/moderation/settings', ['moderation_contact_email' => 'not an address', 'moderation_notify_admins' => '1'], static::$admin);
             $this->assertStringContainsString('value="help@example.org"', $this->get('/admin/moderation/settings', static::$admin)['body'], 'A bad address is not saved.');

@@ -121,6 +121,7 @@ namespace Tests\Pages\User {
             return $found;
         }
 
+        // The control for the tests below: each page they search for the address is served and is about the member.
         public function testThePagesExist()
         {
             foreach (['the profile, HTML', 'a post, HTML', 'the profile, JSON', 'a post, JSON', 'the profile, RSS', 'a post, RSS'] as $name) {

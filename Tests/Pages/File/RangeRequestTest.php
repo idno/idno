@@ -129,6 +129,8 @@ namespace Tests\Pages\File {
         }
 
         /**
+         * A Range header a player sends (first-last, first-, -suffix) is read as the bytes it names.
+         *
          * @dataProvider satisfiableRanges
          */
         public function testParseRange($range, $first, $last)

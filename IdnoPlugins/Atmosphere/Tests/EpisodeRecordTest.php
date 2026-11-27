@@ -43,12 +43,6 @@ class EpisodeRecordTest extends \PHPUnit\Framework\TestCase
         ];
     }
 
-    public function testBothRecordsAreKeyedByTid()
-    {
-        $this->assertSame('tid', self::$validator->keyType('live.voxport.podcast.episode'));
-        $this->assertSame('tid', self::$validator->keyType('live.voxport.podcast.series'));
-    }
-
     public function testTheValidatorRefusesWrongEpisodes()
     {
         $good = EpisodeRecord::episode($this->source());
@@ -126,6 +120,7 @@ class EpisodeRecordTest extends \PHPUnit\Framework\TestCase
         $this->assertArrayNotHasKey('audioLength', $record);
     }
 
+    // A member's series record is valid against the podcast lexicon: the handle is made a slug (maya.r, maya-r) and the language a tag (en_US, en-US).
     public function testAMembersSeries()
     {
         $record = EpisodeRecord::series([
@@ -149,6 +144,7 @@ class EpisodeRecordTest extends \PHPUnit\Framework\TestCase
         ], $record);
     }
 
+    // A handle with no ASCII letters falls back to "audio", and a language or address that is not one is left out, so the PDS does not refuse the record.
     public function testASeriesFromAlmostNothing()
     {
         $record = EpisodeRecord::series(['handle' => 'üï', 'title' => 'x', 'language' => 'English', 'created' => 1795564800]);

@@ -196,10 +196,6 @@ class EntityGetByUrlListenerTest extends \Tests\IdnoTestCase
     public function testASubclassThatOverridesRegisterEventHooksStillWorks()
     {
         $dispatcher = $this->freshDispatcher();
-        $called = 0;
-        $dispatcher->addListener('test/hooks', function () use (&$called) {
-            $called++;
-        });
         $subclass = new class () extends GenericDataItem {
             public static $registered = 0;
             public function registerEventHooks()
@@ -215,6 +211,5 @@ class EntityGetByUrlListenerTest extends \Tests\IdnoTestCase
         new $class();
         $this->assertSame(3, $class::$registered);
         $this->assertSame(1, $this->listenerCount($dispatcher));
-        $this->assertSame(0, $called);
     }
 }

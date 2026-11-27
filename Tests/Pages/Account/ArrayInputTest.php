@@ -284,6 +284,8 @@ namespace Tests\Pages\Account {
         }
 
         /**
+         * The control for the tests below: the same form, sent with texts, makes the account.
+         *
          * @dataProvider transports
          */
         public function testATextRegisters($transport)

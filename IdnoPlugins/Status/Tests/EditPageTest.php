@@ -78,6 +78,8 @@ namespace IdnoPlugins\Status\Tests {
         }
 
         /**
+         * The compose form opens with the text its address gives it (a share, a reply), or empty.
+         *
          * @dataProvider queries
          */
         public function testFormLoads($query, $text)
@@ -106,6 +108,8 @@ namespace IdnoPlugins\Status\Tests {
         }
 
         /**
+         * A new post that mentions somebody or answers an address is a Reply; any other is a Status.
+         *
          * @dataProvider inputs
          */
         public function testFactory($input, $class)

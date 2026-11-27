@@ -8,6 +8,7 @@ namespace Tests\Core {
     class GatekeeperTest extends \Tests\IdnoTestCase
     {
 
+        // A page for members answers 403 to a visitor and 200 to a request signed with a member's API key.
         public function testGatekeeper()
         {
             $result = \Idno\Core\Webservice::get(\Idno\Core\Idno::site()->config()->url . 'begin/profile/', [], []);
@@ -35,6 +36,7 @@ namespace Tests\Core {
             \Idno\Core\Idno::site()->session()->logUserOff();
         }
 
+        // An admin page answers 403 to a visitor, to a signed member, and to a signed administrator: an API request is never an administrator.
         public function testAdminGatekeeper()
         {
             $result = \Idno\Core\Webservice::get(\Idno\Core\Idno::site()->config()->url . 'admin/', [], []);

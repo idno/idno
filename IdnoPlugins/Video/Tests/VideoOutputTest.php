@@ -153,6 +153,8 @@ namespace IdnoPlugins\Video\Tests {
         }
 
         /**
+         * A video post draws exactly one player, whose address is built from the checked provider and id, never the address the member typed.
+         *
          * @dataProvider playerProvider
          */
         public function testPlayerIsDrawn($look, $address, $embed)

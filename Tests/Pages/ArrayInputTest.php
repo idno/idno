@@ -75,6 +75,8 @@ namespace Tests\Pages {
         }
 
         /**
+         * Webfinger answers a resource sent as an array as it answers an empty one, and describes no member.
+         *
          * @dataProvider arrays
          */
         public function testWebfinger($suffix)
@@ -91,6 +93,8 @@ namespace Tests\Pages {
         }
 
         /**
+         * A webmention whose source or target is an array is refused exactly as a missing address is.
+         *
          * @dataProvider arrays
          */
         public function testTheWebmentionEndpoint($suffix)

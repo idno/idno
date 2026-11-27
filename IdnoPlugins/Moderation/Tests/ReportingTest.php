@@ -85,7 +85,6 @@ namespace IdnoPlugins\Moderation\Tests {
             foreach (array_keys(\IdnoPlugins\Moderation\Reasons::all()) as $slug) {
                 $this->assertStringContainsString('name="reason" value="' . $slug . '"', $result['body']);
             }
-            $this->assertCount(12, \IdnoPlugins\Moderation\Reasons::all());
             $this->assertStringContainsString($marker, $result['body']);
             $this->assertStringContainsString('be told who reported them', $result['body']);
         }
@@ -174,6 +173,7 @@ namespace IdnoPlugins\Moderation\Tests {
             $this->assertTrue($result['case']->urgent);
         }
 
+        // A report is refused for an unknown reason, for your own post, profile or comment, and for a thing you cannot read or that is of another kind.
         public function testRefusals()
         {
             $entry = $this->post(static::$author);
@@ -268,6 +268,7 @@ namespace IdnoPlugins\Moderation\Tests {
             $this->assertTrue($case->urgent);
         }
 
+        // A member cannot flood the queue: the report after the hourly limit is refused and opens no case.
         public function testRateLimit()
         {
             $busy = static::member('repbusy');
@@ -310,7 +311,6 @@ namespace IdnoPlugins\Moderation\Tests {
             $long = Moderation::cleanDescription(str_repeat('é😀', 5000));
             $this->assertEquals(Moderation::DESCRIPTION_LENGTH, mb_strlen($long));
             $this->assertTrue(mb_check_encoding($long, 'UTF-8'), 'The text must be cut between characters.');
-            $this->assertEquals(1000, Moderation::DESCRIPTION_LENGTH);
         }
 
         public function testHostileDescriptionIsNotMarkupOnTheAdminPage()

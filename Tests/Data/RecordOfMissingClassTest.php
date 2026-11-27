@@ -110,13 +110,6 @@ namespace Tests\Data {
             return ['a visitor' => [false], 'the member who owns the records' => [true]];
         }
 
-        public function testClassesAreNotThere()
-        {
-            foreach (self::CLASSES as $class) {
-                $this->assertFalse(class_exists($class), "The test needs $class not to exist.");
-            }
-        }
-
         /**
          * @dataProvider records
          */

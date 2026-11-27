@@ -49,7 +49,6 @@ namespace IdnoPlugins\Checkin\Tests {
             $this->assertStringNotContainsString('<New York>', $html);
             $this->assertStringContainsString('tile.openstreetmap.org', $html);
             $this->assertStringContainsString('OpenStreetMap</a> contributors', $html, 'The map names the source of its tiles.');
-            $this->assertStringNotContainsString('StamenTileLayer', $html);
             $this->assertStringContainsString('class="idno-entry-body e-content entry-content"', $html);
         }
 

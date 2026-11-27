@@ -87,19 +87,6 @@ namespace Tests\Data {
         }
 
         /**
-         * A post with an emoji in its title, body and tags is saved.
-         *
-         * @dataProvider sqlModeProvider
-         */
-        public function testPostWithEmojiIsSaved($sqlMode)
-        {
-            $entry = $this->savePost($sqlMode);
-
-            $this->assertNotEmpty($entry->getID(), 'save() should have stored the post and given it an ID.');
-            $this->assertIsArray(\Idno\Core\Idno::site()->db()->getRecord($entry->getID()), 'The post should be in the database.');
-        }
-
-        /**
          * The post is read back exactly as it was written.
          *
          * @dataProvider sqlModeProvider

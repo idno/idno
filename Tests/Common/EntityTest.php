@@ -54,6 +54,7 @@ class EntityTest extends \Tests\IdnoTestCase
         return $entity;
     }
 
+    // A slug is lower case with non-ASCII percent-encoded, and can be cut to a number of words and of bytes.
     public function testPrepareSlug()
     {
         $entity = new GenericDataItem();
@@ -69,6 +70,7 @@ class EntityTest extends \Tests\IdnoTestCase
         $this->assertEquals("indie-hello", $entity->prepareSlug($title, 3, 5, 'hello'), 'Slug should have matched indie-hello.');
     }
 
+    // A second post with the same title gets an address of its own, not the address of the first.
     function testSetSlugResilient()
     {
         $unique = md5(time() . rand(0, 9999));
@@ -237,6 +239,7 @@ EOD
         $this->assertEquals('http://chelsea.example/chelsea-liked-a-post', $anno['permalink'], 'The permalink should have been set to http://chelsea.example/chelsea-liked-a-post.');
     }
 
+    // A page that links to a post arrives as a mention under the post, with its author and address.
     function testMentionWebmention()
     {
         $entity = $this->webmentionEntityProvider();

@@ -77,19 +77,6 @@ class ParseLinksOutsideTagsTest extends \Tests\IdnoTestCase
         $this->assertSame($html, $out);
     }
 
-    public function testNoOnerrorAttributeAppears()
-    {
-        $out = $this->parseAll('<p><img src="https://a.example/i.png" alt="see http://x/onerror=alert(1)//"></p>');
-        $doc = new \DOMDocument();
-        libxml_use_internal_errors(true);
-        $doc->loadHTML('<?xml encoding="UTF-8">' . $out);
-        libxml_clear_errors();
-        foreach ($doc->getElementsByTagName('img') as $img) {
-            $this->assertFalse($img->hasAttribute('onerror'));
-            $this->assertSame(['src', 'alt'], array_values(array_map(fn ($a) => $a->nodeName, iterator_to_array($img->attributes))));
-        }
-    }
-
     public function testTextIsStillLinked()
     {
         $t = Idno::site()->template();

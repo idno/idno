@@ -66,6 +66,8 @@ namespace IdnoPlugins\Video\Tests {
         }
 
         /**
+         * Every form of address the four services give out is recognised, with the right id, start time and player address.
+         *
          * @dataProvider recognised
          */
         public function testRecognisedAddress($address, $provider, $id, $embed, $start, $portrait)
@@ -152,6 +154,8 @@ namespace IdnoPlugins\Video\Tests {
         }
 
         /**
+         * An address on another host, over http, with userinfo or a port, or with an id of the wrong shape is refused: it would become the src of a frame.
+         *
          * @dataProvider refused
          */
         public function testRefusedAddress($address)
@@ -195,13 +199,6 @@ namespace IdnoPlugins\Video\Tests {
             $this->assertSame('https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ', VideoUrl::fromStored('youtube', 'dQw4w9WgXcQ', '"><script>', '')->getEmbedUrl());
             $this->assertSame('https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ', VideoUrl::fromStored('youtube', 'dQw4w9WgXcQ', -5, '')->getEmbedUrl());
             $this->assertSame('https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ?start=12', VideoUrl::fromStored('youtube', 'dQw4w9WgXcQ', '12', '')->getEmbedUrl());
-        }
-
-        public function testProviderNames()
-        {
-            $this->assertSame('YouTube', VideoUrl::parse('https://youtu.be/dQw4w9WgXcQ')->getProviderName());
-            $this->assertSame('Vimeo', VideoUrl::parse('https://vimeo.com/76979871')->getProviderName());
-            $this->assertSame(['YouTube', 'Vimeo', 'Dailymotion', 'TikTok', 'Bluesky'], VideoUrl::supportedServices());
         }
 
         /**

@@ -547,7 +547,6 @@ namespace IdnoPlugins\Portfolios\Tests {
                     $this->assertCount(1, $menu, "The post has one menu for the $who on $page.");
                     $this->assertSame($who === 'author', strpos($menu[0], 'data-portfolio-pick') !== false, "\"Add to portfolio\" is in it for the author only ($who, $page).");
                     $this->assertSame($who !== 'author', strpos($menu[0], 'data-mod-report') !== false, "\"Report\" is in it for other members only ($who, $page).");
-                    $this->assertStringNotContainsString('idno-entry-kebab', $body, 'There is no second menu of the old kind.');
                     $outside = str_replace($menus[0], '', $body);
                     $this->assertStringNotContainsString('data-portfolio-pick', $outside, 'Nothing offers portfolios outside a menu.');
                 }

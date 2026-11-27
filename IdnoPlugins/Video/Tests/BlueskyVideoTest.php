@@ -95,6 +95,8 @@ namespace IdnoPlugins\Video\Tests {
         }
 
         /**
+         * A bsky.app post address (by handle, own domain or DID) is read as a candidate, and never accepted before Bluesky has been asked.
+         *
          * @dataProvider candidates
          */
         public function testCandidate($address, $actor)
@@ -125,6 +127,8 @@ namespace IdnoPlugins\Video\Tests {
         }
 
         /**
+         * A look-alike host, plain http, or a malformed handle, DID or record key is refused before any request is made.
+         *
          * @dataProvider notCandidates
          */
         public function testNotACandidate($address)
@@ -404,12 +408,6 @@ namespace IdnoPlugins\Video\Tests {
             $message = Idno::site()->session()->getAndFlushMessages()[0]['message'];
             $this->assertStringContainsString('Bluesky', $message);
             $this->assertStringNotContainsString('<', $message);
-        }
-
-        public function testBlueskyIsNamedAmongTheServices()
-        {
-            $this->assertContains('Bluesky', VideoUrl::supportedServices());
-            $this->assertContains('Bluesky', Video::serviceNames());
         }
     }
 

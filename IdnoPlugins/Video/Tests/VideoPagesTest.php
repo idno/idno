@@ -101,6 +101,7 @@ namespace IdnoPlugins\Video\Tests {
             $this->assertNotEquals(200, $result['response'], 'The form is for members only. If this is failing, you may need to set IDNO_DOMAIN.');
         }
 
+        // The compose form of a video opens for a member, with its address and title fields.
         public function testFormLoads()
         {
             $this->logIn();
@@ -227,6 +228,7 @@ namespace IdnoPlugins\Video\Tests {
             $this->assertSame($video->getTitle(), $videos[0]->getTitle());
         }
 
+        // A visitor sees the video at its address: the nocookie player, the h-entry and u-video marks, and the description without its script.
         public function testPermalink()
         {
             $title = 'Permalink video ' . substr(md5(rand() . microtime(true)), 0, 10);

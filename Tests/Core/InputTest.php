@@ -9,6 +9,7 @@ namespace Tests\Core {
     class InputTest extends \Tests\IdnoTestCase
     {
 
+        // A field that was not sent gives exactly the default it was asked with (null, false or true), statically and on a page.
         public function testInputDefaults()
         {
 
