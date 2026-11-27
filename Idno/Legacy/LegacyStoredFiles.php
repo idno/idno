@@ -91,6 +91,6 @@ final class LegacyStoredFiles implements StoredFiles
     public function releaseSession(): void
     {
         // Close the session early: the file may be a long time in the sending
-        session_write_close();
+        Idno::site()->session()->finishEarly();
     }
 }

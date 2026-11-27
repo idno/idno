@@ -85,7 +85,7 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         // Passwords is the service; the legacy hasher is built by it. SessionUser and StatelessAuthentication are value
         // objects and ApiSignatureVerifier a pure helper (built with new); the interfaces are implemented by Idno\Legacy
         // adapters (wired below); the authenticator, the responder and the form token are wired by hand below.
-        'Security' => ['ApiSignatureVerifier.php', 'CurrentUserAuthenticator.php', 'CurrentUserSource.php', 'DeniedResponder.php', 'ForbiddenPage.php', 'FormToken.php', 'LegacyBcryptPasswordHasher.php', 'LoginThrottle.php', 'SessionUser.php', 'StatelessAuthentication.php'],
+        'Security' => ['ApiSignatureVerifier.php', 'CurrentUserAuthenticator.php', 'CurrentUserSource.php', 'DeniedResponder.php', 'ForbiddenPage.php', 'FormToken.php', 'LegacyBcryptPasswordHasher.php', 'LoginThrottle.php', 'SessionSettings.php', 'SessionUser.php', 'StatelessAuthentication.php'],
         // The installer's value objects, static helpers and the classes it builds with new; the paths, the web
         // installer, the setup token and the two listeners are services (the paths are wired below).
         'Install' => ['AdministratorDetails.php', 'CheckResult.php', 'ConfigFile.php', 'DatabaseChoice.php', 'DatabaseConnectionFailed.php', 'DatabaseFinding.php', 'EarlierSite.php', 'FirstAdministrator.php', 'InstallCode.php', 'InstallForm.php', 'InstallPage.php', 'ServerChecks.php', 'SiteAddress.php', 'UploadFolder.php'],
@@ -135,6 +135,7 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
             service_closure(\Idno\Storage\Files\FileStore::class),
             service_closure('messenger.bus.default'),
             service_closure(\Psr\Cache\CacheItemPoolInterface::class),
+            service_closure(\Idno\Security\NativeSession::class),
         ])
         ->autowire(false)
         ->autoconfigure(false);
@@ -364,6 +365,8 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
 
     // The password service needs nothing of the legacy application; the legacy application's User entity fetches it.
     $services->set(\Idno\Security\Passwords::class)->public();
+    // The one owner of PHP's session (shared): the legacy Session and the db() service's session handler both go through it.
+    $services->set(\Idno\Security\NativeSession::class)->public();
 
     // Failed logins are counted on the site's one cache pool, which is built when first fetched (it needs the legacy
     // application), so the throttle is built then too: the login page fetches it.

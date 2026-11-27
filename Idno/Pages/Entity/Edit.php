@@ -30,7 +30,7 @@ namespace Idno\Pages\Entity {
                 $this->setOwner($owner);
             }
 
-            session_write_close();
+            \Idno\Core\Idno::site()->session()->finishEarly();
 
             $t = \Idno\Core\Idno::site()->template();
             $t->__(

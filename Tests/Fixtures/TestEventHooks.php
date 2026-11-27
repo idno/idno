@@ -42,6 +42,12 @@ final class TestEventHooks
                 Idno::site()->routes()->addRoute('/' . $directory . 'draw-legacy/?', $page);
             }
         });
+        // With IDNO_TEST_LOGIN_EXIT=1 a legacy page that logs a member on and ends the request (LegacyLoginExitPage), at `/_test/login-exit/?`
+        if (getenv('IDNO_TEST_LOGIN_EXIT') === '1') {
+            $dispatcher->addListener('plugins/loaded', static function (): void {
+                Idno::site()->routes()->addRoute('/_test/login-exit/?', LegacyLoginExitPage::class);
+            });
+        }
         // With IDNO_TEST_FIXTURE_SHELL=1 the shell of FixtureShellController's page, registered as core registers a shell it keeps
         if (getenv('IDNO_TEST_FIXTURE_SHELL') === '1') {
             $dispatcher->addListener('plugins/loaded', static function (): void {

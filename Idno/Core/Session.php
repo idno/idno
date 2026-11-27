@@ -69,19 +69,20 @@ namespace Idno\Core {
          */
         const PASSWORD_FINGERPRINT = 'password_fingerprint';
 
+        private ?\Idno\Security\NativeSession $native = null;
+
+        /**
+         * The owner of PHP's session (the container's one): every call this class makes to PHP's session goes through it.
+         */
+        private function native(): \Idno\Security\NativeSession
+        {
+            return $this->native ??= Idno::container()->get(\Idno\Security\NativeSession::class);
+        }
+
         function init()
         {
-            ini_set('session.cookie_lifetime', 60 * 60 * 24 * 7); // Persistent cookies
-            ini_set('session.gc_maxlifetime', 60 * 60 * 24 * 7); // Garbage collection to match
-
-            ini_set('session.use_only_cookies', true); // Only cookies for session
-            ini_set('session.cookie_httponly', true); // Restrict cookies to HTTP only (help reduce XSS attack profile)
-            ini_set('session.cookie_samesite', 'Lax'); // Not sent with cross-site POSTs: the general defence for handlers that skip the form token
-            ini_set('session.use_strict_mode', true); // Help mitigate session fixation
-            ini_set("session.use_trans_sid", false); // Prevent transparent IDs
-            if (\Idno\Common\Page::isSSL()) {
-                ini_set('session.cookie_secure', true); // Set secure cookies when site is secure
-            }
+            // The ini values are set before any handler is installed, so that a handler a plugin supplies sees them
+            $this->native()->configure(new \Idno\Security\SessionSettings((string) Idno::site()->config()->sessionname, (bool) \Idno\Common\Page::isSSL()));
 
             $sessions_handled = false;
 
@@ -118,17 +119,12 @@ namespace Idno\Core {
                 }
             }
 
-            // Fallback to files if no other session storage handler has been defined
-            if (!$sessions_handled) {
-                session_save_path(Idno::site()->config()->session_path);
-            }
-
-            session_name(Idno::site()->config()->sessionname);
-            // The lines that keep every page out of shared caches are the session's `nocache` limiter's; a host's php.ini must not change them
-            session_cache_limiter('nocache');
-            session_start();
-            $carried = $_COOKIE[session_name()] ?? null;
-            $this->sessionStartedHere = !is_string($carried) || $carried !== session_id();
+            // Fallback to files if no other session storage handler has been defined: PHP's own, in the configured directory
+            $this->native()->start(
+                Idno::site()->config()->sessionname,
+                $sessions_handled ? null : Idno::site()->config()->session_path
+            );
+            $this->sessionStartedHere = !$this->native()->carriedCookie();
 
             $this->seedSession();
 
@@ -184,7 +180,7 @@ namespace Idno\Core {
                     $session = Idno::site()->session();
                     if ($session && $session->isAPIRequest() && $session->sessionStartedHere) {
                         $_SESSION = [];
-                        @session_destroy();
+                        $session->native()->destroy();
                     }
                 }
             );
@@ -228,8 +224,7 @@ namespace Idno\Core {
             if ($this->apiRequest) {
                 return;
             }
-            session_id(session_create_id());
-            if (@session_start()) {
+            if ($this->native()->startNew()) {
                 $_SESSION = [];
                 $this->sessionStartedHere = true;
                 \Idno\Core\Bonita\Forms::forgetToken();
@@ -254,7 +249,7 @@ namespace Idno\Core {
          */
         function finishEarly()
         {
-            session_write_close();
+            $this->native()->close();
         }
 
         /**
@@ -541,23 +536,9 @@ namespace Idno\Core {
 
             // Really log the user off by destroying the cookie
             // See https://secure.php.net/manual/en/function.session-destroy.php
-            if (!defined('IDNO_UNIT_TEST')) {
-                if (ini_get("session.use_cookies")) {
-                    $params = session_get_cookie_params();
-                    setcookie(
-                        session_name(), '', [
-                            'expires'  => time() - 42000,
-                            'path'     => $params["path"],
-                            'domain'   => $params["domain"],
-                            'secure'   => $params["secure"],
-                            'httponly' => $params["httponly"],
-                            'samesite' => 'Lax',
-                        ]
-                    );
-                }
-            }
+            $this->native()->expireCookie();
 
-            @session_destroy();
+            $this->native()->destroy();
 
             return true;
         }
@@ -706,13 +687,13 @@ namespace Idno\Core {
          */
         private function endSessionStartedHere(): void
         {
-            if (!$this->apiRequest || !$this->sessionStartedHere || session_status() !== PHP_SESSION_ACTIVE) {
+            if (!$this->apiRequest || !$this->sessionStartedHere || !$this->native()->isActive()) {
                 return;
             }
             // what this request has said so far (the warning about a connection in the clear) is drawn with it: the messages stay in memory
             $messages = $_SESSION['messages'] ?? [];
             $_SESSION = $messages === [] ? [] : ['messages' => $messages];
-            @session_destroy();
+            $this->native()->destroy();
             $this->removeSessionCookie();
         }
 
@@ -735,7 +716,7 @@ namespace Idno\Core {
                 $_SESSION[self::PASSWORD_FINGERPRINT] = $this->passwordFingerprint($return);
             }
             if (!$this->apiRequest) {
-                @session_regenerate_id(true);
+                $this->native()->regenerate();
                 // The form token belongs to the session id it was made for: the next form carries a new one.
                 \Idno\Core\Bonita\Forms::forgetToken();
             }
@@ -939,12 +920,12 @@ namespace Idno\Core {
          */
         public function beginStatelessRequest(): void
         {
-            if (session_status() === PHP_SESSION_ACTIVE) {
+            if ($this->native()->isActive()) {
                 if ($this->sessionStartedHere) {
                     $_SESSION = [];
-                    @session_destroy();
+                    $this->native()->destroy();
                 } else {
-                    session_abort();
+                    $this->native()->abort();
                 }
             }
             $_SESSION = [];
@@ -965,27 +946,7 @@ namespace Idno\Core {
          */
         private function removeSessionCookie(): void
         {
-            $prefix  = session_name() . '=';
-            $cookies = [];
-            $found   = false;
-            foreach (headers_list() as $line) {
-                if (stripos($line, 'Set-Cookie:') !== 0) {
-                    continue;
-                }
-                $cookie = trim(substr($line, strlen('Set-Cookie:')));
-                if (str_starts_with($cookie, $prefix)) {
-                    $found = true;
-                } else {
-                    $cookies[] = $cookie;
-                }
-            }
-            if (!$found) {
-                return;
-            }
-            header_remove('Set-Cookie');
-            foreach ($cookies as $cookie) {
-                header('Set-Cookie: ' . $cookie, false);
-            }
+            $this->native()->removeCookieLine();
         }
 
         /**

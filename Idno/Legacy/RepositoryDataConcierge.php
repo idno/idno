@@ -104,6 +104,7 @@ final class RepositoryDataConcierge extends \Idno\Core\DataConcierge implements 
      * @param \Closure(): EntityRepository $repository   fetched at first use
      * @param \Closure(): LoggerInterface  $logger       the site's logger, fetched at first use
      * @param string|null                  $databaseName what getDatabase() returns (the `dbname` setting)
+     * @param (\Closure(): \Idno\Security\NativeSession)|null $nativeSession the owner of PHP's session (the one Idno\Core\Session uses), fetched when the handler is installed
      */
     public function __construct(
         private readonly string $family,
@@ -112,6 +113,7 @@ final class RepositoryDataConcierge extends \Idno\Core\DataConcierge implements 
         private readonly \Closure $repository,
         private readonly \Closure $logger,
         private readonly ?string $databaseName,
+        private readonly ?\Closure $nativeSession = null,
         private readonly LegacySqlMaintenance $maintenance = new LegacySqlMaintenance(),
     )
     {
@@ -203,7 +205,7 @@ final class RepositoryDataConcierge extends \Idno\Core\DataConcierge implements 
         if ($this->family === 'sqlite') {
             return null;
         }
-        session_set_save_handler($this->sessionHandler(), true);
+        ($this->nativeSession ?? static fn (): \Idno\Security\NativeSession => new \Idno\Security\NativeSession())()->useHandler($this->sessionHandler());
     }
 
     /**

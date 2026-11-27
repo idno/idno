@@ -265,7 +265,7 @@ namespace Idno\Core {
             $this->indieweb_citation         = false;
             $this->indieweb_reference        = false;
             $this->hub                       = 'https://withknown.superfeedr.com/';
-            $this->session_path              = session_save_path(); // Session path when not storing sessions in the database
+            $this->session_path              = ini_get('session.save_path'); // Session path when not storing sessions in the database
             $this->sessions_database         = true; // Let the database handle the session
             $this->disable_cleartext_warning = false; // Set to true to disable warning when access credentials are sent in the clear
             $this->multi_syndication         = true; // Do we allow multiple accounts per syndication endpoint?

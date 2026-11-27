@@ -26,7 +26,7 @@ namespace Idno\Core {
                 // (a page that cannot forward, an XHR POST, is ended by the forward with an empty answer: the work still runs behind it)
                 throw new \Idno\Http\Page\PageRedirect($location, '', 200);
             }
-            session_write_close();
+            \Idno\Core\Idno::site()->session()->finishEarly();
             $page->forward($location, false);
 
             ignore_user_abort(true);    // This is dangerous, but the work must continue

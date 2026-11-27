@@ -35,6 +35,7 @@ final class LegacyServiceFactory
      * @param (\Closure(): \Idno\Storage\Files\FileStore)|null      $fileStore  the FileStore service, which the filesystem() service serves
      * @param (\Closure(): \Symfony\Component\Messenger\MessageBusInterface)|null $messageBus the bus queued events are sent on, which queue() sends them with
      * @param (\Closure(): \Psr\Cache\CacheItemPoolInterface)|null $cachePool the cache pool, which cache() serves
+     * @param (\Closure(): \Idno\Security\NativeSession)|null     $nativeSession the owner of PHP's session, which the db() service installs its session handler through
      */
     public function __construct(
         private readonly ?\Closure $connection = null,
@@ -44,6 +45,7 @@ final class LegacyServiceFactory
         private readonly ?\Closure $fileStore = null,
         private readonly ?\Closure $messageBus = null,
         private readonly ?\Closure $cachePool = null,
+        private readonly ?\Closure $nativeSession = null,
     )
     {
     }
@@ -115,6 +117,7 @@ final class LegacyServiceFactory
             $this->repository,
             $this->logger,
             $config->dbname === null ? null : (string) $config->dbname,
+            $this->nativeSession,
         );
     }
 

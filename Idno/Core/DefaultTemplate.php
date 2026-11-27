@@ -181,7 +181,7 @@ namespace Idno\Core {
             $this->messages = \Idno\Core\Idno::site()->session()->getAndFlushMessages();
 
             // End session BEFORE we output any data
-            session_write_close();
+            \Idno\Core\Idno::site()->session()->finishEarly();
 
             $status = $this->pageStatus();
             $this->sendShellHeaders();
@@ -235,7 +235,7 @@ namespace Idno\Core {
 
             $this->messages = \Idno\Core\Idno::site()->session()->getAndFlushMessages();
 
-            session_write_close();
+            \Idno\Core\Idno::site()->session()->finishEarly();
 
             $headers = $this->shellHeaders($status);
             if ($sendHeaders !== null) {
