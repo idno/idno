@@ -40,6 +40,11 @@ final class SignInAnswersTest extends SignInSiteCase
     private const CHANGED = [
         'login-visitor-xhr' => self::XHR_WHY,
         'login-visitor-malformed-host' => self::HOST_WHY,
+        'current-user-bob-xhr' => self::XHR_WHY,
+        'current-user-put-visitor' => self::METHOD_WHY,
+        'current-user-put-bob-with-token' => self::METHOD_WHY,
+        'current-user-delete-visitor' => self::METHOD_WHY,
+        'current-user-delete-bob-with-token' => self::METHOD_WHY,
         'login-post-array-email' => 'a login field that is not text (`email[]=bob`) is an empty value: the ordinary failed login, where the legacy page was the 500 page of a PHP error',
         'logout-get-visitor' => self::METHOD_WHY,
         'logout-get-bob' => self::METHOD_WHY,
@@ -335,6 +340,22 @@ final class SignInAnswersTest extends SignInSiteCase
     }
 
     /**
+     * Catches: the current-user page of an XHR request answered with the legacy router's lines for it (two `Cache-Control` lines, a 1997 `Expires`, a JSON
+     * type) where every page a controller serves gets the lines of the same request that is not XHR; and the member's page changing with it.
+     */
+    public function testAnXhrGetOfTheCurrentUserPageGetsTheHeadersOfTheSameRequestThatIsNotXhr(): void
+    {
+        $bob = ['Cookie' => $this->bobsSession()];
+        $answer = $this->site()->request('GET', '/currentUser', $bob + ['X-Requested-With' => 'XMLHttpRequest']);
+        $plain = $this->site()->request('GET', '/currentUser', $bob);
+        [$answeredHeaders, $answeredBody] = explode("\n\n", self::normalise(self::withoutLastModified($answer), $this->baseUrl()), 2);
+        [$plainHeaders] = explode("\n\n", self::normalise(self::withoutLastModified($plain), $this->baseUrl()), 2);
+        $this->assertSame($plainHeaders, $answeredHeaders);
+        $this->assertSame($this->recorded('current-user-bob-xhr')[1], $answeredBody, 'the body is what it was');
+        $this->assertCount(1, $answer->lines('cache-control'));
+    }
+
+    /**
      * Catches: the XHR logout losing the caching lines every XHR POST has (both `Cache-Control` lines, as the XHR login sends them): the answer is the
      * recording but for the second `Cache-Control` line.
      */
@@ -370,6 +391,10 @@ final class SignInAnswersTest extends SignInSiteCase
         $this->assertNotFoundPage($this->site()->request('GET', '/session/logout?_t=json', $bob), 'logout-get-bob-json');
         $this->assertSame(404, $this->site()->request('HEAD', '/session/logout')->status, 'logout-head-visitor');
         $this->assertSame(404, $this->site()->request('HEAD', '/session/logout', $bob)->status, 'logout-head-bob');
+        foreach (['PUT', 'DELETE'] as $method) {
+            $this->assertNotFoundPage($this->site()->request($method, '/currentUser', [], $x), $method . ' /currentUser');
+            $this->assertNotFoundPage($this->site()->request($method, '/currentUser?__bTk=' . $token, $bob, $x), $method . ' /currentUser with a token');
+        }
         // and none of them signed Bob out
         $this->assertSame('Bob Member', $this->site()->request('GET', '/currentUser?_t=json', $bob)->json()['user']['displayName']);
     }

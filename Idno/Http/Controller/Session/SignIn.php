@@ -81,6 +81,16 @@ interface SignIn
     public function isSecure(): bool;
 
     /**
+     * The site's title.
+     */
+    public function siteTitle(): string;
+
+    /**
+     * What a member is called on a page: their name.
+     */
+    public function userTitle(User $user): string;
+
+    /**
      * The page to go to as a sign-in form's `fwd` field of a GET holds it (base64, URL-safe), decoded.
      */
     public function decodeForward(string $value): string;

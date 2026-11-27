@@ -86,6 +86,16 @@ final class LegacySignIn implements SignIn
         return Page::isSSL();
     }
 
+    public function siteTitle(): string
+    {
+        return (string) Idno::site()->config()->title;
+    }
+
+    public function userTitle(User $user): string
+    {
+        return (string) $user->getTitle();
+    }
+
     public function decodeForward(string $value): string
     {
         return (string) Webservice::base64UrlDecode($value);

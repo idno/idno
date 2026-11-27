@@ -171,6 +171,16 @@ final class SignInDouble implements SignIn
         return 'https://example.com/';
     }
 
+    public function siteTitle(): string
+    {
+        return 'Example';
+    }
+
+    public function userTitle(User $user): string
+    {
+        return 'Member';
+    }
+
     public function isSecure(): bool
     {
         return true;

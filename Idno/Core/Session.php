@@ -182,7 +182,7 @@ namespace Idno\Core {
             // Session login / logout
             Idno::site()->routes()->addRoute('/session/login', \Idno\Legacy\ControllerRoute::class, true);
             Idno::site()->routes()->addRoute('/session/logout', \Idno\Legacy\ControllerRoute::class);
-            Idno::site()->routes()->addRoute('/currentUser/?', '\Idno\Pages\Session\CurrentUser');
+            Idno::site()->routes()->addRoute('/currentUser/?', \Idno\Legacy\ControllerRoute::class);
 
             // Update the session on save if we're saving the current user
             \Idno\Core\Idno::site()->events()->addListener(

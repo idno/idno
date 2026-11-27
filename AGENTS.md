@@ -387,6 +387,7 @@ Idno/
                                ProfileController, with Profile/ProfilePages, the one implementation of a member's profile page, and Profiles, the interface of what it asks the site;
                                MemberPagesController, with Member/MemberPages, the one implementation of the member's drafts page, and MemberLists, the interface of what it asks the site;
                                SessionController, with Session/SessionPages, the one implementation of the login page and the logout, and SignIn, the interface of what it asks the site;
+                               CurrentUserController, with Session/CurrentUserPages, the one implementation of the current-user page (`/currentUser`), over the same SignIn;
                                FileController, with File/FilePages, the one implementation of the page of a stored file (streamed), StoredFiles, the interface of what it asks the site,
                                and its value objects (FileLookup, ServedFile, FileCaching, the enum FileOutcome) and static helpers (ByteRange, FileStream);
                                SiteFilesController, WebfingerController, MentionSearchController and FormTokenController, with
@@ -1341,6 +1342,15 @@ for classes that extend `PageShell`, and holds each to the rule); it is `Idno\Pa
   logout ends with an empty 200 and no `Location`; a blocked member's login is refused silently. Deliberate differences, each a `CHANGED` case of the answers class with an assertion of the new answer, and in both upgrade documents: `GET`
   and `HEAD` of the logout, `PUT` and `DELETE` of either address and a malformed `Host` are the legacy router's 404 page (the logout answered an empty 200 to a GET, the redirect home or the 403 to the others); an XHR GET of the login page gets
   the headers of the same request that is not XHR; an XHR logout is sent the caching lines of every XHR POST (the legacy logout's new session replaced them with the session's one line); a signed request's JSON `{"location": ...}` is `application/json`; a login field that is not text is a failed login (it was the 500 page of a PHP error); an XHR POST of either page with a missing or wrong form token is the site's 403 page, the lifecycle's rule for every site page (the legacy page ended such a request with an empty answer).
+
+- THE CURRENT-USER PAGE (`/currentUser`). `Idno\Pages\Session\CurrentUser` is deleted (no shell is kept: nothing extends it in the repository; a plugin that does must be disabled before the upgrade). `Idno\Http\Controller\CurrentUserController::show()`
+  has `#[Route('/{lead}currentUser{slash}', name: 'idno_current_user')]` (GET, HEAD, OPTIONS and POST) and `#[SitePage(name: 'Idno\Pages\Session\CurrentUser', methods: ['GET', 'POST'])]`, one call of
+  `Idno\Http\Controller\Session\CurrentUserPages::show()`; no `#[IsGranted]`, because nobody is the site's 404 page. It is the API's "who am I" (a signed request and a bearer token use it), so POST is kept and is answered as a GET: the
+  lifecycle checks the session's form token for a browser and asks none of a signed request. A signed request is answered about the member that signed it even when it carries another member's cookie. The page is the member's profile drawn
+  as a permalink (the body `entity/User/profile`, the title the member's, the description `The %s profile for %s`), asked of the site through `SignIn` (`currentUser()`, `siteTitle()`, `userTitle()`); a member's email address, API key and
+  password hash are in no form of it. Core still registers `/currentUser/?` where it always did, with `Idno\Legacy\ControllerRoute`. Held by the `current-user-*` recordings of `SignInAnswersTest`, `SignInWalledAnswersTest`
+  and `SignInBlockedAnswersTest`, `AuthMatrixTest` and `TokenAgreementTest`. Deliberate differences, each a `CHANGED` case with an assertion of the new answer, and in both upgrade documents: a PUT or DELETE is the legacy router's 404 page (the
+  403 of a missing form token, or the redirect of a page with no handler); an XHR GET gets the headers of the same request that is not XHR.
 
 - THE FEED READER IS REMOVED. Following a FEED (a site's RSS, Atom or h-feed, to read its items in the site) never worked on a supported PHP, and nothing linked it: `Idno\Core\Reader::parseFeed()` and `getFeedDetails()` called
   `\DOMDocument::loadHTML()` statically, which is an `\Error` on PHP 8 (`@` does not stop it), so `/following/add/` and `/following/confirm/` answered the 500 page before any record was made and `/following/refresh/` read a collection nothing
