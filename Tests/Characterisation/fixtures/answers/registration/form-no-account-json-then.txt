@@ -1,0 +1,76 @@
+status 503
+cache-control: no-store
+content-security-policy: default-src 'none'; style-src 'nonce-{nonce}'; script-src 'nonce-{nonce}'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'
+content-type: text/html; charset=UTF-8
+expires: <past>
+link: <{site}/indieauth/auth>; rel="authorization_endpoint"
+link: <{site}/indieauth/token>; rel="token_endpoint"
+link: <{site}/micropub/endpoint>; rel="micropub"
+link: <{site}/webmention/>; rel="http://webmention.org/"
+link: <{site}/webmention/>; rel="webmention"
+link: <https://withknown.superfeedr.com/>; rel="hub"
+link: <{site}/?_t=json>; rel="self"
+pragma: no-cache
+retry-after: 300
+vary: Accept
+x-clacks-overhead: GNU Terry Pratchett
+x-powered-by: https://idno.co
+
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex, nofollow"><title>This site is being set up &middot; Idno</title><style nonce="{nonce}">:root{color-scheme:light dark;--bg:#ffffff;--fg:#1b1b1b;--muted:#4a4a4a;--line:#c8c8c8;--field:#ffffff;--warn-bg:#fff4d6;--warn-fg:#3d2c00;--err-bg:#fde8e8;--err-fg:#6b0f0f;--ok:#17633a;--button:#1f4fa3;--button-fg:#ffffff}
+@media (prefers-color-scheme: dark){:root{--bg:#141414;--fg:#ececec;--muted:#c4c4c4;--line:#5a5a5a;--field:#1d1d1d;--warn-bg:#3a2e0c;--warn-fg:#ffe7a6;--err-bg:#3d1414;--err-fg:#ffd2d2;--ok:#8fd9ad;--button:#8fb4ff;--button-fg:#0d1a33}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:1rem/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:40rem;margin:0 auto;padding:2rem 1rem 4rem}
+h1{font-size:1.5rem;line-height:1.25;margin:0 0 1rem}
+p{margin:0 0 1rem}
+.steps{font-size:.875rem;color:var(--muted);margin:0 0 .25rem}
+.checks{list-style:none;margin:0 0 1.5rem;padding:0;border-top:1px solid var(--line)}
+.checks li{padding:.7rem 0;border-bottom:1px solid var(--line)}
+.checks li[hidden]{display:none}
+.name{font-weight:600}
+.state{font-weight:600;white-space:nowrap}
+.state.ok{color:var(--ok)}
+.state.fail{color:var(--err-fg)}
+.state.warn{color:var(--warn-fg)}
+.fix,.errors{background:var(--err-bg);color:var(--err-fg);padding:.75rem 1rem;border-radius:.25rem;margin:.5rem 0 0;overflow-wrap:anywhere}
+.warning,.notice{background:var(--warn-bg);color:var(--warn-fg);padding:.75rem 1rem;border-radius:.25rem;margin:.5rem 0 0;overflow-wrap:anywhere}
+.errors,.notice{margin:0 0 1rem}
+.fix p:last-child,.warning p:last-child,.errors ul{margin-bottom:0}
+.errors ul{padding-left:1.25rem}
+code,pre{font:.9rem ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+pre{margin:.5rem 0 1rem;white-space:pre-wrap;overflow-wrap:anywhere;background:rgba(127,127,127,.18);padding:.5rem .6rem;border-radius:.25rem}
+.fix pre,.warning pre{margin-bottom:0}
+.field{margin:0 0 1rem}
+label{display:block;font-weight:600;margin:0 0 .25rem}
+.hint{color:var(--muted);font-size:.9rem;margin:0 0 .25rem;overflow-wrap:anywhere}
+.error{color:var(--err-fg);font-weight:600;font-size:.9rem;margin:0 0 .25rem}
+input[type=text],input[type=email],input[type=password]{font:inherit;width:100%;padding:.55rem .65rem;border:1px solid var(--line);border-radius:.25rem;background:var(--field);color:var(--fg)}
+input[aria-invalid=true]{border-color:var(--err-fg);border-width:2px}
+fieldset{border:0;padding:0;margin:0 0 1rem;min-width:0}
+legend{padding:0;margin:0 0 .75rem}
+.choice{display:flex;gap:.75rem;align-items:flex-start;border:1px solid var(--line);border-radius:.4rem;padding:.8rem 1rem;margin:0 0 .6rem;font-weight:400}
+.choice input{margin-top:.35rem}
+.choice strong{display:block}
+.choice span span{color:var(--muted);font-size:.92rem}
+.choice:has(input:checked){border-color:var(--button);box-shadow:0 0 0 1px var(--button)}
+.check{font-weight:400;display:flex;gap:.6rem;align-items:flex-start;margin:0 0 1rem}
+.check input{margin-top:.35rem}
+.js .needs-mysql.off{display:none}
+.actions{margin-top:1.5rem;display:flex;gap:1rem;flex-wrap:wrap;align-items:center}
+button,.button{font:inherit;padding:.6rem 1.1rem;border:0;border-radius:.25rem;background:var(--button);color:var(--button-fg);cursor:pointer;text-decoration:none;display:inline-block}
+button[disabled]{opacity:.5;cursor:not-allowed}
+button.link{background:none;color:var(--button);padding:0;text-decoration:underline}
+a{color:var(--button)}
+a:focus-visible,button:focus-visible,input:focus-visible{outline:3px solid var(--fg);outline-offset:2px}</style><script nonce="{nonce}">document.documentElement.className="js";</script></head><body><main><h1>This site is being set up</h1><p>It is not ready yet. Please come back later.</p><p>If you are the person setting it up: go back to the browser you started in and open this address again. If that is not possible, run this on the server, in the folder Idno is in, and open the link it prints:</p><pre>php bin/console idno:setup:link</pre></main><script nonce="{nonce}">(function () {
+  'use strict';
+  var forms = document.querySelectorAll('form');
+  for (var i = 0; i < forms.length; i++) {
+    forms[i].addEventListener('submit', function (event) {
+      if (this.getAttribute('data-sent')) { event.preventDefault(); return; }
+      this.setAttribute('data-sent', '1');
+    });
+  }
+  window.addEventListener('pageshow', function () {
+    for (var j = 0; j < forms.length; j++) { forms[j].removeAttribute('data-sent'); }
+  });
+})();</script></body></html>
