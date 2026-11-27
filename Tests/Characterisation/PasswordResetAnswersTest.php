@@ -546,6 +546,9 @@ final class PasswordResetAnswersTest extends SignInSiteCase
             $this->assertTrue($this->signsIn('bob', self::PASSWORD));
 
             $this->arm();
+            $this->post(['answer' => 'reset-post-mismatch-xhr'], $path, self::reset(['password2' => 'different']), ['headers' => ['X-Requested-With' => 'XMLHttpRequest']]);
+
+            $this->arm();
             $this->post(['answer' => 'reset-post-mismatch-json'], $path . '?_t=json', self::reset(['password2' => 'different']));
 
             $this->arm();

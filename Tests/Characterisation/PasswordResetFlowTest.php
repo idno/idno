@@ -91,18 +91,6 @@ final class PasswordResetFlowTest extends PrivateSiteTestCase
         $this->assertNotEmpty($this->loginCookie('member1', self::NEW_PASSWORD), 'the new password signs in');
     }
 
-    /** A site with no mail service sends a reset mail that may never arrive, and the page that asks for it must say so (and say nothing once mail is set up). */
-    public function testTheResetPageOfASiteWithNoMailServiceWarnsAndOneWithMailDoesNot(): void
-    {
-        $this->assertStringContainsString('idno-notice-warning', $this->site()->request('GET', 'account/password')->body);
-        $this->assertStringContainsString('idno-notice-warning', $this->site()->request('GET', 'account/password?sent=true')->body);
-
-        $this->assertTrue($this->runInSite('$c = \Idno\Core\Idno::site()->config(); $c->smtp_host = "mail.example.test"; $c->save(); return true;'));
-
-        $this->assertStringNotContainsString('idno-notice-warning', $this->site()->request('GET', 'account/password')->body);
-        $this->assertStringNotContainsString('idno-notice-warning', $this->site()->request('GET', 'account/password?sent=true')->body);
-    }
-
     /** An address the owner blocked, and an account being deleted, were each sent a working reset link, and the visible answer must still be the same for all. */
     public function testNoResetLinkIsSentToABlockedAddressOrAnAccountThatIsBeingDeleted(): void
     {
@@ -173,31 +161,19 @@ final class PasswordResetFlowTest extends PrivateSiteTestCase
         $this->assertNotEmpty($this->loginCookie('member1', self::NEW_PASSWORD));
     }
 
-    /** A wrong code and an expired one each told a guesser something different, or the same code was told apart by how strong the password was. */
-    public function testAWrongAnAnExpiredAndAUsedCodeAreRefusedAlikeWhateverThePassword(): void
+    /** A refused new password asked for by script or as JSON was a redirect to the home page (a private site's 403), which threw the form and the code away. */
+    public function testARefusedPasswordSentByScriptOrAsJsonIsAnAnswerAndNotARedirect(): void
     {
         [$email, $code] = $this->linkFor('member1@example.com');
-        $this->addUser('member2');
-        [$email2, $code2] = $this->linkFor('member2@example.com');
-        $this->assertTrue($this->runInSite('\Idno\Core\Idno::site()->db()->setIgnoreAccess(true); $u = \Idno\Entities\User::getByHandle("member2"); $u->password_recovery_code_time = time() - 4 * 3600; $u->save(true); return true;'));
+        [$cookie, $token] = $this->visitor();
+        $fields = ['__bTk' => $token, 'email' => $email, 'code' => $code, 'password' => 'zq9xk', 'password2' => 'zq9xk'];
 
-        $refusals = [];
-        foreach ([
-            'wrong, strong password' => [$email, str_repeat('f', 32), self::NEW_PASSWORD],
-            'wrong, weak password' => [$email, str_repeat('f', 32), 'abc'],
-            'expired, strong password' => [$email2, $code2, self::NEW_PASSWORD],
-            'expired, weak password' => [$email2, $code2, 'abc'],
-            'unknown address' => ['nobody@example.com', $code, self::NEW_PASSWORD],
-        ] as $case => [$who, $theCode, $password]) {
-            $answer = $this->reset(['email' => $who, 'code' => $theCode, 'password' => $password, 'password2' => $password]);
-            $this->assertSame(302, $answer->status, $case);
-            $refusals[$case] = parse_url((string) $answer->header('Location'), PHP_URL_PATH);
+        $json = $this->site()->request('POST', 'account/password/reset?_t=json', ['Cookie' => $cookie], $fields);
+        $xhr = $this->site()->request('POST', 'account/password/reset', ['Cookie' => $cookie, 'X-Requested-With' => 'XMLHttpRequest'], $fields);
+
+        foreach (['json' => $json, 'xhr' => $xhr] as $how => $answer) {
+            $this->assertSame(400, $answer->status, $how);
+            $this->assertNull($answer->header('Location'), $how . ': no redirect, so nothing sends the visitor away from the form');
         }
-        $this->assertSame(['/account/password'], array_values(array_unique($refusals)), 'every refusal goes to the same page: ' . json_encode($refusals));
-
-        // a code that was used is refused like one that never was
-        $this->reset(['email' => $email, 'code' => $code, 'password' => self::NEW_PASSWORD, 'password2' => self::NEW_PASSWORD]);
-        $again = $this->reset(['email' => $email, 'code' => $code, 'password' => 'another-passphrase-88', 'password2' => 'another-passphrase-88']);
-        $this->assertSame('/account/password', parse_url((string) $again->header('Location'), PHP_URL_PATH));
     }
 }

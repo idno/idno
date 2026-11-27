@@ -1,6 +1,6 @@
 {% set me = current_user() %}{% set is_admin = me and me.isAdmin() %}{#- A visitor of a private site can open neither the home feed nor the search: both would only tell them to sign in, so the navigation offers them the sign-in page alone -#}{% set closed = not me and setting('walled_garden') %}
 <nav class="idno-nav-sidebar" aria-label="Main navigation">
-    <a href="{{ site_url() }}" class="idno-nav-logo">
+    <a href="{{ site_url() }}{% if closed %}session/login{% endif %}" class="idno-nav-logo">
         {{ site_title() }}
     </a>
 

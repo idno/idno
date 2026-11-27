@@ -127,7 +127,7 @@ return [
     'visitor /?offset=10' => ['content', 'contentTypes', 'count', 'description', 'items', 'items_per_page', 'messages', 'object', 'offset', 'subject', 'title', 'user'],
     'visitor /?q=hello' => ['content', 'contentTypes', 'count', 'description', 'items', 'messages', 'object', 'offset', 'subject', 'title', 'user', 'value'],
     'visitor /?q=zzzznothingmatches' => ['content', 'contentTypes', 'count', 'description', 'items', 'messages', 'offset', 'subject', 'title', 'user', 'value'],
-    'visitor /account/password/' => ['title'],
+    'visitor /account/password/' => ['messages', 'title'],
     'visitor /account/password/reset/?email=ada%40example.com&code=00000000000000000000000000000000' => ['#status 302'],
     'visitor /account/register' => ['messages', 'title'],
     'visitor /account/register/?email=new%40example.com&code=abc' => ['#status 403'],

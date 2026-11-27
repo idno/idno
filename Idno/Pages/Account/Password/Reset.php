@@ -98,12 +98,11 @@ namespace Idno\Pages\Account\Password {
         private function refuseTheCode()
         {
             \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->_("The password reset code wasn't valid. They expire after three hours, so you might need to try again."));
-            $this->forward(\Idno\Core\Idno::site()->config()->getURL() . 'account/password');
+            $this->forward(\Idno\Core\Idno::site()->config()->getDisplayURL() . 'account/password');
         }
 
         /**
-         * Draw the form for this address and code, in the plain shell with the session's messages: drawPage() would pick the account settings shell for
-         * an address under /account/, which is for people who are signed in.
+         * Draw the form for this address and code in the site's own shell, and end the request (see Password::drawInTheSitesShell()).
          */
         private function drawForm($email, $code)
         {
@@ -111,9 +110,7 @@ namespace Idno\Pages\Account\Password {
             $t        = \Idno\Core\Idno::site()->template();
             $t->body  = $t->withVars(array_merge($t->vars, ['email' => $email, 'code' => $code]))->draw('account/password/reset');
             $t->title = \Idno\Core\Idno::site()->language()->_('Reset password');
-            $t->messages = \Idno\Core\Idno::site()->session()->getAndFlushMessages();
-            $t->sendShellHeaders();
-            echo $t->draw('shell');
+            \Idno\Pages\Account\Password::drawInTheSitesShell();
         }
 
     }

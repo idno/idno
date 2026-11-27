@@ -31,9 +31,32 @@ namespace Idno\Pages\Account {
                 $t->title = \Idno\Core\Idno::site()->language()->_('Recover password');
             }
 
-            $t->sendShellHeaders();
-            echo $t->draw('shell');
+            static::drawInTheSitesShell();
 
+        }
+
+        /**
+         * Draw the page the template holds in the site's own shell with its headers and the session's messages, and end the request.
+         *
+         * drawPage() would pick the account settings shell for an address under /account/, which is for people who are signed in; the exact shell
+         * does that for the web page type only, so another type is chosen as for any page and a JSONP request is still answered as the HTML settings
+         * page, never as a script. The request ends here: a legacy page that returns is forwarded home by Page::post().
+         *
+         * @param int $status The status the answer has
+         */
+        public static function drawInTheSitesShell($status = 0)
+        {
+            $status = $status ?: (http_response_code() ?: 200);
+            $t      = \Idno\Core\Idno::site()->template();
+            $page   = $t->renderPage(
+                $status, 'shell', static function (array $headers) {
+                    foreach ($headers as [$name, $value]) {
+                        header($name . ': ' . $value, \Idno\Templating\ShellHeaders::replaces($name));
+                    }
+                }, true
+            );
+            echo $page['body'];
+            exit;
         }
 
         function postContent()
