@@ -3,7 +3,6 @@ access-control-allow-credentials: true
 access-control-allow-headers: Authorization, Content-Type
 access-control-allow-origin: *
 cache-control: no-store, no-cache, must-revalidate
-content-length: <not the length of the body>
 content-type: application/json
 expires: <past>
 link: <{site}/indieauth/auth>; rel="authorization_endpoint"
@@ -14,13 +13,12 @@ link: <{site}/webmention/>; rel="webmention"
 link: <https://hub.example/>; rel="hub"
 link: <{site}/account/password/reset/?email=bob%40example.com&code={code}&_t=json>; rel="self"
 pragma: no-cache
+referrer-policy: no-referrer
 vary: Accept
 x-clacks-overhead: GNU Terry Pratchett
 x-powered-by: https://idno.co
 
 {
-    "email": "bob@example.com",
-    "code": "{code}",
     "title": "Reset password",
     "messages": []
 }

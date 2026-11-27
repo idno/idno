@@ -1,7 +1,6 @@
 status 200
 access-control-allow-origin: *
 cache-control: no-store, no-cache, must-revalidate
-content-length: <the length of the body>
 content-type: text/markdown; charset=utf-8
 expires: <past>
 link: <{site}/indieauth/auth>; rel="authorization_endpoint"
@@ -13,6 +12,7 @@ link: <https://hub.example/>; rel="hub"
 link: <{site}/account/password/reset?email=bob%40example.com&code={code}&_t=markdown>; rel="self"
 link: <{site}/account/password/reset>; rel="canonical"
 pragma: no-cache
+referrer-policy: no-referrer
 vary: Accept
 x-clacks-overhead: GNU Terry Pratchett
 x-content-type-options: nosniff

@@ -17,4 +17,10 @@ title: "Fixture Site"
 link: "{site}/profile/ada"
 ---
 
-[Click here to log in.]({site}/session/login/?fwd=L3Byb2ZpbGUvYWRhP190PW1hcmtkb3du)
+# Fixture Site is private
+
+Only members can read this community. If you are a member, sign in. If you have been invited, use the link in your invitation email to create your account.
+
+[Sign in]({site}/session/login/?fwd=L3Byb2ZpbGUvYWRhP190PW1hcmtkb3du)
+
+[Forgot your password?]({site}/account/password)

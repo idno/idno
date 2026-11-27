@@ -1,7 +1,9 @@
 status 200
+access-control-allow-credentials: true
+access-control-allow-headers: Authorization, Content-Type
+access-control-allow-origin: *
 cache-control: no-store, no-cache, must-revalidate
-content-length: <not the length of the body>
-content-type: text/html; charset=utf-8
+content-type: application/x-javascript; charset=UTF-8
 expires: <past>
 link: <{site}/indieauth/auth>; rel="authorization_endpoint"
 link: <{site}/indieauth/token>; rel="token_endpoint"
@@ -11,91 +13,9 @@ link: <{site}/webmention/>; rel="webmention"
 link: <https://hub.example/>; rel="hub"
 link: <{site}/account/password/reset?email=bob%40example.com&code={code}&_t=jsonp&callback=f>; rel="self"
 pragma: no-cache
+referrer-policy: no-referrer
 vary: Accept
 x-clacks-overhead: GNU Terry Pratchett
-x-content-type-options: nosniff
 x-powered-by: https://idno.co
 
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Reset Test Site — Account</title>
-<link rel="stylesheet" href="{site}/css/idno-2026.min.css">
-</head>
-<body class="account-template">
-<div class="idno-account-shell">
-<nav class="idno-account-sidebar">
-<div class="idno-account-header">Account</div>
-<ul class="nav">
-<li  role="presentation"><a
-            href="{site}/account/settings/">Settings</a></li>
-<li  role="presentation">
-<a href="{site}/account/settings/tools/">Tools and Apps</a></li>
-<li  role="presentation">
-<a href="{site}/account/indiepub/">IndiePub</a>
-</li>
-<li ><a href="{site}/account/bridgy/">Interactions</a></li>
-<li  role="presentation">
-<a href="{site}/account/export/">Export Data</a></li>
-</ul>
-<div class="idno-account-back">
-<a href="{site}/" class="idno-account-nav-item">
-<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>
-<span>Back to site</span>
-</a>
-</div>
-</nav>
-<main class="idno-account-main">
-<div class="idno-account-content">
-<div id="page-messages">
-</div>
-<div class="row">
-<div class="col-md-10 col-md-offset-1">
-<h1>Reset your password</h1>
-<p>
-To change your password, enter your new password below:
-</p>
-</div>
-<div class="col-md-10 col-md-offset-1">
-<form action="{site}/account/password/reset" method="post" class="form-horizontal">
-<div class="control-group">
-<label class="control-label" for="inputEmail">Your email address<br />
-<small>The address associated with your Reset Test Site account.</small></label>
-<div class="controls">
-<input type="email" id="inputEmail" placeholder="Email" class="form-control" name="email" value="bob@example.com" required>
-</div>
-</div>
-<div class="control-group">
-<label class="control-label" for="inputPassword">New password (7 characters or more)</label>
-<div class="controls">
-<input type="password" id="inputPassword" class="form-control" name="password" value="" required>
-</div>
-</div>
-<div class="control-group">
-<label class="control-label" for="inputPassword2">Retype password<br />
-<small>We ask you to enter the password twice to protect against typos.</small></label>
-<div class="controls">
-<input type="password" id="inputPassword2" class="form-control" name="password2" value="" required>
-</div>
-</div>
-<div class="control-group">
-<div class="controls">
-<button type="submit" class="btn btn-primary">Reset password</button>
-<input type="hidden" name="code" value="{code}">
-<span class="known-security-token" style="display: none;" id="tid{id}"></span>
-<input type="hidden" name="__bTs" value="{token-time}" />
-<input type="hidden" name="__bTk" value="{form-token}" />
-<input type="hidden" name="__bTa" value="/account/password/reset" />
-</div>
-</div>
-</form>
-</div>
-</div>
-</div>
-</main>
-</div>
-<script src="{site}/js/idno-2026.min.js" defer></script>
-</body>
-</html>
+f({"title":"Reset password","messages":[]})

@@ -1,6 +1,9 @@
 status 302
+access-control-allow-credentials: true
+access-control-allow-headers: Authorization, Content-Type
+access-control-allow-origin: *
 cache-control: no-store, no-cache, must-revalidate
-content-type: text/html; charset=UTF-8
+content-type: application/json
 expires: <past>
 link: <{site}/indieauth/auth>; rel="authorization_endpoint"
 link: <{site}/indieauth/token>; rel="token_endpoint"
@@ -9,9 +12,19 @@ link: <{site}/webmention/>; rel="http://webmention.org/"
 link: <{site}/webmention/>; rel="webmention"
 link: <https://hub.example/>; rel="hub"
 link: <{site}/account/password/reset?_t=json>; rel="self"
-location: {site}/account/password/reset?_t=json
+location: {site}/?_t=json
 pragma: no-cache
+referrer-policy: no-referrer
 vary: Accept
 x-clacks-overhead: GNU Terry Pratchett
 x-powered-by: https://idno.co
 
+{
+    "title": "Reset password",
+    "messages": [
+        {
+            "message": "Sorry, your passwords either don't match, or are too weak",
+            "message_type": "alert-danger"
+        }
+    ]
+}

@@ -1,6 +1,5 @@
 status 200
 cache-control: no-store, no-cache, must-revalidate
-content-length: <not the length of the body>
 content-type: application/rss+xml
 expires: <past>
 link: <{site}/indieauth/auth>; rel="authorization_endpoint"
@@ -11,6 +10,7 @@ link: <{site}/webmention/>; rel="webmention"
 link: <https://hub.example/>; rel="hub"
 link: <{site}/account/password/reset?email=bob%40example.com&code={code}&_t=rss>; rel="self"
 pragma: no-cache
+referrer-policy: no-referrer
 vary: Accept
 x-clacks-overhead: GNU Terry Pratchett
 x-powered-by: https://idno.co

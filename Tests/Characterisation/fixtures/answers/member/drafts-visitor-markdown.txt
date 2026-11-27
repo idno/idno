@@ -22,4 +22,10 @@ title: "Fixture Site"
 link: "{site}/drafts/"
 ---
 
-[Click here to log in.]({site}/session/login/?fwd=L2RyYWZ0cy8_X3Q9bWFya2Rvd24,)
+# Sign in to continue
+
+You need to be signed in to see this page.
+
+[Sign in]({site}/session/login/?fwd=L2RyYWZ0cy8_X3Q9bWFya2Rvd24,)
+
+[Forgot your password?]({site}/account/password)

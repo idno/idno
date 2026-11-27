@@ -9,7 +9,7 @@ link: <{site}/webmention/>; rel="http://webmention.org/"
 link: <{site}/webmention/>; rel="webmention"
 link: <https://hub.example/>; rel="hub"
 link: <{site}/account/password/reset>; rel="self"
-location: {site}/account/password/reset
+location: {site}/account/password
 pragma: no-cache
 vary: Accept
 x-clacks-overhead: GNU Terry Pratchett

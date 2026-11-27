@@ -8,8 +8,8 @@ link: <{site}/micropub/endpoint>; rel="micropub"
 link: <{site}/webmention/>; rel="http://webmention.org/"
 link: <{site}/webmention/>; rel="webmention"
 link: <https://hub.example/>; rel="hub"
-link: <{site}/account/password/reset>; rel="self"
-location: {site}/account/password
+link: <{site}/account/password>; rel="self"
+location: {site}/account/password/?sent=true
 pragma: no-cache
 vary: Accept
 x-clacks-overhead: GNU Terry Pratchett

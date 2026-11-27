@@ -152,20 +152,12 @@ Fixture Site
 </div>
 </div>
 <a name="pagecontent"></a>
-<div class="container result-403">
-<div class="row" style="margin-bottom: 2em; margin-top: 6em">
-<div class="col-md-offset-1 col-md-5">
-<h1 class="p-name" style="margin-bottom: 2em;">
-Hold on. You don&#039;t have access to this content.
-</h1>
-<p>It&#039;s nothing personal. You just don&#039;t have the right permissions to see what&#039;s here.</p>
-<p>
-Find something else to view on the
-<a href="{site}/">Fixture Site homepage</a>.
-</p>
-</div>
-<div class="col-md-5">
-<img src="{site}/gfx/robots/aleph_403.png" alt="Robot with a stop sign">
+<div class="idno-gate idno-gate-wide">
+<div class="idno-editor">
+<h1 class="idno-editor-heading p-name">You don&#039;t have access to this page</h1>
+<p class="idno-gate-lead">Your account doesn&#039;t have the permissions this page needs.</p>
+<div class="idno-gate-actions">
+<a class="idno-btn idno-btn-primary" href="{site}/">Go to the home page</a>
 </div>
 </div>
 </div>

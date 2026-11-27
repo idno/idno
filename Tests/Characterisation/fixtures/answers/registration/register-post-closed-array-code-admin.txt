@@ -99,8 +99,18 @@ Fixture Site
 <div class="idno-admin-content">
 <div id="page-messages">
 </div>
-<a id="soft-forward"
-           href="{site}/session/login/?fwd=</admin/>">Click here to log in.</a>
+<div class="idno-gate idno-gate-wide">
+<div class="idno-editor">
+<h1 class="idno-editor-heading">Sign in to continue</h1>
+<p class="idno-gate-lead">You need to be signed in to see this page.</p>
+<div class="idno-gate-actions">
+<a id="soft-forward" class="idno-btn idno-btn-primary" href="{site}/session/login/?fwd=</admin/>">Sign in</a>
+</div>
+<p class="idno-gate-foot">
+<a href="{site}/account/password">Forgot your password?</a>
+</p>
+</div>
+</div>
 </div>
 </main>
 </div>

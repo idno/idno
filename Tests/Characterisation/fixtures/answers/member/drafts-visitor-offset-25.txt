@@ -126,8 +126,18 @@ Fixture Site
 <div id="page-messages">
 </div>
 <a name="pagecontent"></a>
-<a id="soft-forward"
-           href="{site}/session/login/?fwd=L2RyYWZ0cy8_b2Zmc2V0PTI1">Click here to log in.</a>
+<div class="idno-gate idno-gate-wide">
+<div class="idno-editor">
+<h1 class="idno-editor-heading">Sign in to continue</h1>
+<p class="idno-gate-lead">You need to be signed in to see this page.</p>
+<div class="idno-gate-actions">
+<a id="soft-forward" class="idno-btn idno-btn-primary" href="{site}/session/login/?fwd=L2RyYWZ0cy8_b2Zmc2V0PTI1">Sign in</a>
+</div>
+<p class="idno-gate-foot">
+<a href="{site}/account/password">Forgot your password?</a>
+</p>
+</div>
+</div>
 </div>
 </main>
 <div class="idno-spacer" aria-hidden="true"></div>
