@@ -117,6 +117,11 @@ final class PageNormaliserTest extends TestCase
             'http://example.org/account/password/reset/?email=ada%40example.com&code={reset-code}',
             $this->normalise('http://example.org/account/password/reset/?email=ada%40example.com&code=85de43ff741566c71b36f2db35c20015')
         );
+        $this->assertSame(
+            'http://example.org/account/password/reset/?email=ada%40example.com&amp;code={reset-code}',
+            $this->normalise('http://example.org/account/password/reset/?email=ada%40example.com&amp;code=85de43ff741566c71b36f2db35c20015'),
+            'in the HTML part of the mail the & is escaped'
+        );
         $this->assertSame('?code=85de43ff741566c71b36f2db35c20015', $this->normalise('?code=85de43ff741566c71b36f2db35c20015'), 'only the reset link\'s');
     }
 

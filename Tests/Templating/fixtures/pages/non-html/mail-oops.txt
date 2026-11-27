@@ -1,12 +1,17 @@
-Ooops!
-======
+An error occurred on example.org
+================================
 
-An error occured on your Idno site https://example.org/!
+Exception
 
 Unexpected token < in <b>index.php</b> on line 7 & more
 
-Logged in user was ada
-Agent: Mozilla/5.0 (X11; Linux)
-QS: a=1&b=2 
-
+Signed-in member: ada
+Browser: Mozilla/5.0 (X11; Linux)
+Query string: a=1&b=2
 Referrer: https://example.org/from?x=1
+
+-- 
+You got this email because this address is set to be told about errors
+on Fixture Site (the oops_notify setting).
+Fixture Site
+{site}/

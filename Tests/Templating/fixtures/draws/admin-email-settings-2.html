@@ -1,64 +1,78 @@
 <h1 class="idno-admin-page-title">Email</h1>
 <p class="idno-admin-description">
-Idno tries to send email using your server&#039;s default email settings. If you&#039;d like it to do something else - for example, if you&#039;d like to send email using an external provider - enter the new SMTP settings below.
+Your site sends email to invite people, to reset passwords and to notify members. It sends it through a mail server: usually a mail service you have an account with.
 </p>
 <p class="idno-admin-description">
 After changing the mail settings, restart the queue worker: the mails it sends (the export and import results) use the settings it read when it started.
 </p>
-<form action="{site}/admin/email" method="post">
+<div class="idno-notice idno-notice-warning" role="status">
+<strong>No mail service is set up yet.</strong>
+Until you enter a mail server and a From address below, invitations and password reset emails will probably not arrive.
+</div>
+<form action="{site}/admin/email" method="post" id="mail-settings-form" novalidate>
 <div class="idno-admin-card">
-<h2 class="idno-admin-card-title">Email Settings</h2>
-<p>Fill in the site email address if you would like your site to send email.</p>
+<h2 class="idno-admin-card-title">Who the mail is from</h2>
 <div class="idno-form-group">
-<label class="idno-label" for="from_email">Site email address</label>
-<input type="text" id="from_email" name="from_email" class="idno-input"
-                       placeholder="Site email address"
-                       value="">
-<p class="idno-form-help">This is the address that every email will be sent from.</p>
+<label class="idno-label" for="from_email">From address</label>
+<input id="from_email" name="from_email" class="idno-input" type="email" value=""
+               aria-describedby="help-from_email" placeholder="hello@example.com" autocomplete="off" inputmode="email">
+<p class="idno-form-help" id="help-from_email">Every email is sent from this address. It must be one your mail service lets you send from.</p>
+</div>
+<div class="idno-form-group">
+<label class="idno-label" for="from_name">From name</label>
+<input id="from_name" name="from_name" class="idno-input" type="text" value=""
+               aria-describedby="help-from_name" placeholder="Fixture Site" maxlength="100" autocomplete="off">
+<p class="idno-form-help" id="help-from_name">The name people see beside the address. Leave it empty to use the site&#039;s name.</p>
+</div>
+<div class="idno-form-group">
+<label class="idno-label" for="reply_to_email">Reply-To address (optional)</label>
+<input id="reply_to_email" name="reply_to_email" class="idno-input" type="email" value=""
+               aria-describedby="help-reply_to_email" placeholder="you@example.com" autocomplete="off" inputmode="email">
+<p class="idno-form-help" id="help-reply_to_email">Where replies go, if not to the From address: for example your own inbox.</p>
 </div>
 </div>
 <div class="idno-admin-card">
-<h2 class="idno-admin-card-title">SMTP Settings</h2>
-<p>You can often leave the following settings blank. However, you may wish to set them if you&#039;re using a third-party service to send email.</p>
+<h2 class="idno-admin-card-title">Mail server</h2>
 <div class="idno-form-group">
-<label class="idno-label" for="smtp_host">SMTP host</label>
-<input type="text" id="smtp_host" name="smtp_host" class="idno-input"
-                       placeholder="SMTP host"
-                       value="">
-<p class="idno-form-help">This is the address of the server that will send email for you.</p>
+<label class="idno-label" for="smtp_host">Server (SMTP host)</label>
+<input id="smtp_host" name="smtp_host" class="idno-input" type="text" value=""
+               aria-describedby="help-smtp_host" placeholder="smtp.example.com" autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="url">
+<p class="idno-form-help" id="help-smtp_host">The name of the mail server, as your mail service gives it: for example smtp.sendgrid.net.</p>
 </div>
+<div class="idno-field-row">
 <div class="idno-form-group">
-<label class="idno-label" for="smtp_username">SMTP username</label>
-<input type="text" id="smtp_username" name="smtp_username" class="idno-input"
-                       placeholder="SMTP username"
-                       value="">
-<p class="idno-form-help">If your mail server needs a username, enter it here.</p>
-</div>
-<div class="idno-form-group">
-<label class="idno-label" for="smtp_password">SMTP password</label>
-<input type="password" id="smtp_password" name="smtp_password" class="idno-input"
-                       placeholder="SMTP password"
-                       value="">
-<p class="idno-form-help">If your mail server needs a password, enter it here.</p>
-</div>
-<div class="idno-form-group">
-<label class="idno-label" for="smtp_port">SMTP port</label>
-<input type="text" id="smtp_port" name="smtp_port" class="idno-input"
-                       placeholder="25"
-                       value="25">
-<p class="idno-form-help">This is normally 25 or 587.</p>
-</div>
-<div class="idno-form-group">
-<label class="idno-label" for="smtp_secure">Secure connection</label>
-<select name="smtp_secure" id="smtp_secure" class="idno-input">
-<option value="" selected>No</option>
-<option value="tls" >Yes (TLS)</option>
-<option value="ssl" >Yes (SSL)</option>
+<label class="idno-label" for="smtp_secure">Security</label>
+<select name="smtp_secure" id="smtp_secure" class="idno-select" aria-describedby="help-smtp_secure">
+<option value="tls">STARTTLS (usual, port 587)</option>
+<option value="ssl">TLS (port 465)</option>
+<option value="" selected>None (port 25)</option>
 </select>
-<p class="idno-form-help">Select yes if you use secure logins to your mail server.</p>
+<p class="idno-form-help" id="help-smtp_secure">How the connection is encrypted. Mail services expect STARTTLS on port 587.</p>
+</div>
+<div class="idno-form-group">
+<label class="idno-label" for="smtp_port">Port</label>
+<input id="smtp_port" name="smtp_port" class="idno-input" type="text" value="0"
+               aria-describedby="help-smtp_port" placeholder="587" inputmode="numeric" autocomplete="off" maxlength="5">
+<p class="idno-form-help" id="help-smtp_port">Usually 587. Leave it empty to use the usual port for the security you chose.</p>
 </div>
 </div>
-<div style="margin-top:var(--spacing-section)">
+<div class="idno-form-group">
+<label class="idno-label" for="smtp_username">User name</label>
+<input id="smtp_username" name="smtp_username" class="idno-input" type="text" value=""
+               aria-describedby="help-smtp_username" autocomplete="off" autocapitalize="off" spellcheck="false">
+<p class="idno-form-help" id="help-smtp_username">The user name your mail service gives you for SMTP. For some services it is a fixed word such as &quot;apikey&quot;.</p>
+</div>
+<div class="idno-form-group">
+<label class="idno-label" for="smtp_password">Password</label>
+<input type="password" id="smtp_password" name="smtp_password" class="idno-input" value=""
+                   autocomplete="new-password" aria-describedby="help-smtp_password"
+                   placeholder="">
+<p class="idno-form-help" id="help-smtp_password">
+The password or API key for SMTP. It is stored on your site and never shown again.
+</p>
+</div>
+</div>
+<div class="idno-form-actions">
 <button type="submit" class="idno-btn idno-btn-primary">Save settings</button>
 </div>
 <span class="known-security-token" style="display: none;" id="tid{id}"></span>
@@ -66,3 +80,176 @@ After changing the mail settings, restart the queue worker: the mails it sends (
 <input type="hidden" name="__bTk" value="{token}" />
 <input type="hidden" name="__bTa" value="/admin/email" />
 </form>
+<details class="mail-help">
+<summary>Using a mail service</summary>
+<div class="mail-help-body">
+<p>A mail service delivers your site&#039;s email so that it reaches inboxes. Create an account with one, then enter its values here. These are the values for the common ones:</p>
+<section class="mail-help-service">
+<h3>SendGrid</h3>
+<dl>
+<dt>Server</dt>
+<dd><code>smtp.sendgrid.net</code></dd>
+<dt>Port and security</dt>
+<dd>587 with STARTTLS, or 465 with TLS</dd>
+<dt>User name</dt>
+<dd>The word
+<code>apikey</code>, exactly as written</dd>
+<dt>Password</dt>
+<dd>An API key that has the &quot;Mail Send&quot; permission</dd>
+</dl>
+<p class="mail-help-note">The From address must be a verified sender, or on a domain you have authenticated with SendGrid.</p>
+<p>
+<button type="button" class="mail-help-fill" data-mail-host="smtp.sendgrid.net" data-mail-user="apikey" hidden>Fill in the values for SendGrid</button>
+</p>
+</section>
+<section class="mail-help-service">
+<h3>Postmark</h3>
+<dl>
+<dt>Server</dt>
+<dd><code>smtp.postmarkapp.com</code></dd>
+<dt>Port and security</dt>
+<dd>587 with STARTTLS</dd>
+<dt>User name</dt>
+<dd>Your Server API token</dd>
+<dt>Password</dt>
+<dd>The same Server API token</dd>
+</dl>
+<p class="mail-help-note">The From address needs a confirmed sender signature or a verified domain. Until Postmark approves a new account it sends only to addresses on your own domain.</p>
+<p>
+<button type="button" class="mail-help-fill" data-mail-host="smtp.postmarkapp.com" data-mail-user="" hidden>Fill in the values for Postmark</button>
+</p>
+</section>
+<section class="mail-help-service">
+<h3>Mailgun</h3>
+<dl>
+<dt>Server</dt>
+<dd><code>smtp.mailgun.org</code></dd>
+<dt>Port and security</dt>
+<dd>587 with STARTTLS, or 465 with TLS</dd>
+<dt>User name</dt>
+<dd>The SMTP login from the domain&#039;s SMTP credentials in Mailgun</dd>
+<dt>Password</dt>
+<dd>The password of that SMTP login</dd>
+</dl>
+<p class="mail-help-note">Domains in Mailgun&#039;s EU region use the EU host shown with the credentials. A sandbox domain sends only to recipients you have authorised.</p>
+<p>
+<button type="button" class="mail-help-fill" data-mail-host="smtp.mailgun.org" data-mail-user="" hidden>Fill in the values for Mailgun</button>
+</p>
+</section>
+<section class="mail-help-service">
+<h3>Amazon SES</h3>
+<dl>
+<dt>Server</dt>
+<dd><code>email-smtp.us-east-1.amazonaws.com</code></dd>
+<dt>Port and security</dt>
+<dd>587 with STARTTLS, or 465 with TLS</dd>
+<dt>User name</dt>
+<dd>The SMTP user name made under &quot;SMTP settings&quot; in the SES console</dd>
+<dt>Password</dt>
+<dd>The SMTP password made with it (not your AWS access keys)</dd>
+</dl>
+<p class="mail-help-note">Put your own region in the host name. A new SES account is in a sandbox and sends only to addresses you have verified, until Amazon grants production access.</p>
+<p>
+<button type="button" class="mail-help-fill" data-mail-host="email-smtp.us-east-1.amazonaws.com" data-mail-user="" hidden>Fill in the values for Amazon SES</button>
+</p>
+</section>
+<section class="mail-help-service">
+<h3>Brevo</h3>
+<dl>
+<dt>Server</dt>
+<dd><code>smtp-relay.brevo.com</code></dd>
+<dt>Port and security</dt>
+<dd>587 with STARTTLS, or 465 with TLS</dd>
+<dt>User name</dt>
+<dd>The SMTP login shown with your SMTP keys in Brevo</dd>
+<dt>Password</dt>
+<dd>An SMTP key (not an API key)</dd>
+</dl>
+<p class="mail-help-note">The From address must be a verified sender on a domain you have authenticated with Brevo.</p>
+<p>
+<button type="button" class="mail-help-fill" data-mail-host="smtp-relay.brevo.com" data-mail-user="" hidden>Fill in the values for Brevo</button>
+</p>
+</section>
+<section class="mail-help-service">
+<h3>Resend</h3>
+<dl>
+<dt>Server</dt>
+<dd><code>smtp.resend.com</code></dd>
+<dt>Port and security</dt>
+<dd>587 with STARTTLS, or 465 with TLS</dd>
+<dt>User name</dt>
+<dd>The word
+<code>resend</code>, exactly as written</dd>
+<dt>Password</dt>
+<dd>An API key</dd>
+</dl>
+<p class="mail-help-note">The From address must be on a domain you have verified with Resend.</p>
+<p>
+<button type="button" class="mail-help-fill" data-mail-host="smtp.resend.com" data-mail-user="resend" hidden>Fill in the values for Resend</button>
+</p>
+</section>
+<h3>So that your mail is not treated as spam</h3>
+<p>The From address must be on a domain the service is allowed to send for. Each service asks you to prove the domain is yours by adding a few DNS records where your domain is managed: usually DKIM and SPF records that the service gives you. Add a DMARC record as well (a TXT record named
+<code>_dmarc</code>;
+<code>v=DMARC1; p=none</code>
+is enough to start). Mail from an address on a domain you have not set up this way, or from a free address such as Gmail, is likely to be refused or to go to spam.</p>
+</div>
+</details>
+<div class="idno-admin-card" id="test">
+<form action="{site}/admin/emailtest" method="post">
+<h2 class="idno-admin-card-title">Send a test email</h2>
+<p class="idno-form-help">This sends one email with the settings as they are saved, and tells you what the mail server answered. Save your changes first.</p>
+<div class="idno-form-group">
+<label class="idno-label" for="to_email">Send it to</label>
+<input type="email" id="to_email" name="to_email" class="idno-input" required
+                   placeholder="you@example.com" inputmode="email"
+                   value="admin@example.org">
+</div>
+<div class="idno-form-actions">
+<button type="submit" class="idno-btn">Send test email</button>
+</div>
+<span class="known-security-token" style="display: none;" id="tid{id}"></span>
+<input type="hidden" name="__bTs" value="{token-time}" />
+<input type="hidden" name="__bTk" value="{token}" />
+<input type="hidden" name="__bTa" value="/admin/emailtest" />
+</form>
+</div>
+<script>
+    (function () {
+        var form = document.getElementById('mail-settings-form');
+        if (!form) {
+            return;
+        }
+        var host = form.querySelector('[name="smtp_host"]');
+        var port = form.querySelector('[name="smtp_port"]');
+        var secure = form.querySelector('[name="smtp_secure"]');
+        var user = form.querySelector('[name="smtp_username"]');
+        var usual = {tls: '587', ssl: '465', '': '25'};
+
+        // The port follows the security setting unless the administrator has typed another one
+        function suggestPort() {
+            var current = port.value.trim();
+            if (current === '' || current === '25' || current === '465' || current === '587') {
+                port.value = usual[secure.value] || '';
+            }
+        }
+        if (port && secure) {
+            secure.addEventListener('change', suggestPort);
+        }
+
+        var buttons = document.querySelectorAll('.mail-help-fill');
+        for (var i = 0; i < buttons.length; i++) {
+            buttons[i].hidden = false;
+            buttons[i].addEventListener('click', function () {
+                host.value = this.getAttribute('data-mail-host');
+                secure.value = 'tls';
+                port.value = '587';
+                if (this.getAttribute('data-mail-user')) {
+                    user.value = this.getAttribute('data-mail-user');
+                }
+                host.scrollIntoView({block: 'center'});
+                (this.getAttribute('data-mail-user') ? form.querySelector('[name="smtp_password"]') : user).focus();
+            });
+        }
+    })();
+</script>

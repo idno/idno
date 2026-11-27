@@ -1,0 +1,8 @@
+{#- A paragraph: `text` (line breaks are kept), or `format` and `values`: a sentence with %s for each value, the values set in bold. `muted` for a smaller, quieter one. -#}
+{#- A capture, so that what it holds (already escaped) is not escaped again when it is printed -#}
+{%- set words -%}{%- if format -%}{{ mail_emphasise(format, values) }}{%- else -%}{{ text|trim|nl2br }}{%- endif -%}{%- endset -%}
+{% if muted %}
+<p class="idno-mail-muted" style="margin: 0 0 16px 0; font-family: {{ mail_font() }}; font-size: 14px; line-height: 21px; color: {{ mail_colour('muted') }};">{{ words }}</p>
+{% else %}
+<p class="idno-mail-text" style="margin: 0 0 16px 0; font-family: {{ mail_font() }}; font-size: 16px; line-height: 24px; color: {{ mail_colour('text') }};">{{ words }}</p>
+{% endif %}

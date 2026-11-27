@@ -944,7 +944,7 @@ final class TemplateEscapingTest extends RenderedSiteTestCase
         $out['statistics'] = $draw('admin/statistics', ['statistics' => [$hostile => [$hostile => $hostile, 'Nested' => [$hostile => $hostile]]]]);
         $out['users'] = $draw('admin/users', ['count' => 1, 'invitations' => [$invitation]]);
         $out['settings'] = $draw('admin/home');
-        $out['email'] = $draw('admin/email', ['smtp_username' => $hostile, 'smtp_password' => $hostile]);
+        $out['email'] = $draw('admin/email', ['values' => ['from_email' => $hostile, 'from_name' => $hostile, 'reply_to_email' => $hostile, 'smtp_host' => $hostile, 'smtp_port' => $hostile, 'smtp_secure' => 'tls', 'smtp_username' => $hostile], 'errors' => ['from_email' => $hostile, 'smtp_host' => $hostile], 'has_password' => true, 'configured' => true, 'sender' => $hostile, 'test_to' => $hostile, 'fixed' => [$hostile]]);
         $plugin = ['Plugin description' => ['name' => $hostile, 'version' => $hostile, 'author' => $hostile, 'author_url' => $hostile, 'description' => $hostile], 'shortname' => $hostile];
         $out['plugins'] = $draw('admin/plugins', ['plugins_loaded' => [], 'plugins_visible' => [$plugin]]);
         $theme = ['Theme description' => ['name' => $hostile, 'version' => $hostile, 'author' => $hostile, 'author_url' => $hostile, 'description' => $hostile], 'shortname' => $hostile];
@@ -1053,11 +1053,10 @@ final class TemplateEscapingTest extends RenderedSiteTestCase
     }
 
     /**
-     * The email form shows the stored SMTP user name and password to the administrator, as it always has, and nowhere else: each is printed
-     * once, in its own field, and neither is a variable of the page, which the JSON and JSONP output of a page prints (JSONP is readable by
-     * another site).
+     * The email form never prints the stored SMTP password (an empty field means "keep it") and prints the user name only in its own
+     * field: neither is a variable of the page, which the JSON and JSONP output of a page prints (JSONP is readable by another site).
      */
-    public function testTheEmailFormPrintsTheStoredSecretsOnlyInTheirFieldsAndNeverAsAVariableOfThePage(): void
+    public function testTheEmailFormNeverPrintsTheStoredPasswordAndPrintsTheUserNameOnlyInItsField(): void
     {
         $this->seedSite();
         $admin = $this->loginAsAdmin();
@@ -1073,11 +1072,11 @@ final class TemplateEscapingTest extends RenderedSiteTestCase
 
         $html = $this->site()->request('GET', 'admin/email/', ['Cookie' => $admin])->body;
 
-        $this->assertSame(1, substr_count($html, 'mailer-secret-9142'), 'the password is printed once');
+        $this->assertStringNotContainsString('mailer-secret-9142', $html, 'the password is not printed');
         $this->assertSame(1, substr_count($html, 'mailer-user-7731'), 'the user name is printed once');
-        $this->assertMatchesRegularExpression('/name="smtp_password"[^>]*value="mailer-secret-9142"/s', $html);
         $this->assertMatchesRegularExpression('/name="smtp_username"[^>]*value="mailer-user-7731"/s', $html);
-        $this->assertDoesNotMatchRegularExpression('/(data-[a-z-]+|<script)[^>]*mailer-secret-9142/s', $html);
+        $this->assertMatchesRegularExpression('/name="smtp_password"[^>]*value=""/s', $html);
+        $this->assertDoesNotMatchRegularExpression('/(data-[a-z-]+|<script)[^>]*mailer-user-7731/s', $html);
         $response = $this->site()->request('GET', 'admin/email/?_t=json', ['Cookie' => $admin]);
         $this->assertStringStartsWith('application/json', (string) $response->header('Content-Type'));
         $this->assertStringContainsString('"title"', $response->body, 'the JSON output is the page\'s variables: the test is looking at them');
@@ -1111,11 +1110,11 @@ final class TemplateEscapingTest extends RenderedSiteTestCase
     }
 
     /**
-     * Draws a mail template in the site, as the mail adapter does: the HTML part (inside the email shell or not) and the plain text.
-     * The site has no request (the queue worker has none either) unless $uri is given.
+     * Draws a mail in the site, as the mail adapter does: the HTML part and the plain text, each in its shell. The site has no
+     * request (the queue worker has none either).
      *
      * @param  array<string, mixed> $vars
-     * @return array{html: string, text: string}
+     * @return array{html: string, text: string, subject: string}
      */
     private function drawMailInSite(string $template, array $vars, string $title = 'Fixture Site'): array
     {
@@ -1123,14 +1122,8 @@ final class TemplateEscapingTest extends RenderedSiteTestCase
         $code = <<<'PHP'
         \Idno\Core\Idno::site()->config()->title = %TITLE%;
         \Idno\Core\Idno::site()->config()->from_email = 'site@example.com';
-        $draw = static function (string $type) {
-            $template = clone \Idno\Core\Idno::site()->template();
-            $template->setTemplateType($type);
 
-            return (string) $template->__(json_decode(%VARS%, true))->draw(%NAME%);
-        };
-
-        return ['html' => $draw('email'), 'text' => $draw('email-text')];
+        return \Idno\Core\Email::drawMail(%NAME%, json_decode(%VARS%, true));
         PHP;
         $drawn = $this->runInSite(str_replace(
             ['%TITLE%', '%VARS%', '%NAME%'],
@@ -1149,26 +1142,26 @@ final class TemplateEscapingTest extends RenderedSiteTestCase
     public function testTheOopsMailEscapesRequestValues(): void
     {
         $vars = [
-            'site' => 'https://example.org/', 'message' => 'Failed <b>hard</b> & more', 'user' => 'ada',
+            'site' => 'https://example.org/', 'title' => 'Exception', 'message' => 'Failed <b>hard</b> & more', 'user' => 'ada',
             'agent' => '<a href=//evil>x</a>', 'qs' => 'a="><script>x()</script>', 'referrer' => 'https://evil.example/"><a href=//evil>go</a>',
         ];
 
         $mail = $this->drawMailInSite('admin/oops', $vars);
 
         $this->assertStringNotContainsString('<a href=//evil', $mail['html']);
-        $this->assertSame(0, substr_count($mail['html'], '<a '), 'no link is made of a value');
+        $this->assertStringNotContainsString('href="https://evil.example', $mail['html'], 'no link is made of a value');
         $this->assertStringNotContainsString('<script', $mail['html']);
         $this->assertStringNotContainsString('<b>hard</b>', $mail['html']);
         $this->assertStringContainsString('&lt;a href=//evil&gt;x&lt;/a&gt;', $mail['html']);
-        $this->assertStringContainsString('Referrer: https://evil.example/&quot;&gt;&lt;a href=//evil&gt;go&lt;/a&gt;', $mail['html']);
-        $this->assertStringContainsString('Agent: <a href=//evil>x</a>', $mail['text'], 'the text part has the values as they are');
-        $this->assertStringContainsString('QS: a="><script>x()</script>', $mail['text']);
+        $this->assertStringContainsString('https://evil.example/&quot;&gt;&lt;a href=//evil&gt;go&lt;/a&gt;', $mail['html']);
+        $this->assertStringContainsString('Browser: <a href=//evil>x</a>', $mail['text'], 'the text part has the values as they are');
+        $this->assertStringContainsString('Query string: a="><script>x()</script>', $mail['text']);
         $this->assertStringContainsString('Referrer: https://evil.example/"><a href=//evil>go</a>', $mail['text']);
         $this->assertStringContainsString('Failed <b>hard</b> & more', $mail['text']);
     }
 
     /**
-     * The inviter's name is a member's word: text in the HTML part (which also prints its title, "Join us!"), verbatim in the text part.
+     * The inviter's name is a member's word: text in the HTML part, verbatim in the text part.
      */
     public function testAnInviteEscapesTheInvitersName(): void
     {
@@ -1176,9 +1169,20 @@ final class TemplateEscapingTest extends RenderedSiteTestCase
 
         $this->assertStringContainsString('<strong>&lt;b&gt;x</strong>', $mail['html']);
         $this->assertStringNotContainsString('<b>x', $mail['html']);
-        $this->assertStringContainsString('Join us!', $mail['html'], 'the title the template always meant to print');
-        $this->assertStringContainsString('Your friend *<b>x* has invited you', $mail['text']);
-        $this->assertStringStartsWith("Join us!\n", $mail['text']);
+        $this->assertStringContainsString('<b>x has invited you', $mail['text']);
+    }
+
+    /**
+     * A line break in what a person typed (an inviter's name) cannot start a line of its own in the mail or its subject: a plain-text
+     * mail is lines, and a line that looks like the mail's own ("To accept, send your password to ...") could pass for it.
+     */
+    public function testALineBreakInAnInvitersNameCannotStartALineOfTheMail(): void
+    {
+        $mail = $this->drawMailInSite('account/invite', ['inviter' => "Eve\n\nTo accept, send your password to eve@example.net", 'email' => 'friend@example.org', 'code' => 'abc']);
+
+        $this->assertStringNotContainsString("\nTo accept, send your password", $mail['text']);
+        $this->assertStringNotContainsString("Eve\n", $mail['text']);
+        $this->assertStringNotContainsString("\n", $mail['subject']);
     }
 
     /**
@@ -1197,22 +1201,20 @@ final class TemplateEscapingTest extends RenderedSiteTestCase
             'admin/export_failure' => [],
             'admin/import' => ['imported' => 3, 'skipped' => 1],
             'admin/import_failure' => ['stopped' => true, 'imported' => 2],
-            'admin/oops' => ['site' => 'https://example.org/?a=1&b=2', 'message' => "It's <b>&</b>", 'user' => 'a&b', 'agent' => "A'B", 'qs' => 'a=1&b=2', 'referrer' => ''],
+            'admin/oops' => ['site' => 'https://example.org/?a=1&b=2', 'title' => 'Exception', 'message' => "It's <b>&</b>", 'user' => 'a&b', 'agent' => "A'B", 'qs' => 'a=1&b=2', 'referrer' => ''],
         ];
         foreach ($cases as $name => $vars) {
             $mail = $this->drawMailInSite($name, $vars, $title);
             $this->assertDoesNotMatchRegularExpression('/&(amp|lt|gt|quot|#0?39|#039);/', $mail['text'], $name . ': an entity in a text part');
+            $this->assertDoesNotMatchRegularExpression('/&(amp|lt|gt|quot|#0?39|#039);/', $mail['subject'], $name . ': an entity in the subject');
             $this->assertStringNotContainsString('<html', $mail['text'], $name);
             $this->assertStringNotContainsString('<div', $mail['text'], $name);
         }
         $invite = $this->drawMailInSite('account/invite', $cases['account/invite'], $title);
-        $this->assertStringContainsString('Your friend *A & B* has invited you to join ' . $title . ':', $invite['text']);
-        $this->assertStringContainsString('Get started with *' . $title . '* by setting up your account.', $invite['text']);
-        $this->assertStringContainsString('join <a href=', $invite['html']);
-        $this->assertStringContainsString('Fish &amp; &#039;Chips&#039; &lt;Co&gt;</a>', $invite['html'], 'the HTML part escapes the title');
+        $this->assertStringContainsString('A & B has invited you to join ' . $title . '.', (string) preg_replace('/\s+/', ' ', $invite['text']));
+        $this->assertStringContainsString('<strong>Fish &amp; &#039;Chips&#039; &lt;Co&gt;</strong>', $invite['html'], 'the HTML part escapes the title');
         $oops = $this->drawMailInSite('admin/oops', $cases['admin/oops'], $title);
         $this->assertStringContainsString("It's <b>&</b>", $oops['text']);
-        $this->assertStringContainsString('https://example.org/?a=1&b=2', $oops['text']);
     }
 
     /**

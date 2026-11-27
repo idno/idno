@@ -1,0 +1,13 @@
+{# A short list of facts: `rows`, label => value. Rows with an empty value are left out. #}
+{% set shown = [] %}
+{% for label, value in rows|default([]) %}{% if value|mail_one_line %}{% set shown = shown|merge([{label: label|mail_one_line, value: value|mail_one_line}]) %}{% endif %}{% endfor %}
+{% if shown %}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width: 100%; margin: 0 0 16px 0;">
+{% for row in shown %}
+    <tr>
+        <td class="idno-mail-muted idno-mail-rule" width="34%" valign="top" style="width: 34%; padding: 8px 12px 8px 0; border-top: 1px solid {{ mail_colour('rule', 'border-color') }}; font-family: {{ mail_font() }}; font-size: 14px; line-height: 21px; color: {{ mail_colour('muted') }};">{{ row.label }}</td>
+        <td class="idno-mail-text idno-mail-rule" valign="top" style="padding: 8px 0; border-top: 1px solid {{ mail_colour('rule', 'border-color') }}; font-family: {{ mail_font() }}; font-size: 14px; line-height: 21px; color: {{ mail_colour('text') }}; word-break: break-word;">{{ row.value }}</td>
+    </tr>
+{% endfor %}
+</table>
+{% endif %}

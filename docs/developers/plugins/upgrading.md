@@ -275,6 +275,10 @@ A request can send an array where a page expects text (`email[]=x`, `email[$gt]=
 
 `User::jsonLDSerialise()` (the schema.org data in the head of every profile and post page) no longer has an `email` key: a member's account email is private. A plugin that read `email` from it, or from a page's JSON-LD, must read the address from the user's own settings, or from the `mailto:` links the member lists in their profile (`profile.url`).
 
+## Writing a mail
+
+A mail is two short Twig files, `templates/email/<name>.html.twig` and `templates/email-text/<name>.txt.twig`, written with the same parts (`idno_include('parts/paragraph', {text: ...})`; the parts are `heading`, `paragraph`, `button`, `quote`, `rows` and `code`, and each escapes what it is given), and the shell of each puts them in the mail. The HTML file says what the mail is with `{% do mail_describe({subject: ..., preheader: ..., reason: ...}) %}`, and `$email->setBodyFromTemplate('your/name', $vars)` writes both bodies and the subject. Build every link from `site_url()`, never from the request. `setHTMLBodyFromTemplate()` and `setTextBodyFromTemplate()` still work, and a `.tpl.php` mail template of your plugin or theme still replaces core's; it is placed in core's shell. `Email::isConfigured()`, `failureKind()` and `explanation()` tell a page whether mail can be sent and why it was not.
+
 ## Sending webmentions from a content type
 
 A content type that announces a post to the pages its text links to calls `\Idno\Core\Webmention::queueMentions($post->getURL(), $text)` after it saves, where `$text` is the post's text with its addresses made into links (`\Idno\Core\Idno::site()->template()->parseURLs(...)`). It queues the event `webmention/sendall`, so with the asynchronous queue the save returns without waiting for the other sites, and with the default queue the event runs at once. Calling `Webmention::pingMentions()` directly still works, but sends inside the request. Before announcing a change other than a save (a delete), ask `$post->announcesMentions()`: true only for a public post that is published, never for a draft.

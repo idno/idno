@@ -34,8 +34,8 @@ use Twig\TwigFunction;
  *
  * The functions marked safe return `Twig\Markup`, so another function can tell their output from a plain string.
  *
- * What is marked safe for HTML is exactly: `idno_include`, `slot`, `t_html`, `form_token`, `action_link`, `form_data`, `js_string` and
- * `pagination` (functions); `sanitize_html`, `autop`, `parse_urls`, `parse_hashtags` and `parse_users` (filters). The last
+ * What is marked safe for HTML is exactly: `idno_include`, `slot`, `t_html`, `form_token`, `action_link`, `form_data`, `js_string`,
+ * `pagination`, `mail_dark_css` (the constant style rules of the mail palette) and `mail_emphasise` (a sentence of a mail with its values in bold, all escaped) (functions); `sanitize_html`, `autop`, `parse_urls`, `parse_hashtags` and `parse_users` (filters). The last
  * four work on text and so ESCAPE their input first (`pre_escape`: raw text is escaped, sanitized HTML and `Markup` are
  * kept). `action_link`'s label and `form_data`'s argument are kept only when they are `Markup` (a capture, or the output of a safe
  * function) and escaped otherwise, so a plain string can never become markup by passing through them. `action_link` refuses an
@@ -65,6 +65,7 @@ final class IdnoTwigExtension extends AbstractExtension
             new TwigFunction('slot', $this->slot(...), ['needs_context' => true, 'is_safe' => ['html']]),
             new TwigFunction('t', $this->translate(...)),
             new TwigFunction('t_html', $this->translateHtml(...), $html),
+            new TwigFunction('t_format', $this->translateFormat(...)),
 
             new TwigFunction('site_url', $this->siteUrl(...)),
             new TwigFunction('static_url', $this->staticUrl(...)),
@@ -141,6 +142,16 @@ final class IdnoTwigExtension extends AbstractExtension
             new TwigFunction('embeds', self::embeds(...)),
             new TwigFunction('syndication_has', $this->syndicationHas(...)),
             new TwigFunction('syndication_accounts', $this->syndicationAccounts(...)),
+            // What a mail is made of (Idno\Mail\MailDesign: pure, so none of these needs the site)
+            new TwigFunction('mail_describe', self::mailDescribe(...)),
+            new TwigFunction('mail_colour', self::mailColour(...)),
+            new TwigFunction('mail_site_name', $this->mailSiteName(...)),
+            new TwigFunction('mail_font', self::mailFont(...)),
+            new TwigFunction('mail_dark_css', self::mailDarkCss(...), $html),
+            new TwigFunction('mail_emphasise', self::mailEmphasise(...), $html),
+            new TwigFunction('mail_sentence', self::mailSentence(...)),
+            new TwigFunction('mail_wrap', self::mailWrap(...)),
+            new TwigFunction('mail_rule', self::mailRule(...)),
         ];
     }
 
@@ -173,6 +184,7 @@ final class IdnoTwigExtension extends AbstractExtension
             new TwigFilter('alnum_only', self::alnumOnly(...)),
             new TwigFilter('base64_url', self::base64Url(...)),
             new TwigFilter('attachment_url', $this->attachmentUrl(...)),
+            new TwigFilter('mail_one_line', self::mailOneLine(...)),
         ];
     }
 
@@ -733,6 +745,15 @@ final class IdnoTwigExtension extends AbstractExtension
     }
 
     /**
+     * The translation of a sentence with a `%s` for each value that is filled in later (`mail_emphasise()`, `mail_sentence()`): the
+     * translated text with every specifier numbered (`%1$s`, `%2$s`, ...), which a translation may put in another order.
+     */
+    public function translateFormat(string $text): string
+    {
+        return $this->translation->translate($text, array_map(static fn (int $n): string => '%' . $n . '$s', range(1, 9)));
+    }
+
+    /**
      * The translation of a string that holds markup: the text is trusted, so only what is put into it is escaped.
      *
      * @param array<int, mixed> $subs
@@ -878,6 +899,82 @@ final class IdnoTwigExtension extends AbstractExtension
     public static function emailAddress(mixed $address): string
     {
         return (string) filter_var(self::text($address), FILTER_SANITIZE_EMAIL);
+    }
+
+    /**
+     * A mail's HTML template says what the shell should know about the mail: `subject`, `preheader` and `reason` (all plain text).
+     *
+     * @param array<string, mixed> $about
+     */
+    public static function mailDescribe(array $about): string
+    {
+        \Idno\Mail\MailDesign::describe($about);
+
+        return '';
+    }
+
+    /** A light colour of the mail palette, for an inline style: `mail_colour('card', 'background-color')` */
+    public static function mailColour(string $role, string $property = 'color'): string
+    {
+        return \Idno\Mail\MailDesign::colour($role, $property);
+    }
+
+    /** The name of the site for a mail: its title on one line, or its host name when it has none */
+    public function mailSiteName(): string
+    {
+        $name = \Idno\Mail\MailDesign::oneLine($this->helpers->siteTitle());
+
+        return $name !== '' ? $name : (string) self::urlHost($this->helpers->siteUrl());
+    }
+
+    /** The typefaces of a mail (those of preformatted text when `mono`) */
+    public static function mailFont(bool $mono = false): string
+    {
+        return $mono ? \Idno\Mail\MailDesign::FONT_MONO : \Idno\Mail\MailDesign::FONT;
+    }
+
+    /** The dark colours of every role of the palette, as the style rules the mail shell holds (constant text of the palette: safe for the style element) */
+    public static function mailDarkCss(): Markup
+    {
+        return new Markup(\Idno\Mail\MailDesign::darkCss(), 'UTF-8');
+    }
+
+    /**
+     * A sentence with a `%s` for each value, the values in bold: the sentence and the values are escaped here.
+     *
+     * @param array<array-key, mixed> $values
+     */
+    public static function mailEmphasise(mixed $format, mixed $values): Markup
+    {
+        return new Markup(\Idno\Mail\MailDesign::emphasise($format, is_array($values) ? $values : []), 'UTF-8');
+    }
+
+    /**
+     * The same sentence for a plain-text mail: the values as they are, each on one line.
+     *
+     * @param array<array-key, mixed> $values
+     */
+    public static function mailSentence(mixed $format, mixed $values): string
+    {
+        return \Idno\Mail\MailDesign::sentence($format, is_array($values) ? $values : []);
+    }
+
+    /** A value as one line of text, for a mail: nothing a person typed can start a line or a header of the mail's own */
+    public static function mailOneLine(mixed $value): string
+    {
+        return \Idno\Mail\MailDesign::oneLine($value);
+    }
+
+    /** Plain text wrapped to a mail's width (an address longer than a line is left whole), every line starting with `prefix` */
+    public static function mailWrap(mixed $text, string $prefix = ''): string
+    {
+        return \Idno\Mail\MailDesign::wrapText($text, \Idno\Mail\MailDesign::TEXT_WIDTH, $prefix);
+    }
+
+    /** The line of `=` under a heading of a plain-text mail */
+    public static function mailRule(mixed $heading): string
+    {
+        return \Idno\Mail\MailDesign::rule($heading);
     }
 
     /**

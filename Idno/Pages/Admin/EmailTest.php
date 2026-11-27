@@ -1,7 +1,7 @@
 <?php
 
     /**
-     * Administration page: email settings
+     * Administration page: send a test email with the stored settings
      */
 
 namespace Idno\Pages\Admin {
@@ -13,32 +13,34 @@ namespace Idno\Pages\Admin {
         {
             $this->adminGatekeeper(); // Admins only
 
-            $email = $this->getInput('to_email');
+            $lang    = \Idno\Core\Idno::site()->language();
+            $session = \Idno\Core\Idno::site()->session();
+            $email   = $this->getInput('to_email');
+            $email   = is_string($email) ? trim($email) : '';
 
-            try {
-                $message = new \Idno\Core\Email();
-                $message->addTo($email);
-                $message->setSubject("Test email from " . \Idno\Core\Idno::site()->config()->title . '!');
-                $message->setHTMLBodyFromTemplate('admin/emailtest');
-                $message->setTextBodyFromTemplate('admin/emailtest');
+            if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                $session->addErrorMessage($lang->_('Enter the email address to send the test to.'));
+            } else {
+                try {
+                    $message = new \Idno\Core\Email();
+                    $message->addTo($email);
+                    $message->setBodyFromTemplate('admin/emailtest');
 
-                if ($message->send()) {
-                    \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->esc_("Test email sent to %s", [$email]));
-                } else {
-                    \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->esc_("There was a problem sending a test message to %s.", [$email]));
-                    // A mail setting that cannot be used is named (never its value), so the admin knows what to fix.
-                    if (str_starts_with((string)$message->lastFailure(), 'settings: ')) {
-                        \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->esc_("The mail setting %s cannot be used. Check it on this page.", [substr($message->lastFailure(), 10)]));
+                    if ($message->send()) {
+                        $session->addMessage($lang->esc_('The mail server accepted a test email for %s. Check that it arrives, and that it is not in the spam folder.', [$email]));
+                    } else {
+                        // The reason is Email::explanation(): one fixed sentence for the kind of failure and what the mail server
+                        // answered, with no user name and no password (and never an exception's text)
+                        $session->addErrorMessage($lang->esc_('The test email to %s was not sent. %s', [$email, $message->explanation()]));
                     }
+                } catch (\Exception $e) {
+                    $session->addErrorMessage(htmlspecialchars(\Idno\Core\ExceptionMessage::forVisitor($e), ENT_QUOTES));
                 }
-            } catch (\Exception $e) {
-                \Idno\Core\Idno::site()->session()->addErrorMessage(htmlspecialchars(\Idno\Core\ExceptionMessage::forVisitor($e), ENT_QUOTES));
             }
 
-            $this->forward(\Idno\Core\Idno::site()->config()->getURL() . 'admin/email');
+            $this->forward(\Idno\Core\Idno::site()->config()->getURL() . 'admin/email#test');
         }
 
     }
 
 }
-

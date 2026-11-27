@@ -625,8 +625,9 @@ final class PortabilityJobsTest extends PortabilityTestCase
         foreach (['email-text', 'email'] as $type) {
             $mail = $drawn($type, $this->notifier->importDetails[0]);
             $this->assertStringContainsString('stopped after repeated errors', $mail, $type);
-            $this->assertStringContainsString('3 posts were imported before it stopped', $mail, $type);
-            $this->assertStringContainsString("site's log", $mail, $type);
+            $flat = html_entity_decode((string) preg_replace('/\s+/', ' ', $mail), ENT_QUOTES);
+            $this->assertStringContainsString('3 posts were imported before it stopped', $flat, $type);
+            $this->assertStringContainsString("site's log", $flat, $type);
         }
     }
 

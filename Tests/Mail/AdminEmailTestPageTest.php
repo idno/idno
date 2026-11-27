@@ -34,11 +34,11 @@ final class AdminEmailTestPageTest extends SmtpSiteTestCase
 
         $text = $this->sendTestMail($cookie, 'admin@example.net');
 
-        $this->assertStringContainsString('Test email sent to admin@example.net', $text);
-        $this->assertStringNotContainsString('There was a problem', $text);
+        $this->assertStringContainsString('The mail server accepted a test email for admin@example.net', $text);
+        $this->assertStringNotContainsString('was not sent', $text);
         $this->assertCount(1, $this->smtp->messages());
         $message = ReceivedMessage::parse($this->smtp->messages()[0]);
-        $this->assertSame('Test email from Page Site!', $message->header('Subject'));
+        $this->assertSame('Test email from Page Site', $message->header('Subject'));
         $this->assertStringContainsString('admin@example.net', (string) $message->header('To'));
         $this->assertNotNull($message->part('text/html'));
     }
@@ -50,9 +50,10 @@ final class AdminEmailTestPageTest extends SmtpSiteTestCase
 
         $text = $this->sendTestMail($cookie, 'admin@example.net');
 
-        $this->assertStringContainsString('There was a problem sending a test message to admin@example.net', $text);
+        $this->assertStringContainsString('The test email to admin@example.net was not sent', $text);
         $this->assertStringContainsString('The mail setting smtp_host cannot be used', $text);
-        $this->assertStringNotContainsString('evil.example', $text, 'the value of the setting is not shown');
+        $this->assertSame(1, preg_match('/The test email to .*?Check it on this page\./s', $text, $message), 'the message');
+        $this->assertStringNotContainsString('evil.example', $message[0], 'the value of the setting is not in the message');
         $this->assertSame([], $this->smtp->messages());
     }
 
@@ -65,7 +66,7 @@ final class AdminEmailTestPageTest extends SmtpSiteTestCase
 
         $text = $this->sendTestMail($cookie, 'admin@example.net');
 
-        $this->assertStringContainsString('There was a problem sending a test message to admin@example.net', $text);
+        $this->assertStringContainsString('The test email to admin@example.net was not sent', $text);
         $this->assertStringNotContainsString('cannot be used', $text, 'a transport failure is not a refused setting');
         $this->assertStringNotContainsString($password, $text);
         $this->assertStringNotContainsString('Connection could not be established', $text, 'no exception text is shown');

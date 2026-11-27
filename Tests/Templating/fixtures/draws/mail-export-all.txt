@@ -1,6 +1,15 @@
-Your data export is ready!
-===================
+Your export is ready
+====================
 
-We've gathered all your site content and placed it in an archive for you. To download it, click the following link:
+Everything on Fixture Site has been gathered into one archive. Sign in
+as an administrator to download it.
 
-Get your data: {site}/admin/export/
+Get your export:
+{site}/admin/export/
+
+The archive is a full copy of the site, so keep it somewhere safe.
+
+-- 
+You got this email because you asked for an export of Fixture Site.
+Fixture Site
+{site}/

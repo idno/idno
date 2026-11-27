@@ -1,80 +1,74 @@
-<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
-    "http://www.w3.org/TR/html4/loose.dtd">
-<html lang="en">
+{#- The shell of every HTML mail the site sends: the site's name, the body in a card, and a footer that says why the reader got the mail and which site sent it.
+
+    Mail clients are not browsers. The layout is tables, every style that matters is inline (some clients drop the style element, which here adds the phone and dark
+    variants), there is no image, no font and no other file to fetch, and no script. Colours come from the mail palette (Idno\Mail\MailDesign), light inline and dark in the
+    style block; every element with a colour has the class of its role. The header and the footer name the page's background themselves, so a mail client that turns colours
+    over by itself turns a text and its background over together.
+
+    Variables, all plain text but `body`: `body` (the mail's HTML), `title` (the subject), `preheader`, `reason`, `lang` and `dir`. -#}
+{%- set bg = mail_colour('bg', 'background-color') -%}
+{%- set dir = dir|default('ltr') == 'rtl' ? 'rtl' : 'ltr' -%}
+{%- set align = dir == 'rtl' ? 'right' : 'left' -%}
+{%- set font = mail_font() -%}
+<!DOCTYPE html>
+<html lang="{{ lang|default('en') }}" dir="{{ dir }}" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
-    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-    <meta name="viewport" content="initial-scale=1.0">    <!-- So that mobile webkit will display zoomed in -->
-    <meta name="format-detection" content="telephone=no"> <!-- disable auto telephone linking in iOS -->
-
-    <title>{{ title }}</title>
-    <style type="text/css">
-
-        /* Resets: see reset.css for details */
-        .ReadMsgBody { width: 100%; background-color: #ebebeb;}
-        .ExternalClass {width: 100%; background-color: #ebebeb;}
-        .ExternalClass, .ExternalClass p, .ExternalClass span, .ExternalClass font, .ExternalClass td, .ExternalClass div {line-height:100%;}
-        body {-webkit-text-size-adjust:none; -ms-text-size-adjust:none;}
-        body {margin:0; padding:0;}
-        table {border-spacing:0;}
-        table td {border-collapse:collapse;}
-        .yshortcuts a {border-bottom: none !important;}
-        span.preheader { display: none !important; }
-
-        /* Constrain email width for small screens */
-        @media screen and (max-width: 600px) {
-            table[class="container"] {
-                width: 95% !important;
-            }
-        }
-
-        /* Give content more room on mobile */
-        @media screen and (max-width: 480px) {
-            td[class="container-padding"] {
-                padding-left: 12px !important;
-                padding-right: 12px !important;
-            }
-        }
-
-    </style>
+<meta charset="utf-8">
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="x-apple-disable-message-reformatting">
+<meta name="format-detection" content="telephone=no, date=no, address=no, email=no">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
+<title>{{ title|mail_one_line }}</title>
+<!--[if mso]>
+<noscript><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript>
+<![endif]-->
+<style>
+    :root { color-scheme: light dark; supported-color-schemes: light dark; }
+    body { margin: 0; padding: 0; width: 100%; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+    table { border-collapse: separate; mso-table-lspace: 0; mso-table-rspace: 0; }
+    a { text-decoration: underline; }
+    @media screen and (max-width: 620px) {
+        .idno-mail-outer { padding: 20px 10px !important; }
+        .idno-mail-card { padding: 24px 20px !important; }
+    }
+    a:focus-visible { outline: 2px solid {{ mail_colour('link') }}; outline-offset: 2px; }
+{{ mail_dark_css() }}
+</style>
 </head>
-<body style="margin:0; padding:10px 0;" bgcolor="#ebebeb" leftmargin="0" topmargin="0" marginwidth="0" marginheight="0">{% if preheader %}<span class="preheader">{{ preheader }}</span>{% endif %}
-<br>
-
-<!-- 100% wrapper (grey background) -->
-<table border="0" width="100%" height="100%" cellpadding="0" cellspacing="0" bgcolor="#ebebeb">
+<body class="idno-mail-bg" style="margin: 0; padding: 0; width: 100%; background-color: {{ bg }};">
+{% if preheader|mail_one_line %}
+<div class="idno-mail-preheader" style="display: none; max-height: 0; max-width: 0; overflow: hidden; opacity: 0; font-size: 1px; line-height: 1px; color: {{ mail_colour('preheader') }}; mso-hide: all;">{{ preheader|mail_one_line }}{% for i in 1..60 %}&#847;&zwnj;&nbsp;{% endfor %}</div>
+{% endif %}
+<table role="presentation" class="idno-mail-bg" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="{{ bg }}" style="width: 100%; background-color: {{ bg }};">
+<tr>
+<td class="idno-mail-outer idno-mail-bg" align="center" bgcolor="{{ bg }}" style="padding: 32px 16px; background-color: {{ bg }};">
+<!--[if mso]><table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" align="center"><tr><td><![endif]-->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width: 100%; max-width: 600px;">
     <tr>
-        <td align="center" valign="top" bgcolor="#ebebeb" style="background-color: #ebebeb; padding-top: 3em; padding-bottom: 3em;">
-
-            <!-- 600px container (white background) -->
-            <table border="0" width="600" cellpadding="0" cellspacing="0" class="container" bgcolor="#ffffff">
-                <tr>
-                    <td class="container-padding" bgcolor="#ffffff" style="background-color: #ffffff; padding-left: 30px; padding-right: 30px; font-size: 16px; line-height: 20px; font-family: Helvetica, sans-serif; color: #666;">
-                        <br>
-
-                        <!-- ### BEGIN CONTENT ### -->
-
-                        {{ body|raw }}
-
-                        <!-- ### END CONTENT ### -->
-
-                        <hr style="border-top: 1px solid #cccccc;">
-
-                        <p style="text-align: center; margin-top: 15px;">
-                        <em style="font-style:italic; font-size: 12px; color: #aaa; text-decoration: center;">{{ t('Powered by') }} <a href="https://idno.co/" style="color: #4c93cb; text-decoration: none;">Idno</a>.</em>
-                        </p>
-                        <br><br>
-
-                    </td>
-                </tr>
-            </table>
-            <!--/600px container -->
+        <td class="idno-mail-bg idno-mail-strong" bgcolor="{{ bg }}" style="padding: 0 4px 16px 4px; background-color: {{ bg }}; font-family: {{ font }}; font-size: 16px; line-height: 24px; font-weight: 700; color: {{ mail_colour('strong') }}; text-align: {{ align }};">
+            {{ mail_site_name() }}
+        </td>
+    </tr>
+    <tr>
+        <td class="idno-mail-card idno-mail-text" bgcolor="{{ mail_colour('card', 'background-color') }}" style="padding: 32px; background-color: {{ mail_colour('card', 'background-color') }}; border: 1px solid {{ mail_colour('card', 'border-color') }}; border-radius: 16px; font-family: {{ font }}; font-size: 16px; line-height: 24px; color: {{ mail_colour('text') }}; text-align: {{ align }};">
+{{ body|raw }}
+        </td>
+    </tr>
+    <tr>
+        <td class="idno-mail-bg idno-mail-footer" bgcolor="{{ bg }}" style="padding: 20px 4px 0 4px; background-color: {{ bg }}; font-family: {{ font }}; font-size: 13px; line-height: 20px; color: {{ mail_colour('footer') }}; text-align: {{ align }};">
+{% if reason|mail_one_line %}
+            {{ reason|mail_one_line }}<br>
+{% endif %}
+            {{ mail_site_name() }}{% if site_url()|http_url %} &middot; <a class="idno-mail-footer" href="{{ site_url()|http_url }}" style="color: {{ mail_colour('footer') }}; text-decoration: underline;">{{ site_url()|http_url|url_host }}</a>{% endif %}
 
         </td>
     </tr>
 </table>
-<!--/100% wrapper-->
-<br>
-<br>
+<!--[if mso]></td></tr></table><![endif]-->
+</td>
+</tr>
+</table>
 </body>
 </html>
-

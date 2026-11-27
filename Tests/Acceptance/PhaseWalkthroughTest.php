@@ -109,14 +109,14 @@ final class PhaseWalkthroughTest extends AsyncSiteTestCase
         $this->assertStringContainsString('restart the queue worker', $page->body, $this->step . ': the page says the worker reads the settings when it starts');
 
         $text = $this->sendTestMail($owner, 'owner@example.net');
-        $this->assertStringContainsString('There was a problem sending a test message to owner@example.net', $text, $this->step);
+        $this->assertStringContainsString('The test email to owner@example.net was not sent', $text, $this->step);
         $this->assertSame([], $this->smtp->messages(), $this->step . ': nothing was delivered');
         $this->assertFalse($this->smtp->connections()[0]['authAccepted'], $this->step . ': the server saw the wrong login');
 
         $this->step('1 the corrected password, saved on the same page, is the one the site uses');
         $this->assertSame(302, $save('right-pw')->status);
         $text = $this->sendTestMail($owner, 'owner@example.net');
-        $this->assertStringContainsString('Test email sent to owner@example.net', $text, $this->step);
+        $this->assertStringContainsString('The mail server accepted a test email for owner@example.net', $text, $this->step);
         $mails = $this->mailsWith('Test email from');
         $this->assertCount(1, $mails, $this->step);
         $this->assertStringContainsString('site@example.com', (string) $mails[0]->header('From'));
@@ -164,7 +164,7 @@ final class PhaseWalkthroughTest extends AsyncSiteTestCase
         $asked = $this->browser->submit('account/password/', 'account/password', ['email' => 'bob@example.com'], null);
         $this->assertSame(302, $asked->status, $this->step);
         $this->assertStringContainsString('sent=true', (string) $asked->header('Location'));
-        $mails = $this->mailsWith('Password reset');
+        $mails = $this->mailsWith('Reset your password');
         $this->assertCount(1, $mails, $this->step);
         $this->assertSame('bob@example.com', $mails[0]->header('To'));
         $this->assertSame(1, preg_match('~account/password/reset/\?email=([^&\s]+)&code=([0-9a-f]+)~', (string) $mails[0]->part('text/plain'), $reset), $this->step);
@@ -208,7 +208,7 @@ final class PhaseWalkthroughTest extends AsyncSiteTestCase
         $worker = $this->runWorkerOnce();
         $this->assertSame(0, $worker['exit'], $this->step . ': ' . $worker['output']);
         $this->assertSame([], $this->failedEvents(), $this->step);
-        $mails = $this->mailsWith('Your data export is ready');
+        $mails = $this->mailsWith('Your export of');
         $this->assertCount(1, $mails, $this->step . $this->serverLog());
         $this->assertSame('alice@example.com', $mails[0]->header('To'));
         // The mail's BODY is checked in testTheMailsAWorkerSendsAboutAnExportAndAnImportHaveABody.
@@ -334,7 +334,7 @@ final class PhaseWalkthroughTest extends AsyncSiteTestCase
         $this->assertSame(200, $this->browser->get($draftPath, $owner)->status, $this->step . ': but to its owner');
         $this->assertStringNotContainsString('what lives under the jetty', $this->browser->get('content/all/')->body, $this->step . ': it is on no public list');
 
-        $mails = $this->mailsWith('Idno - Your data import is complete');
+        $mails = $this->mailsWith('Your import into');
         $this->assertCount(1, $mails, $this->step . $this->serverLog());
         $this->assertSame('alice@example.com', $mails[0]->header('To'));
 
@@ -394,8 +394,8 @@ final class PhaseWalkthroughTest extends AsyncSiteTestCase
         $this->browser->upload('admin/import/', 'admin/import/', ['import_type' => 'WordPress'], ['field' => 'import', 'name' => 'export.xml', 'type' => 'text/xml', 'bytes' => $wordpress], $owner);
         $this->assertSame(0, $this->runWorkerOnce()['exit']);
 
-        $export = $this->mailsWith('Your data export is ready');
-        $import = $this->mailsWith('Idno - Your data import is complete');
+        $export = $this->mailsWith('Your export of');
+        $import = $this->mailsWith('Your import into');
         $this->assertCount(1, $export);
         $this->assertCount(1, $import);
         $text = (string) $export[0]->part('text/plain');

@@ -71,9 +71,10 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
         // The message is a value object; the two interfaces are implemented by Idno\Legacy adapters, aliased below;
         // ResilientTransport decorates the idno transport (below).
         'Queue' => ['EventTrigger.php', 'EntityCache.php', 'KeepFailedMessage.php', 'QueuedEvent.php', 'ResilientTransport.php', 'StopWhenQueueIsEmpty.php', 'UserContext.php', 'WorkerSiteUrl.php'],
-        // MailTransportDsn is a pure function of the settings, InvalidMailSetting an exception; MailerFactory and
-        // the transport factory are wired below.
-        'Mail' => ['CramMd5Authenticator.php', 'InvalidMailSetting.php', 'MailTransportDsn.php', 'SmtpTransportFactory.php'],
+        // MailTransportDsn is a pure function of the settings, InvalidMailSetting an exception; MailDesign (the colours and
+        // text helpers of every mail), MailFailure (why a mail was not sent) and MailSettingsInput (the email settings form's
+        // checks) are static and pure; MailerFactory and the transport factory are wired below.
+        'Mail' => ['CramMd5Authenticator.php', 'InvalidMailSetting.php', 'MailDesign.php', 'MailFailure.php', 'MailSettingsInput.php', 'MailTransportDsn.php', 'SmtpTransportFactory.php'],
         // Import and export. SafeXml and SettingsRedactor are static helpers, ImportedPost, ImportedComment and
         // ImportResult are value objects, ImportedImages is a helper the importers call; the interfaces are
         // implemented by Idno\Legacy adapters (aliased below); ImportedMedia takes a closure that fetches the

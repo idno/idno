@@ -1,6 +1,6 @@
-Test Email
-==========
-
-If you can read this, it means that your email settings are configured correctly!
-
-Visit your site: {{ site_url() -}}
+{#- The plain-text twin of templates/email/admin/emailtest. -#}
+{%- set site = mail_site_name() -%}
+{{- idno_include('parts/heading', {text: t('The email settings work')}) -}}
+{{- idno_include('parts/paragraph', {format: t_format('If you can read this, %s can send email.'), values: [site]}) -}}
+{{- idno_include('parts/paragraph', {text: t('If it arrived in the spam folder, check the DNS records your mail service asks for (SPF, DKIM and DMARC).')}) -}}
+{{- idno_include('parts/button', {label: t('Back to the email settings'), url: site_url() ~ 'admin/email/'}) -}}

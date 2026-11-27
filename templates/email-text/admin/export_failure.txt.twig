@@ -1,7 +1,6 @@
-Sorry, your data export was unsuccessful.
-=========================================
-
-Your site's data archive could not be made.
-You could try the export again, or ask your system administrator for help!
-
-Try again: {{ site_url() }}admin/export/
+{#- The plain-text twin of templates/email/admin/export_failure. -#}
+{%- set site = mail_site_name() -%}
+{{- idno_include('parts/heading', {text: t('Your export did not finish')}) -}}
+{{- idno_include('parts/paragraph', {format: t_format('The archive of %s could not be made.'), values: [site]}) -}}
+{{- idno_include('parts/paragraph', {text: t("You can try the export again. If it fails again, the site's error log may say why.")}) -}}
+{{- idno_include('parts/button', {label: t('Try the export again'), url: site_url() ~ 'admin/export/'}) -}}

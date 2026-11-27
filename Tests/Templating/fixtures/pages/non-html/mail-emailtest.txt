@@ -1,6 +1,16 @@
-Test Email
-==========
+The email settings work
+=======================
 
-If you can read this, it means that your email settings are configured correctly!
+If you can read this, Fixture Site can send email.
 
-Visit your site: {site}/
+If it arrived in the spam folder, check the DNS records your mail
+service asks for (SPF, DKIM and DMARC).
+
+Back to the email settings:
+{site}/admin/email/
+
+-- 
+You got this email because an administrator of Fixture Site sent a test
+to this address.
+Fixture Site
+{site}/

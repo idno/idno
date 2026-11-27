@@ -1,15 +1,14 @@
-<div style="font-weight: bold; font-size: 30px; line-height: 32px; color: #333" align="center">
-    Your data export is ready!
-</div><br>
-<hr/>
-<br>
-We've gathered all your site content and placed it in an archive for you. To download it, click the following link:
-<br><br>
-{% if unrendered %}
-<p>{{ unrendered|to_int }} entries could not be rendered and are included as data only.</p>
+{#- Tells the administrator who asked for an export that the archive is ready: `unrendered` (how many entries are in it as data only). The plain-text twin is templates/email-text/admin/export. -#}
+{%- set site = mail_site_name() -%}
+{%- do mail_describe({
+    subject: t('Your export of %s is ready', [site]),
+    preheader: t('The archive is ready to download.'),
+    reason: t('You got this email because you asked for an export of %s.', [site]),
+}) -%}
+{{ idno_include('parts/heading', {text: t('Your export is ready')}) }}
+{{ idno_include('parts/paragraph', {format: t_format('Everything on %s has been gathered into one archive. Sign in as an administrator to download it.'), values: [site]}) }}
+{% if unrendered|default(0)|to_int %}
+{{ idno_include('parts/paragraph', {text: t('%s entries could not be rendered and are included as data only.', [unrendered|to_int])}) }}
 {% endif %}
-<div align="center">
-    <a href="{{ site_url() }}admin/export/" style="background-color:#73B2E3;border:1px solid #73B2E3;border-radius:4px;color:#ffffff;display:inline-block;font-family:sans-serif;font-size:17px;font-weight:normal;line-height:40px;text-align:center;text-decoration:none;width:200px;-webkit-text-size-adjust:none;mso-hide:all;">Get your data</a>
-</div>
-<br>
-<br><br>
+{{ idno_include('parts/button', {label: t('Get your export'), url: site_url() ~ 'admin/export/'}) }}
+{{ idno_include('parts/paragraph', {muted: true, text: t('The archive is a full copy of the site, so keep it somewhere safe.')}) }}

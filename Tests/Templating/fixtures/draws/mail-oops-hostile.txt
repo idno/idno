@@ -1,12 +1,17 @@
-Ooops!
-======
+An error occurred on example.org
+================================
 
-An error occured on your Idno site https://example.org/!
+Exception <b>x</b>
 
 <script>x()</script>
 
-Logged in user was a&b
-Agent: <a href=//evil>x</a>
-QS: a=<i>&b="x" 
-
+Signed-in member: a&b
+Browser: <a href=//evil>x</a>
+Query string: a=<i>&b="x"
 Referrer: https://evil.example/"><b>
+
+-- 
+You got this email because this address is set to be told about errors
+on Fixture Site (the oops_notify setting).
+Fixture Site
+{site}/

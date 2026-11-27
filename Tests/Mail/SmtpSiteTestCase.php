@@ -31,7 +31,7 @@ abstract class SmtpSiteTestCase extends AsyncSiteTestCase
     protected function setUp(): void
     {
         self::$pki ??= TestPki::create();
-        $this->smtp = ScriptedSmtpServer::start(['pki' => self::$pki]);
+        $this->smtp = ScriptedSmtpServer::start(['pki' => self::$pki] + $this->smtpOptions());
         parent::setUp();
     }
 
@@ -40,6 +40,17 @@ abstract class SmtpSiteTestCase extends AsyncSiteTestCase
         $this->smtp?->stop();
         $this->smtp = null;
         parent::tearDown();
+    }
+
+    /**
+     * What the scripted server is told to do (see ScriptedSmtpServer::start()): a class that needs a server that asks for a login or
+     * fails somewhere says so here.
+     *
+     * @return array<string, mixed>
+     */
+    protected function smtpOptions(): array
+    {
+        return [];
     }
 
     protected function siteEnvironment(): array

@@ -23,7 +23,7 @@ use Tests\IdnoTestCase;
  */
 final class EmailAdapterTest extends IdnoTestCase
 {
-    private const SETTINGS = ['smtp_host', 'smtp_port', 'smtp_username', 'smtp_password', 'smtp_secure', 'from_email', 'title', 'oops_notify'];
+    private const SETTINGS = ['smtp_host', 'smtp_port', 'smtp_username', 'smtp_password', 'smtp_secure', 'from_email', 'from_name', 'reply_to_email', 'title', 'oops_notify'];
 
     private static ?\Closure $listener = null;
 
@@ -52,6 +52,8 @@ final class EmailAdapterTest extends IdnoTestCase
         $config->config['smtp_password'] = '';
         $config->config['smtp_secure'] = '';
         $config->config['from_email'] = 'site@example.com';
+        $config->config['from_name'] = '';
+        $config->config['reply_to_email'] = '';
         $config->config['title'] = 'Adapter Site';
         $config->config['oops_notify'] = '';
         RecordingMailTransport::drain();
@@ -121,7 +123,7 @@ final class EmailAdapterTest extends IdnoTestCase
         $this->assertSame(1, $email->send());
 
         $mail = RecordingMailTransport::drain()[0];
-        $this->assertStringContainsString('<html lang="en">', $mail['html']);
+        $this->assertStringContainsString('<html lang="en', $mail['html']);
         $this->assertStringContainsString('<p>Inside</p>', $mail['html']);
     }
 
@@ -159,6 +161,50 @@ final class EmailAdapterTest extends IdnoTestCase
         // With neither there is no sender: nothing is sent.
         $this->assertSame(0, $this->simple()->send());
         $this->assertSame([], RecordingMailTransport::drain());
+    }
+
+    // A site owner sets the name people see and where replies go: both must reach the mail, and a message that names its own Reply-To keeps it.
+    public function testTheFromNameAndTheReplyToAddressOfTheSettingsAreUsedUnlessTheMessageNamesAReplyTo(): void
+    {
+        $config = Idno::site()->config();
+        $config->config['from_name'] = "Ada's Notes\r\nBcc: x@example.net";
+        $config->config['reply_to_email'] = 'inbox@example.org';
+        $this->simple()->send();
+        $mail = RecordingMailTransport::drain()[0];
+        $this->assertSame([['address' => 'site@example.com', 'name' => "Ada's Notes Bcc: x@example.net"]], $mail['from'], 'the name is one line');
+        $this->assertSame([['address' => 'inbox@example.org', 'name' => '']], $mail['reply_to']);
+        $this->assertDoesNotMatchRegularExpression('/^Bcc:/mi', $mail['headers']);
+
+        $own = $this->simple();
+        $own->setReplyTo('own@example.net');
+        $own->send();
+        $this->assertSame([['address' => 'own@example.net', 'name' => '']], RecordingMailTransport::drain()[0]['reply_to']);
+    }
+
+    // An administrator told that "the login was refused" must not also be shown the user name and password the server quoted back.
+    public function testAFailureIsExplainedByItsKindAndTheExplanationHoldsNoCredentialsAndNoExceptionText(): void
+    {
+        $config = Idno::site()->config();
+        $config->config['smtp_username'] = 'mailer-user-77';
+        $config->config['smtp_password'] = 'mailer-secret-91';
+        Email::useMailer(new class () implements MailerInterface {
+            public function send(\Symfony\Component\Mime\RawMessage $message, ?\Symfony\Component\Mailer\Envelope $envelope = null): void
+            {
+                throw new TransportException('Failed to authenticate on SMTP server with username "mailer-user-77" using the following authenticators: "PLAIN". Authenticator "PLAIN" returned "Expected response code "235" but got code "535", with message "535 5.7.8 Bad credentials for mailer-user-77 / bWFpbGVyLXNlY3JldC05MQ==".".');
+            }
+        });
+        $email = $this->simple();
+
+        $this->assertSame(0, $email->send());
+
+        $this->assertSame('auth', $email->failureKind());
+        $this->assertStringContainsString('did not accept the user name and password', $email->explanation());
+        $this->assertStringContainsString('smtp.example.test, port 2525', $email->explanation(), 'it says which server');
+        $this->assertStringContainsString('Bad credentials', $email->explanation(), 'the server\'s own words are kept');
+        foreach (['mailer-user-77', 'mailer-secret-91', 'bWFpbGVyLXNlY3JldC05MQ', 'Failed to authenticate'] as $secret) {
+            $this->assertStringNotContainsString($secret, $email->explanation());
+            $this->assertStringNotContainsString($secret, $this->log());
+        }
     }
 
     public function testAFailingTransportReturnsZeroLogsTheClassAndNeverThrows(): void
@@ -330,7 +376,7 @@ final class EmailAdapterTest extends IdnoTestCase
         $this->assertCount(2, $recorded);
         $this->assertSame(['ops@example.net'], array_column($recorded[0]['to'], 'address'));
         $this->assertSame(['second@example.net'], array_column($recorded[1]['to'], 'address'));
-        $this->assertSame(Idno::site()->config()->host . ': Oh no', $recorded[0]['subject']);
+        $this->assertStringContainsString('Oh no', $recorded[0]['subject']);
         $this->assertStringContainsString('It broke', $recorded[0]['text']);
     }
 
@@ -409,16 +455,16 @@ final class EmailAdapterTest extends IdnoTestCase
 
         $recorded = RecordingMailTransport::drain();
         $this->assertCount(1, $recorded);
-        $this->assertStringContainsString('<html lang="en">', $recorded[0]['html']);
+        $this->assertStringContainsString('<html lang="en', $recorded[0]['html']);
         $this->assertSame('', $this->log(), 'the shell warned about nothing');
     }
 
     public function testOopsAlertReturnsWithoutThrowingWhenATemplateThrows(): void
     {
         Idno::site()->config()->config['oops_notify'] = 'ops@example.net';
-        // The user agent is drawn by the template: a value that cannot be printed makes it throw (the
+        // The site's name is drawn by the shell: a title that cannot be printed makes the draw throw (the
         // test site turns every PHP error into an exception).
-        $_SERVER['HTTP_USER_AGENT'] = ['not', 'a', 'string'];
+        Idno::site()->config()->config['title'] = ['not', 'a', 'string'];
 
         \Idno\Core\Logging::oopsAlert('It broke', 'Oh no');
 
@@ -433,7 +479,7 @@ final class EmailAdapterTest extends IdnoTestCase
     public function testOopsAlertSendsAPlainTextAlertWhenTheTemplatesCannotBeDrawn(): void
     {
         Idno::site()->config()->config['oops_notify'] = 'ops@example.net';
-        $_SERVER['HTTP_USER_AGENT'] = ['not', 'a', 'string'];
+        Idno::site()->config()->config['title'] = ['not', 'a', 'string'];
         $_SERVER['QUERY_STRING'] = 'secret=request-value';
 
         \Idno\Core\Logging::oopsAlert('It broke [/a/file.php:12]', 'Oh no');

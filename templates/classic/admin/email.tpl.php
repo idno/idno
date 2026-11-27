@@ -81,7 +81,7 @@
                 <div class="col-md-4">
                     <input type="password" id="smtp_password" placeholder="SMTP password" class="form-control"
                            name="smtp_password"
-                           value="<?php echo htmlspecialchars(\Idno\Core\Idno::site()->config()->smtp_password) ?>">
+                           value="">
                 </div>
                 <div class="col-md-6">
                     <p class="config-desc"><?php echo \Idno\Core\Idno::site()->language()->_('If your mail server needs a password, enter it here.'); ?></p>

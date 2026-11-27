@@ -1,100 +1,123 @@
+{#- The email settings form: `values` (the fields as stored, or as the administrator typed them), `errors` (what is wrong with each field, by name), `has_password` (whether a password is stored: the password itself is never a variable), `configured`, `sender`, `test_to`, `fixed` (the mail settings the configuration file sets). -#}
+{% macro field(name, label, help, values, errors, attributes) %}
+    {% set attributes = attributes|default({}) %}
+    <div class="idno-form-group">
+        <label class="idno-label" for="{{ name }}">{{ label }}</label>
+        <input id="{{ name }}" name="{{ name }}" class="idno-input" type="{{ attributes.type|default('text') }}" value="{{ values[name]|default('') }}"
+               aria-describedby="help-{{ name }}{% if errors[name] is defined %} error-{{ name }}{% endif %}"{% if errors[name] is defined %} aria-invalid="true"{% endif %}
+               {%- for attribute, value in attributes|filter((v, k) => k != 'type') %} {{ attribute }}="{{ value }}"{% endfor %}>
+        {% if errors[name] is defined %}
+            <p class="idno-form-error" id="error-{{ name }}">{{ errors[name] }}</p>
+        {% endif %}
+        <p class="idno-form-help" id="help-{{ name }}">{{ help }}</p>
+    </div>
+{% endmacro %}
+{% import _self as form %}
+{% set values = values|default({}) %}
+{% set errors = errors|default({}) %}
 <h1 class="idno-admin-page-title">{{ t('Email') }}</h1>
-    <p class="idno-admin-description">
-        {{ t("Idno tries to send email using your server's default email settings. If you'd like it to do something else - for example, if you'd like to send email using an external provider - enter the new SMTP settings below.") }}
-    </p>
-    <p class="idno-admin-description">
-        {{ t("After changing the mail settings, restart the queue worker: the mails it sends (the export and import results) use the settings it read when it started.") }}
-    </p>
+<p class="idno-admin-description">
+    {{ t('Your site sends email to invite people, to reset passwords and to notify members. It sends it through a mail server: usually a mail service you have an account with.') }}
+</p>
+<p class="idno-admin-description">
+    {{ t("After changing the mail settings, restart the queue worker: the mails it sends (the export and import results) use the settings it read when it started.") }}
+</p>
 
-    <form action="{{ site_url() }}admin/email" method="post">
-        <div class="idno-admin-card">
-            <h2 class="idno-admin-card-title">{{ t('Email Settings') }}</h2>
+{% if configured %}
+    <div class="idno-notice idno-notice-ok" role="status">
+        {{ t('Mail is sent through %s, from %s.', [setting('smtp_host'), sender]) }}
+    </div>
+{% else %}
+    <div class="idno-notice idno-notice-warning" role="status">
+        <strong>{{ t('No mail service is set up yet.') }}</strong>
+        {{ t('Until you enter a mail server and a From address below, invitations and password reset emails will probably not arrive.') }}
+    </div>
+{% endif %}
 
-            <p>{{ t('Fill in the site email address if you would like your site to send email.') }}</p>
+{% if fixed %}
+    <div class="idno-notice" role="note">
+        {{ t("These settings are set in the site's configuration file (config.ini) or environment, which wins over what is saved here: %s. Change them there.", [fixed|join(', ')]) }}
+    </div>
+{% endif %}
 
+<form action="{{ site_url() }}admin/email" method="post" id="mail-settings-form" novalidate>
+    <div class="idno-admin-card">
+        <h2 class="idno-admin-card-title">{{ t('Who the mail is from') }}</h2>
+
+        {{ form.field('from_email', t('From address'), t('Every email is sent from this address. It must be one your mail service lets you send from.'), values, errors, {type: 'email', placeholder: 'hello@example.com', autocomplete: 'off', inputmode: 'email'}) }}
+        {{ form.field('from_name', t('From name'), t("The name people see beside the address. Leave it empty to use the site's name."), values, errors, {placeholder: site_title(), maxlength: 100, autocomplete: 'off'}) }}
+        {{ form.field('reply_to_email', t('Reply-To address (optional)'), t('Where replies go, if not to the From address: for example your own inbox.'), values, errors, {type: 'email', placeholder: 'you@example.com', autocomplete: 'off', inputmode: 'email'}) }}
+    </div>
+
+    <div class="idno-admin-card">
+        <h2 class="idno-admin-card-title">{{ t('Mail server') }}</h2>
+
+        {{ form.field('smtp_host', t('Server (SMTP host)'), t('The name of the mail server, as your mail service gives it: for example smtp.sendgrid.net.'), values, errors, {placeholder: 'smtp.example.com', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', inputmode: 'url'}) }}
+
+        <div class="idno-field-row">
             <div class="idno-form-group">
-                <label class="idno-label" for="from_email">{{ t('Site email address') }}</label>
-                <input type="text" id="from_email" name="from_email" class="idno-input"
-                       placeholder="{{ t('Site email address') }}"
-                       value="{{ setting('from_email') }}">
-                <p class="idno-form-help">{{ t('This is the address that every email will be sent from.') }}</p>
-            </div>
-        </div>
-
-        <div class="idno-admin-card">
-            <h2 class="idno-admin-card-title">{{ t('SMTP Settings') }}</h2>
-
-            <p>{{ t("You can often leave the following settings blank. However, you may wish to set them if you're using a third-party service to send email.") }}</p>
-
-            <div class="idno-form-group">
-                <label class="idno-label" for="smtp_host">{{ t('SMTP host') }}</label>
-                <input type="text" id="smtp_host" name="smtp_host" class="idno-input"
-                       placeholder="{{ t('SMTP host') }}"
-                       value="{{ setting('smtp_host') }}">
-                <p class="idno-form-help">{{ t('This is the address of the server that will send email for you.') }}</p>
-            </div>
-
-            <div class="idno-form-group">
-                <label class="idno-label" for="smtp_username">{{ t('SMTP username') }}</label>
-                <input type="text" id="smtp_username" name="smtp_username" class="idno-input"
-                       placeholder="{{ t('SMTP username') }}"
-                       value="{{ smtp_username }}">
-                <p class="idno-form-help">{{ t('If your mail server needs a username, enter it here.') }}</p>
-            </div>
-
-            <div class="idno-form-group">
-                <label class="idno-label" for="smtp_password">{{ t('SMTP password') }}</label>
-                <input type="password" id="smtp_password" name="smtp_password" class="idno-input"
-                       placeholder="{{ t('SMTP password') }}"
-                       value="{{ smtp_password }}">
-                <p class="idno-form-help">{{ t('If your mail server needs a password, enter it here.') }}</p>
-            </div>
-
-            <div class="idno-form-group">
-                <label class="idno-label" for="smtp_port">{{ t('SMTP port') }}</label>
-                {% set port = setting('smtp_port')|to_int %}{% if not port %}{% set port = 25 %}{% endif %}
-                <input type="text" id="smtp_port" name="smtp_port" class="idno-input"
-                       placeholder="25"
-                       value="{{ port }}">
-                <p class="idno-form-help">{{ t('This is normally 25 or 587.') }}</p>
-            </div>
-
-            <div class="idno-form-group">
-                <label class="idno-label" for="smtp_secure">{{ t('Secure connection') }}</label>
-                <select name="smtp_secure" id="smtp_secure" class="idno-input">
-                    {% for field, value in {'No': false, 'Yes (TLS)': 'tls', 'Yes (SSL)': 'ssl'} %}
-                        <option value="{{ value }}" {% if setting('smtp_secure') is same as(value) %}selected{% endif %}>{{ field }}</option>
+                <label class="idno-label" for="smtp_secure">{{ t('Security') }}</label>
+                <select name="smtp_secure" id="smtp_secure" class="idno-select" aria-describedby="help-smtp_secure">
+                    {% for value, label in {'tls': t('STARTTLS (usual, port 587)'), 'ssl': t('TLS (port 465)'), '': t('None (port 25)')} %}
+                        <option value="{{ value }}"{% if (values.smtp_secure|default('')) is same as(value) %} selected{% endif %}>{{ label }}</option>
                     {% endfor %}
                 </select>
-                <p class="idno-form-help">{{ t('Select yes if you use secure logins to your mail server.') }}</p>
+                <p class="idno-form-help" id="help-smtp_secure">{{ t('How the connection is encrypted. Mail services expect STARTTLS on port 587.') }}</p>
             </div>
+            {{ form.field('smtp_port', t('Port'), t('Usually 587. Leave it empty to use the usual port for the security you chose.'), values, errors, {placeholder: '587', inputmode: 'numeric', autocomplete: 'off', maxlength: 5}) }}
         </div>
 
-        <div style="margin-top:var(--spacing-section)">
-            <button type="submit" class="idno-btn idno-btn-primary">{{ t('Save settings') }}</button>
+        {{ form.field('smtp_username', t('User name'), t('The user name your mail service gives you for SMTP. For some services it is a fixed word such as "apikey".'), values, errors, {autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false'}) }}
+
+        <div class="idno-form-group">
+            <label class="idno-label" for="smtp_password">{{ t('Password') }}</label>
+            <input type="password" id="smtp_password" name="smtp_password" class="idno-input" value=""
+                   autocomplete="new-password" aria-describedby="help-smtp_password"
+                   placeholder="{{ has_password|default(false) ? t('Saved. Type a new one to replace it') : '' }}">
+            <p class="idno-form-help" id="help-smtp_password">
+                {% if has_password|default(false) %}
+                    <span class="idno-badge idno-badge-ok">{{ t('Saved') }}</span>
+                    {{ t('A password is saved and is not shown here. Leave this empty to keep it, or type a new one to replace it.') }}
+                {% else %}
+                    {{ t('The password or API key for SMTP. It is stored on your site and never shown again.') }}
+                {% endif %}
+            </p>
+            {% if has_password|default(false) %}
+                <div class="idno-checkbox-group">
+                    <input type="checkbox" id="smtp_password_remove" name="smtp_password_remove" value="1">
+                    <label for="smtp_password_remove">{{ t('Remove the saved password') }}</label>
+                </div>
+            {% endif %}
         </div>
-
-        {{ form_token('/admin/email') }}
-    </form>
-
-    {% if setting('from_email') %}
-    <div class="idno-admin-card" style="margin-top:var(--spacing-section)">
-        <form action="{{ site_url() }}admin/emailtest" method="post">
-            <h2 class="idno-admin-card-title">{{ t('Test Email') }}</h2>
-
-            <div class="idno-form-group">
-                <label class="idno-label" for="to_email">{{ t('Send a test message to') }}</label>
-                <input type="text" id="to_email" name="to_email" class="idno-input"
-                       placeholder="{{ t('To address') }}"
-                       value="{{ setting('from_email') }}">
-                <p class="idno-form-help">{{ t('Check your email settings by sending a test email.') }}</p>
-            </div>
-
-            <div style="margin-top:var(--spacing-section)">
-                <button type="submit" class="idno-btn idno-btn-primary">{{ t('Test settings') }}</button>
-            </div>
-
-            {{ form_token('/admin/emailtest') }}
-        </form>
     </div>
-    {% endif %}
+
+    <div class="idno-form-actions">
+        <button type="submit" class="idno-btn idno-btn-primary">{{ t('Save settings') }}</button>
+    </div>
+
+    {{ form_token('/admin/email') }}
+</form>
+
+{{ idno_include('admin/email/services') }}
+
+<div class="idno-admin-card" id="test">
+    <form action="{{ site_url() }}admin/emailtest" method="post">
+        <h2 class="idno-admin-card-title">{{ t('Send a test email') }}</h2>
+        <p class="idno-form-help">{{ t('This sends one email with the settings as they are saved, and tells you what the mail server answered. Save your changes first.') }}</p>
+
+        <div class="idno-form-group">
+            <label class="idno-label" for="to_email">{{ t('Send it to') }}</label>
+            <input type="email" id="to_email" name="to_email" class="idno-input" required
+                   placeholder="you@example.com" inputmode="email"
+                   value="{{ test_to|default('') }}">
+        </div>
+
+        <div class="idno-form-actions">
+            <button type="submit" class="idno-btn">{{ t('Send test email') }}</button>
+        </div>
+
+        {{ form_token('/admin/emailtest') }}
+    </form>
+</div>
+
+{{ idno_include('admin/email/script') }}

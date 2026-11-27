@@ -89,7 +89,7 @@ final class MarkdownOutputChangedSiteTest extends MarkdownSiteTestCase
         }
 
         // The test is looking at pages that hold the secrets: the HTML of the administrator's has each of these
-        foreach (['admin/email/' => 'mailer-secret-9142', 'account/indiepub/' => 'token-secret-A-6620', 'account/bridgy/' => 'bridgy-key-A-4471', 'admin/webhooks/' => 'key-hook-8812', 'admin/styles/' => 'custom-sheet-5530'] as $page => $secret) {
+        foreach (['account/indiepub/' => 'token-secret-A-6620', 'account/bridgy/' => 'bridgy-key-A-4471', 'admin/webhooks/' => 'key-hook-8812', 'admin/styles/' => 'custom-sheet-5530'] as $page => $secret) {
             $this->assertStringContainsString($secret, $this->get($page, ['Cookie' => $ada])->body, $page . ' holds its secret as HTML');
         }
 

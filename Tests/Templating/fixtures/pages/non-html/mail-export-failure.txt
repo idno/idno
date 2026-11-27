@@ -1,7 +1,15 @@
-Sorry, your data export was unsuccessful.
-=========================================
+Your export did not finish
+==========================
 
-Your site's data archive could not be made.
-You could try the export again, or ask your system administrator for help!
+The archive of Fixture Site could not be made.
 
-Try again: {site}/admin/export/
+You can try the export again. If it fails again, the site's error log
+may say why.
+
+Try the export again:
+{site}/admin/export/
+
+-- 
+You got this email because you asked for an export of Fixture Site.
+Fixture Site
+{site}/

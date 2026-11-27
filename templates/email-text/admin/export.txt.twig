@@ -1,10 +1,9 @@
-Your data export is ready!
-===================
-
-We've gathered all your site content and placed it in an archive for you. To download it, click the following link:
-
-{% if unrendered -%}
-{{ unrendered|to_int }} entries could not be rendered and are included as data only.
-
-{% endif -%}
-Get your data: {{ site_url() }}admin/export/
+{#- The plain-text twin of templates/email/admin/export. -#}
+{%- set site = mail_site_name() -%}
+{{- idno_include('parts/heading', {text: t('Your export is ready')}) -}}
+{{- idno_include('parts/paragraph', {format: t_format('Everything on %s has been gathered into one archive. Sign in as an administrator to download it.'), values: [site]}) -}}
+{%- if unrendered|default(0)|to_int -%}
+{{- idno_include('parts/paragraph', {text: t('%s entries could not be rendered and are included as data only.', [unrendered|to_int])}) -}}
+{%- endif -%}
+{{- idno_include('parts/button', {label: t('Get your export'), url: site_url() ~ 'admin/export/'}) -}}
+{{- idno_include('parts/paragraph', {muted: true, text: t('The archive is a full copy of the site, so keep it somewhere safe.')}) -}}

@@ -1,16 +1,13 @@
-<div style="font-weight: bold; font-size: 30px; line-height: 32px; color: #333" align="center">
-    Your data import is done!
-</div><br>
-<hr/>
-<br>
-We've taken the data you uploaded and turned it into Idno posts. Enjoy!
-{% if imported %}<br><br>
-{{ imported|to_int }} posts were imported{% if skipped %}, and {{ skipped|to_int }} items in the file were not (pages, attachments, drafts of other types, or items that could not be imported){% endif %}.
+{#- Tells the administrator who started an import that it is done: `imported` and `skipped` (counts). The plain-text twin is templates/email-text/admin/import. -#}
+{%- set site = mail_site_name() -%}
+{%- do mail_describe({
+    subject: t('Your import into %s is complete', [site]),
+    preheader: t('The posts from your file are on the site.'),
+    reason: t('You got this email because you started an import into %s.', [site]),
+}) -%}
+{{ idno_include('parts/heading', {text: t('Your import is complete')}) }}
+{{ idno_include('parts/paragraph', {format: t_format('The file you uploaded has been turned into posts on %s.'), values: [site]}) }}
+{% if imported|default(0)|to_int %}
+{{ idno_include('parts/paragraph', {text: (skipped|default(0)|to_int) ? t('%s posts were imported, and %s items in the file were not (pages, attachments, other types, or items that could not be imported).', [imported|to_int, skipped|to_int]) : t('%s posts were imported.', [imported|to_int])}) }}
 {% endif %}
-<br><br>
-<div align="center">
-    <a href="{{ site_url() }}" style="background-color:#73B2E3;border:1px solid #73B2E3;border-radius:4px;color:#ffffff;display:inline-block;font-family:sans-serif;font-size:17px;font-weight:normal;line-height:40px;text-align:center;text-decoration:none;width:200px;-webkit-text-size-adjust:none;mso-hide:all;">Visit your site</a>
-</div>
-<br>
-<br>
-<br>
+{{ idno_include('parts/button', {label: t('Visit your site'), url: site_url()}) }}

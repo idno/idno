@@ -1,14 +1,21 @@
-Join us!
-=======
+You're invited to join Fixture Site
+===================================
 
-Hi there! Your friend *<b>Ada</b> & "Co" 'x'* has invited you to join Fixture Site: {site}/.
+<b>Ada</b> & "Co" 'x' has invited you to join Fixture Site.
 
+To accept, create your account:
 
-You can use this space to publish your stories, share things that interest you, and discuss things that matter.
+Create your account:
+{site}/account/register/?email=new%2Bmember%40example.com&code=a+b%26c
 
-Get started with *Fixture Site* by setting up your account.
+Invitation for: new+member@example.com
+Role: Member
 
+This invitation is for new+member@example.com only. If you weren't
+expecting it, you can ignore this email.
 
-Sign up now: {site}/account/register/?email=new%2Bmember%40example.com&code=a+b%26c
-
-If you have any questions at all, please don't hesitate to contact us by sending an email to site@example.com
+-- 
+You got this email because <b>Ada</b> & "Co" 'x' invited this address to
+join Fixture Site.
+Fixture Site
+{site}/

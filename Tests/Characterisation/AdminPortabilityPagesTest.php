@@ -713,10 +713,8 @@ final class AdminPortabilityPagesTest extends CharacterisationTestCase
         $this->assertLessThan(5.0, $scenario['import']['seconds'], 'the page answers before the work');
 
         $mail = $scenario['mails']['importer'];
-        $this->assertSame('Idno - Your data import is complete', $mail['subject']);
-        $this->assertSame('Your data import is done!', trim(strtok($mail['text'], "\n")));
-        $this->assertStringContainsString('Visit your site: ' . $this->site()->baseUrl(), $mail['text']);
-        $this->assertStringContainsString('Enjoy!', $mail['text']);
+        $this->assertStringStartsWith('Your import into', $mail['subject']);
+        $this->assertStringContainsString("\n" . $this->site()->baseUrl() . "\n", $mail['text'], 'the mail links to the site');
         $this->assertSame(['Scenario import: a draft', 'Scenario import: one post', 'Scenario import: private'], $scenario['imported']['titles']);
         $this->assertSame($scenario['importerUuid'], $scenario['imported']['owner'], 'owned by the administrator who ran the import');
         $this->assertSame(['draft', 'published', 'published'], $scenario['imported']['statuses']);
@@ -747,8 +745,8 @@ final class AdminPortabilityPagesTest extends CharacterisationTestCase
         $scenario = $this->scenario();
 
         $mail = $scenario['mails']['bad'];
-        $this->assertSame('Idno - Problem with your import', $mail['subject']);
-        $this->assertStringContainsString('Sorry, your data import was unsuccessful.', $mail['text']);
+        $this->assertStringEndsWith('did not finish', $mail['subject']);
+        $this->assertStringContainsString('Your import did not finish', $mail['text']);
         $this->assertSame([], $scenario['badImported'], 'nothing was created');
     }
 
@@ -772,8 +770,8 @@ final class AdminPortabilityPagesTest extends CharacterisationTestCase
         $this->assertLessThan(5.0, $scenario['generate']['seconds']);
 
         $mail = $scenario['mails']['exporter'];
-        $this->assertSame('Your data export is ready', $mail['subject']);
-        $this->assertStringContainsString('Get your data: ' . $this->site()->baseUrl() . 'admin/export/', $mail['text'], 'the mail links to the export page, which links to the archive');
+        $this->assertStringStartsWith('Your export of', $mail['subject']);
+        $this->assertStringContainsString("\n" . $this->site()->baseUrl() . 'admin/export/', $mail['text'], 'the mail links to the export page, which links to the archive');
         $this->assertStringNotContainsString('/file/', $mail['text']);
         $this->assertStringContainsString('href="' . $this->site()->baseUrl() . 'admin/export/"', $mail['html']);
         $this->assertStringContainsString('file/' . $scenario['recorded']['export_file_id'] . '/', $scenario['exportPageAfter'], 'and the page does show the link');
@@ -827,8 +825,8 @@ final class AdminPortabilityPagesTest extends CharacterisationTestCase
         $scenario = $this->scenario();
 
         $mail = $scenario['mails']['failing'];
-        $this->assertSame('Idno - Problem with your data export', $mail['subject']);
-        $this->assertStringContainsString('Sorry, your data export was unsuccessful.', $mail['text']);
+        $this->assertStringEndsWith('did not finish', $mail['subject']);
+        $this->assertStringContainsString($this->site()->baseUrl() . 'admin/export/', $mail['text'], 'the failure mail links to the page to try again');
         $this->assertSame(0, $scenario['failedFlag']);
     }
 

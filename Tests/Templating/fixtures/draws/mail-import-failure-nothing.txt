@@ -1,9 +1,17 @@
-Sorry, your data import was unsuccessful.
-=========================================
+Your import did not finish
+==========================
 
-The import stopped, and nothing in the file could be imported, or it did not finish.
-Some posts may already have been imported. Check your posts before you import the file
-again, or it may add them twice. Your system administrator can help: the details are in
-the server's log.
+Some or all of the file you uploaded to Fixture Site could not be
+imported.
 
-Visit your site: {site}/
+Some posts may already have been imported. Check your posts before you
+import the file again, or it may add them twice. If it fails again, the
+site's error log may say why.
+
+Try the import again:
+{site}/admin/import/
+
+-- 
+You got this email because you started an import into Fixture Site.
+Fixture Site
+{site}/

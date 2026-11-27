@@ -1,12 +1,14 @@
-Ooops!
-======
-
-An error occured on your Idno site {{ site }}!
-
-{{ message }}
-
-Logged in user was {{ user }}
-Agent: {{ agent }}
-QS: {{ qs }} 
-
-Referrer: {{ referrer -}}
+{#- The plain-text twin of templates/email/admin/oops. -#}
+{%- set host = (site|default(site_url()))|url_host|default(mail_site_name()) -%}
+{%- set kind = title|default('')|mail_one_line -%}
+{{- idno_include('parts/heading', {text: t('An error occurred on %s', [host])}) -}}
+{%- if kind -%}
+{{- idno_include('parts/paragraph', {text: kind}) -}}
+{%- endif -%}
+{{- idno_include('parts/code', {text: message|default('')}) -}}
+{{- idno_include('parts/rows', {rows: {
+    (t('Signed-in member')): (user|default('')|mail_one_line in ['', 'UNKNOWN']) ? t('Nobody') : user,
+    (t('Browser')): agent|default(''),
+    (t('Query string')): qs|default(''),
+    (t('Referrer')): referrer|default(''),
+}}) -}}

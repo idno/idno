@@ -63,8 +63,8 @@ final class PageNormaliser
         // the time the checkout was made.
         $body = preg_replace('#\b(js|css)/\d{9,10}/#', '$1/{built}/', $body) ?? $body;
 
-        // The code in the link of a password reset mail (32 random hex digits).
-        $body = preg_replace('/(account\/password\/reset\/\?email=[^&"\s]*&code=)[0-9a-f]{32}/', '$1{reset-code}', $body) ?? $body;
+        // The code in the link of a password reset mail (32 random hex digits), whether the `&` of its query is written as it is (the text part) or as `&amp;` (the HTML part).
+        $body = preg_replace('/(account\/password\/reset\/\?email=[^&"\s]*&(?:amp;)?code=)[0-9a-f]{32}/', '$1{reset-code}', $body) ?? $body;
 
         // The number the media template draws from rand() into the ids of its player (`player7`, `waveform7`, `wavesurfer7`):
         // numbered by first appearance.

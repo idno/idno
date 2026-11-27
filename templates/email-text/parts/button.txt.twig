@@ -1,0 +1,4 @@
+{#- The address on a line of its own, so that no mail client breaks it: `label`, `url` -#}
+{%- if url|http_url -%}
+{{- label|mail_one_line ~ ":\n" ~ url|http_url ~ "\n\n" -}}
+{%- endif -%}

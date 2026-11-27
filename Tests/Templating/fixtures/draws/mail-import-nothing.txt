@@ -1,6 +1,12 @@
-Your data import is done!
-===================
+Your import is complete
+=======================
 
-We've taken the data you uploaded and turned it into Idno posts. Enjoy!
+The file you uploaded has been turned into posts on Fixture Site.
 
-Visit your site: {site}/
+Visit your site:
+{site}/
+
+-- 
+You got this email because you started an import into Fixture Site.
+Fixture Site
+{site}/

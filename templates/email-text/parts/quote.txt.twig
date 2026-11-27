@@ -1,0 +1,4 @@
+{#- Words somebody typed, set apart from the mail's own: `text` -#}
+{%- if text|trim -%}
+{{- mail_wrap(text|trim, '> ') ~ "\n\n" -}}
+{%- endif -%}

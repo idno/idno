@@ -1,14 +1,22 @@
-Join us!
-=======
+You're invited to join Fixture Site
+===================================
 
-Hi there! Your friend *Ada Admin* has invited you to join Fixture Site: {site}/.
+Ada Admin has invited you to join Fixture Site.
 
+To accept, create your account:
 
-You can use this space to publish your stories, share things that interest you, and discuss things that matter.
+Create your account:
+https://example.org/account/register/?email=new.member%40example.com&code=0123456789abcdef0123456789abcdef
 
-Get started with *Fixture Site* by setting up your account.
+Invitation for: new.member@example.com
+Role: Member
+Works until: 9 March 2026
 
+This invitation is for new.member@example.com only and works until 9
+March 2026. If you weren't expecting it, you can ignore this email.
 
-Sign up now: {site}/account/register/?email=new.member%40example.com&code=0123456789abcdef0123456789abcdef
-
-If you have any questions at all, please don't hesitate to contact us by sending an email to site@example.com
+-- 
+You got this email because Ada Admin invited this address to join
+Fixture Site.
+Fixture Site
+{site}/

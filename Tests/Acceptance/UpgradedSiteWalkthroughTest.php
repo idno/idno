@@ -125,7 +125,7 @@ final class UpgradedSiteWalkthroughTest extends \PHPUnit\Framework\TestCase
         $messages = $this->smtp->messages();
         $this->assertCount(1, $messages, 'the reset mail is delivered with the stored 1.x settings' . $this->log());
         $mail = ReceivedMessage::parse($messages[0]);
-        $this->assertSame('Password reset', $mail->header('Subject'));
+        $this->assertStringStartsWith('Reset your password', (string) $mail->header('Subject'));
         $this->assertSame('legacyadmin@example.com', $mail->header('To'));
         $this->assertStringContainsString('owner@legacy.example', (string) $mail->header('From'));
         $this->assertSame(1, preg_match('~account/password/reset/\?email=([^&\s]+)&code=([0-9a-f]+)~', (string) $mail->part('text/plain'), $link));

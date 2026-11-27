@@ -43,7 +43,7 @@ final class IdnoTwigExtensionTest extends TestCase
     }
 
     /** What the extension marks as safe for HTML: functions, and filters */
-    private const SAFE_FUNCTIONS = ['idno_include', 'slot', 't_html', 'form_token', 'action_link', 'form_data', 'js_string', 'pagination'];
+    private const SAFE_FUNCTIONS = ['idno_include', 'slot', 't_html', 'form_token', 'action_link', 'form_data', 'js_string', 'pagination', 'mail_dark_css', 'mail_emphasise'];
 
     private const SAFE_FILTERS = ['sanitize_html', 'autop', 'parse_urls', 'parse_hashtags', 'parse_users'];
 

@@ -328,29 +328,25 @@ final class SmtpWireTest extends IdnoTestCase
         // The admin's test mail (Idno\Pages\Admin\EmailTest).
         $message = new Email();
         $message->addTo('admin@example.net');
-        $message->setSubject('Test email from ' . Idno::site()->config()->title . '!');
-        $message->setHTMLBodyFromTemplate('admin/emailtest');
-        $message->setTextBodyFromTemplate('admin/emailtest');
+        $message->setBodyFromTemplate('admin/emailtest');
         $this->assertSame(1, $message->send());
-        $expected['Test email from Parity Site!'] = ['admin@example.net', ''];
+        $expected['Test email from Parity Site'] = ['admin@example.net', ''];
 
         // The alert for a fatal error.
         \Idno\Core\Logging::oopsAlert('Something broke', 'Oh no');
-        $expected[Idno::site()->config()->host . ': Oh no'] = ['ops@example.net', 'Something broke'];
+        $expected['Error on ' . parse_url(Idno::site()->config()->getDisplayURL(), PHP_URL_HOST) . ': Oh no'] = ['ops@example.net', 'Something broke'];
 
         // The results of an import (both outcomes) and of an export (Idno\Pages\Admin\Import,
         // Idno\Pages\Admin\Export\Generate), built here as those pages build them. They are driven through
         // the real pages by the import and export tests that follow in a later change.
         foreach ([
-            'admin/import' => 'Idno - Your data import is complete',
-            'admin/import_failure' => 'Idno - Problem with your import',
-            'admin/export' => 'Your data export is ready',
+            'admin/import' => 'Your import into Parity Site is complete',
+            'admin/import_failure' => 'Your import into Parity Site did not finish',
+            'admin/export' => 'Your export of Parity Site is ready',
         ] as $template => $subject) {
             $mail = new Email();
-            $mail->setHTMLBodyFromTemplate($template);
-            $mail->setTextBodyFromTemplate($template);
+            $mail->setBodyFromTemplate($template);
             $mail->addTo('owner@example.net');
-            $mail->setSubject($subject);
             $this->assertSame(1, $mail->send(), $template);
             $expected[$subject] = ['owner@example.net', ''];
         }

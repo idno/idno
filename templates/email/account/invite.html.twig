@@ -1,20 +1,35 @@
-<div style="font-weight: bold; font-size: 30px; line-height: 32px; color: #333" align="center">
-    {{ t('Join us!') }}
-</div><br>
-<hr/>
-<br>
-{% set site_link %}a href="{{ site_url() }}" style="color: #73b2e3; text-decoration: none;">{{ site_title() }}</a{% endset -%}
-{{ t_html('Hi there! Your friend <strong>%s</strong> has invited you to join <%s>', [inviter, site_link]) }}.
-<br><br>
-{{ t('You can use this space to publish your stories, share things that interest you, and discuss things that matter.') -}}
-<br><br>
-{{ t_html('Get started with <strong>%s</strong> by setting up your account', [site_title()]) }}.
-<br><br>
-<div align="center">
-<a href="{{ site_url() }}account/register/?email={{ email|form_urlencode }}&code={{ code|form_urlencode }}" style="background-color:#73B2E3;border:1px solid #73B2E3;border-radius:4px;color:#ffffff;display:inline-block;font-family:sans-serif;font-size:17px;font-weight:normal;line-height:40px;text-align:center;text-decoration:none;width:200px;-webkit-text-size-adjust:none;mso-hide:all;">{{ t('Sign up now') }}</a>
-</div>
-<br>
-{% set contact %}<a href="mailto:{{ setting('from_email')|email_address }}" style="color: #73b2e3; text-decoration: none;">{{ setting('from_email') }}</a>{% endset -%}
-{{ t_html('If you have any questions at all, please don\'t hesitate to contact us by sending an email to %s', [contact]) }}.
-
-<br><br>
+{#- The invitation mail: `email`, `inviter`, and either `link` (the address that makes the account) or `code` (the link is then made here); `is_admin`, `expires` (a time) when the invitation has them.
+    Written with the parts of templates/email/parts, which escape everything a person typed (the inviter's name, the site's name and description). The plain-text twin is
+    templates/email-text/account/invite. -#}
+{%- set site = mail_site_name() -%}
+{%- set who = inviter|default('')|mail_one_line -%}
+{%- set until = expires|default(0) ? expires|date('j F Y') : '' -%}
+{%- set join = link|default('') ?: (site_url() ~ 'account/register/?email=' ~ (email|default('')|form_urlencode) ~ '&code=' ~ (code|default('')|form_urlencode)) -%}
+{#- What the site says it is, unless that is still the text every new site starts with -#}
+{%- set about = setting('description')|mail_one_line -%}
+{%- if about == 'A social website powered by Idno' -%}{%- set about = '' -%}{%- endif -%}
+{%- do mail_describe({
+    subject: t("You've been invited to join %s", [site]),
+    preheader: who ? (until ? t('%s invited you. The invitation works until %s.', [who, until]) : t('%s invited you to join %s.', [who, site])) : (until ? t('Create your account. The invitation works until %s.', [until]) : t('Create your account.')),
+    reason: who ? t('You got this email because %s invited this address to join %s.', [who, site]) : t('You got this email because an administrator invited this address to join %s.', [site]),
+}) -%}
+{{ idno_include('parts/heading', {text: t("You're invited to join %s", [site])}) }}
+{% if who %}
+{{ idno_include('parts/paragraph', {format: is_admin ? t_format('%s has invited you to join %s as an administrator.') : t_format('%s has invited you to join %s.'), values: [who, site]}) }}
+{% else %}
+{{ idno_include('parts/paragraph', {format: is_admin ? t_format('You have been invited to join %s as an administrator.') : t_format('You have been invited to join %s.'), values: [site]}) }}
+{% endif %}
+{% if about %}
+{{ idno_include('parts/quote', {text: about}) }}
+{% endif %}
+{% if is_admin %}
+{{ idno_include('parts/paragraph', {text: t("As an administrator you will be able to change the site's settings, manage its members and invite others.")}) }}
+{% endif %}
+{{ idno_include('parts/paragraph', {text: t('To accept, create your account:')}) }}
+{{ idno_include('parts/button', {label: t('Create your account'), url: join}) }}
+{{ idno_include('parts/rows', {rows: {
+    (t('Invitation for')): email|default(''),
+    (t('Role')): is_admin ? t('Administrator') : t('Member'),
+    (t('Works until')): until,
+}}) }}
+{{ idno_include('parts/paragraph', {muted: true, text: (until ? t('This invitation is for %s only and works until %s.', [email|default('')|mail_one_line, until]) : t('This invitation is for %s only.', [email|default('')|mail_one_line])) ~ ' ' ~ t("If you weren't expecting it, you can ignore this email.")}) }}

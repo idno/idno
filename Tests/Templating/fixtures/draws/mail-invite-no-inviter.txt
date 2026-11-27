@@ -1,0 +1,21 @@
+You're invited to join Fixture Site
+===================================
+
+You have been invited to join Fixture Site.
+
+To accept, create your account:
+
+Create your account:
+{site}/account/register/?email=new.member%40example.com&code=0123456789abcdef0123456789abcdef
+
+Invitation for: new.member@example.com
+Role: Member
+
+This invitation is for new.member@example.com only. If you weren't
+expecting it, you can ignore this email.
+
+-- 
+You got this email because an administrator invited this address to join
+Fixture Site.
+Fixture Site
+{site}/

@@ -1,0 +1,4 @@
+{#- Preformatted text (an error message): `text` -#}
+{%- if text|trim -%}
+{{- text|trim ~ "\n\n" -}}
+{%- endif -%}

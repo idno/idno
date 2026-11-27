@@ -1,13 +1,11 @@
-<div style="font-weight: bold; font-size: 30px; line-height: 32px; color: #333" align="center">
-    Sorry, your data export was unsuccessful.
-</div><br>
-<hr/>
-<br>
-Your site's data archive could not be made. You could try the export again, or ask your system administrator for help!
-<br><br>
-<div align="center">
-    <a href="{{ site_url() }}admin/export/" style="background-color:#73B2E3;border:1px solid #73B2E3;border-radius:4px;color:#ffffff;display:inline-block;font-family:sans-serif;font-size:17px;font-weight:normal;line-height:40px;text-align:center;text-decoration:none;width:200px;-webkit-text-size-adjust:none;mso-hide:all;">Try again</a>
-</div>
-<br>
-<br>
-<br>
+{#- Tells the administrator who asked for an export that it did not work. No variables. The plain-text twin is templates/email-text/admin/export_failure. -#}
+{%- set site = mail_site_name() -%}
+{%- do mail_describe({
+    subject: t('Your export of %s did not finish', [site]),
+    preheader: t('The archive could not be made.'),
+    reason: t('You got this email because you asked for an export of %s.', [site]),
+}) -%}
+{{ idno_include('parts/heading', {text: t('Your export did not finish')}) }}
+{{ idno_include('parts/paragraph', {format: t_format('The archive of %s could not be made.'), values: [site]}) }}
+{{ idno_include('parts/paragraph', {text: t("You can try the export again. If it fails again, the site's error log may say why.")}) }}
+{{ idno_include('parts/button', {label: t('Try the export again'), url: site_url() ~ 'admin/export/'}) }}

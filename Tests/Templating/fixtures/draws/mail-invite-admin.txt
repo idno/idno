@@ -1,0 +1,25 @@
+You're invited to join Fixture Site
+===================================
+
+Ada Admin has invited you to join Fixture Site as an administrator.
+
+As an administrator you will be able to change the site's settings,
+manage its members and invite others.
+
+To accept, create your account:
+
+Create your account:
+https://example.org/account/register/?email=new.admin%40example.com&code=0123456789abcdef0123456789abcdef
+
+Invitation for: new.admin@example.com
+Role: Administrator
+Works until: 9 March 2026
+
+This invitation is for new.admin@example.com only and works until 9
+March 2026. If you weren't expecting it, you can ignore this email.
+
+-- 
+You got this email because Ada Admin invited this address to join
+Fixture Site.
+Fixture Site
+{site}/

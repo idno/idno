@@ -177,6 +177,9 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
         ['default', 'shell/pagination', ['count' => 45, 'offset' => 20, 'items_per_page' => 10, 'control-id' => 'c', 'source-url' => '/s?a=1&b=2']],
         ['email', 'shell', ['body' => '<p>Hello</p>']],
         ['email', 'shell', ['body' => '<p>Hello</p>', 'title' => 'Password reset', 'preheader' => 'A preview line']],
+        // The part that sets apart words somebody typed: the invitation draws it only for a site with a description of its own
+        ['email', 'parts/quote', ['text' => "Words <b>somebody</b> typed,\nover two lines"]],
+        ['email-text', 'parts/quote', ['text' => "Words <b>somebody</b> typed,\nover two lines"]],
     ];
 
     protected bool $compareGoldens = false;
@@ -1507,8 +1510,15 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
             $out['diagnostics, ' . $label] = $draw('admin/diagnostics', ['basics' => $basics]);
         }
 
-        $secrets = static fn (string $user, string $password): array => ['smtp_username' => $user, 'smtp_password' => $password];
-        $out['email, no settings'] = $draw('admin/email', $secrets('', ''));
+        // The email form's variables, as the page makes them: the values of the fields, never the password (only whether one is stored)
+        $emailVars = static fn (array $mail, bool $password, array $errors = [], array $fixed = []): array => [
+            'values' => ['from_email' => (string) $mail['from_email'], 'from_name' => '', 'reply_to_email' => '', 'smtp_host' => (string) $mail['smtp_host'], 'smtp_port' => (string) $mail['smtp_port'], 'smtp_secure' => (string) $mail['smtp_secure'], 'smtp_username' => (string) $mail['smtp_username']],
+            'errors' => $errors, 'has_password' => $password, 'configured' => $mail['smtp_host'] !== '' && $mail['from_email'] !== '',
+            'sender' => 'Site <' . $mail['from_email'] . '>', 'test_to' => 'admin@example.org', 'fixed' => $fixed,
+        ];
+        $blank = ['smtp_host' => '', 'smtp_port' => '', 'smtp_secure' => 'tls', 'from_email' => '', 'smtp_username' => ''];
+        $out['email, no settings'] = $draw('admin/email', $emailVars($blank, false));
+        $out['email, a refused form'] = $draw('admin/email', $emailVars(['smtp_host' => 'https://smtp.example.org', 'smtp_port' => '99999', 'smtp_secure' => '', 'from_email' => 'not an address', 'smtp_username' => 'mailer'], true, ['smtp_host' => 'Enter the name of the mail server only.', 'smtp_port' => 'The port is a number.', 'from_email' => "That doesn't look like an email address."], ['smtp_host', 'smtp_password']));
         foreach ([
             ['smtp_host' => 'smtp.example.org', 'smtp_port' => 587, 'smtp_secure' => 'tls', 'from_email' => 'site@example.org', 'smtp_username' => 'mailer', 'smtp_password' => 'p4ss'],
             ['smtp_host' => 'smtp.example.org', 'smtp_port' => '465', 'smtp_secure' => 'ssl', 'from_email' => 'site@example.org', 'smtp_username' => '', 'smtp_password' => ''],
@@ -1519,7 +1529,7 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
             foreach ($mail as $key => $value) {
                 $config->config[$key] = $value;
             }
-            $out['email, settings ' . $n] = $draw('admin/email', $secrets((string) $mail['smtp_username'], (string) $mail['smtp_password']));
+            $out['email, settings ' . $n] = $draw('admin/email', $emailVars($mail, (string) $mail['smtp_password'] !== ''));
         }
         $config->config = $saved;
 
@@ -1653,7 +1663,8 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
         $this->assertDrawn($out);
         $this->assertStringContainsString('label-danger', (string) $out['idno version 99999.0']);
         $this->assertStringContainsString('label-success', (string) $out['idno version 0.1']);
-        $this->assertStringContainsString('value="p4ss"', (string) $out['email, settings 0']);
+        $this->assertStringNotContainsString('p4ss', (string) $out['email, settings 0'], 'the stored password is not printed');
+        $this->assertStringContainsString('idno-badge-ok', (string) $out['email, settings 0'], 'the page says one is saved');
         $this->assertStringContainsString('Re-archive your data', (string) $out['export, an archive']);
         $this->assertStringContainsString('id="legacytables-restored"', (string) $out['legacy tables, tables, restored']);
         $this->assertStringContainsString('idno-plugin-always-on', (string) $out['plugins, two always on']);

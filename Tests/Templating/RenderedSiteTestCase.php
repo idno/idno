@@ -41,7 +41,9 @@ abstract class RenderedSiteTestCase extends PrivateSiteTestCase
      * @var array<string, array{string, array<string, mixed>}>
      */
     protected const MAIL_CASES = [
-        'invite' => ['account/invite', ['inviter' => 'Ada Admin', 'email' => 'new.member@example.com', 'code' => '0123456789abcdef0123456789abcdef']],
+        'invite' => ['account/invite', ['inviter' => 'Ada Admin', 'email' => 'new.member@example.com', 'link' => 'https://example.org/account/register/?email=new.member%40example.com&code=0123456789abcdef0123456789abcdef', 'is_admin' => false, 'expires' => 1773057600]],
+        'invite-admin' => ['account/invite', ['inviter' => 'Ada Admin', 'email' => 'new.admin@example.com', 'link' => 'https://example.org/account/register/?email=new.admin%40example.com&code=0123456789abcdef0123456789abcdef', 'is_admin' => true, 'expires' => 1773057600]],
+        'invite-no-inviter' => ['account/invite', ['email' => 'new.member@example.com', 'code' => '0123456789abcdef0123456789abcdef']],
         'invite-hostile' => ['account/invite', ['inviter' => '<b>Ada</b> & "Co" \'x\'', 'email' => 'new+member@example.com', 'code' => 'a b&c']],
         'password' => ['account/password', ['email' => 'ada@example.com', 'code' => '0123456789abcdef0123456789abcdef']],
         'emailtest' => ['admin/emailtest', []],
@@ -54,8 +56,8 @@ abstract class RenderedSiteTestCase extends PrivateSiteTestCase
         'import-failure' => ['admin/import_failure', ['imported' => 4, 'stopped' => true]],
         'import-failure-started-before' => ['admin/import_failure', ['startedBefore' => true]],
         'import-failure-nothing' => ['admin/import_failure', []],
-        'oops-hostile' => ['admin/oops', ['site' => 'https://example.org/', 'message' => '<script>x()</script>', 'user' => 'a&b', 'agent' => '<a href=//evil>x</a>', 'qs' => 'a=<i>&b="x"', 'referrer' => 'https://evil.example/"><b>']],
-        'oops' => ['admin/oops', ['site' => 'https://example.org/', 'message' => 'Unexpected token < in <b>index.php</b> on line 7 & more', 'user' => 'ada', 'agent' => 'Mozilla/5.0 (X11; Linux)', 'qs' => 'a=1&b=2', 'referrer' => 'https://example.org/from?x=1']],
+        'oops-hostile' => ['admin/oops', ['site' => 'https://example.org/', 'title' => 'Exception <b>x</b>', 'message' => '<script>x()</script>', 'user' => 'a&b', 'agent' => '<a href=//evil>x</a>', 'qs' => 'a=<i>&b="x"', 'referrer' => 'https://evil.example/"><b>']],
+        'oops' => ['admin/oops', ['site' => 'https://example.org/', 'title' => 'Exception', 'message' => 'Unexpected token < in <b>index.php</b> on line 7 & more', 'user' => 'ada', 'agent' => 'Mozilla/5.0 (X11; Linux)', 'qs' => 'a=1&b=2', 'referrer' => 'https://example.org/from?x=1']],
     ];
 
     /** The mails that have golden files (mail-<name>.html and .txt), in Tests/Templating/fixtures/pages/non-html. */
@@ -475,8 +477,7 @@ abstract class RenderedSiteTestCase extends PrivateSiteTestCase
     }
 
     /**
-     * Draws every mail of MAIL_CASES in the site (HTML inside the email shell, and plain text), as the mail adapter does.
-     * The shell reads the request's path for its link: a console process has none, so the link is the same every time.
+     * Draws every mail of MAIL_CASES in the site (HTML and plain text, each inside its shell), as the mail adapter does.
      *
      * @return array<string, array{html: string, text: string}>
      */
@@ -484,18 +485,10 @@ abstract class RenderedSiteTestCase extends PrivateSiteTestCase
     {
         $cases = $this->literal(json_encode(self::MAIL_CASES, JSON_THROW_ON_ERROR));
         $code = <<<'PHP'
-        $draw = static function (string $type, string $name, array $vars): string {
-            $template = clone \Idno\Core\Idno::site()->template();
-            $template->setTemplateType($type);
-
-            return (string) $template->__($vars)->draw($name);
-        };
         $mails = [];
         foreach (json_decode(%CASES%, true) as $name => [$template, $vars]) {
-            $mails[$name] = [
-                'html' => $draw('email', 'shell', ['body' => $draw('email', $template, $vars)]),
-                'text' => $draw('email-text', $template, $vars),
-            ];
+            $mail = \Idno\Core\Email::drawMail($template, $vars);
+            $mails[$name] = ['html' => $mail['html'], 'text' => $mail['text']];
         }
 
         return $mails;
@@ -529,7 +522,7 @@ abstract class RenderedSiteTestCase extends PrivateSiteTestCase
         $this->assertSame(302, $post->status, substr($post->body, 0, 500) . $this->serverLog());
         $log = $this->site()->request('GET', '_test/mail/log')->json();
         $this->assertCount(1, $log, 'one mail');
-        $this->assertSame('Password reset', $log[0]['subject']);
+        $this->assertStringStartsWith('Reset your password', $log[0]['subject']);
         $this->golden('non-html/password-reset-mail.html', $log[0]['html'], true);
         $this->golden('non-html/password-reset-mail.txt', $log[0]['text']);
     }

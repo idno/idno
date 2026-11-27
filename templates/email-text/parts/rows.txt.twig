@@ -1,0 +1,9 @@
+{#- A short list of facts: `rows`, label => value. Rows with an empty value are left out. -#}
+{%- set printed = false -%}
+{%- for label, value in rows|default([]) -%}
+{%- if value|mail_one_line -%}
+{{- mail_wrap((label|mail_one_line) ~ ': ' ~ (value|mail_one_line)) ~ "\n" -}}
+{%- set printed = true -%}
+{%- endif -%}
+{%- endfor -%}
+{%- if printed -%}{{- "\n" -}}{%- endif -%}

@@ -25,7 +25,7 @@ final class PasswordResetMailPageTest extends SmtpSiteTestCase
 
         $this->assertCount(1, $this->smtp->messages(), $this->serverLog());
         $message = ReceivedMessage::parse($this->smtp->messages()[0]);
-        $this->assertSame('Password reset', $message->header('Subject'));
+        $this->assertStringStartsWith('Reset your password', (string) $message->header('Subject'));
         $this->assertSame('alice@example.com', $message->header('To'));
         $this->assertSame('Page Site <site@example.com>', $message->header('From'));
         $this->assertMatchesRegularExpression('~account/password/reset/\?email=alice%40example\.com&code=[0-9a-f]+~', (string) $message->part('text/plain'));

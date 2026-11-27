@@ -12,7 +12,7 @@ namespace Idno\Core;
  * base class translates them when it is asked for them, so no call names
  * them), and,
  * in Twig templates (.twig files), Twig's own lexer, looking for the
- * t() and t_html() functions.
+ * t(), t_html() and t_format() functions.
  *
  * Replaces the external mapkyca/known-language-tools package.
  */
@@ -186,7 +186,7 @@ class PotGenerator
     }
 
     /**
-     * Extract translatable strings from a Twig template: the first argument of `t(` and `t_html(` when it is a string
+     * Extract translatable strings from a Twig template: the first argument of `t(`, `t_html(` and `t_format(` when it is a string
      * literal (a variable, a concatenation or an interpolated string is not a string that can be translated, and is left out).
      * The template is read by Twig's lexer, so a call split over lines, a comment or a string that only looks like a call
      * is told apart; a template the lexer cannot read adds nothing.
@@ -212,7 +212,7 @@ class PotGenerator
         $count = count($tokens);
         for ($i = 0; $i + 3 < $count; $i++) {
             $name = $tokens[$i];
-            if (!$name->test(\Twig\Token::NAME_TYPE) || !in_array($name->getValue(), ['t', 't_html'], true)) {
+            if (!$name->test(\Twig\Token::NAME_TYPE) || !in_array($name->getValue(), ['t', 't_html', 't_format'], true)) {
                 continue;
             }
             // `object.t(...)` and `x|t(...)` call something else

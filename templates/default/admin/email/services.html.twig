@@ -1,0 +1,50 @@
+{#- "Using a mail service": the values to enter for the common hosted services. The buttons fill in the form above (admin/email/script); without JavaScript the values are there to copy. -#}
+{% set starttls = t('587 with STARTTLS') %}
+{% set either = t('587 with STARTTLS, or 465 with TLS') %}
+{% set services = [
+    {name: 'SendGrid', host: 'smtp.sendgrid.net', port: either, user: t_html('The word <code>%s</code>, exactly as written', ['apikey']), fill_user: 'apikey',
+     pass: t('An API key that has the "Mail Send" permission'),
+     note: t('The From address must be a verified sender, or on a domain you have authenticated with SendGrid.')},
+    {name: 'Postmark', host: 'smtp.postmarkapp.com', port: starttls, user: t('Your Server API token'), fill_user: '',
+     pass: t('The same Server API token'),
+     note: t('The From address needs a confirmed sender signature or a verified domain. Until Postmark approves a new account it sends only to addresses on your own domain.')},
+    {name: 'Mailgun', host: 'smtp.mailgun.org', port: either, user: t("The SMTP login from the domain's SMTP credentials in Mailgun"), fill_user: '',
+     pass: t('The password of that SMTP login'),
+     note: t("Domains in Mailgun's EU region use the EU host shown with the credentials. A sandbox domain sends only to recipients you have authorised.")},
+    {name: 'Amazon SES', host: 'email-smtp.us-east-1.amazonaws.com', port: either, user: t('The SMTP user name made under "SMTP settings" in the SES console'), fill_user: '',
+     pass: t('The SMTP password made with it (not your AWS access keys)'),
+     note: t('Put your own region in the host name. A new SES account is in a sandbox and sends only to addresses you have verified, until Amazon grants production access.')},
+    {name: 'Brevo', host: 'smtp-relay.brevo.com', port: either, user: t('The SMTP login shown with your SMTP keys in Brevo'), fill_user: '',
+     pass: t('An SMTP key (not an API key)'),
+     note: t('The From address must be a verified sender on a domain you have authenticated with Brevo.')},
+    {name: 'Resend', host: 'smtp.resend.com', port: either, user: t_html('The word <code>%s</code>, exactly as written', ['resend']), fill_user: 'resend',
+     pass: t('An API key'),
+     note: t('The From address must be on a domain you have verified with Resend.')},
+] %}
+<details class="mail-help">
+    <summary>{{ t('Using a mail service') }}</summary>
+    <div class="mail-help-body">
+        <p>{{ t("A mail service delivers your site's email so that it reaches inboxes. Create an account with one, then enter its values here. These are the values for the common ones:") }}</p>
+        {% for service in services %}
+            <section class="mail-help-service">
+                <h3>{{ service.name }}</h3>
+                <dl>
+                    <dt>{{ t('Server') }}</dt>
+                    <dd><code>{{ service.host }}</code></dd>
+                    <dt>{{ t('Port and security') }}</dt>
+                    <dd>{{ service.port }}</dd>
+                    <dt>{{ t('User name') }}</dt>
+                    <dd>{{ service.user }}</dd>
+                    <dt>{{ t('Password') }}</dt>
+                    <dd>{{ service.pass }}</dd>
+                </dl>
+                <p class="mail-help-note">{{ service.note }}</p>
+                <p>
+                    <button type="button" class="mail-help-fill" data-mail-host="{{ service.host }}" data-mail-user="{{ service.fill_user }}" hidden>{{ t('Fill in the values for %s', [service.name]) }}</button>
+                </p>
+            </section>
+        {% endfor %}
+        <h3>{{ t('So that your mail is not treated as spam') }}</h3>
+        <p>{{ t_html('The From address must be on a domain the service is allowed to send for. Each service asks you to prove the domain is yours by adding a few DNS records where your domain is managed: usually DKIM and SPF records that the service gives you. Add a DMARC record as well (a TXT record named <code>%s</code>; <code>%s</code> is enough to start). Mail from an address on a domain you have not set up this way, or from a free address such as Gmail, is likely to be refused or to go to spam.', ['_dmarc', 'v=DMARC1; p=none']) }}</p>
+    </div>
+</details>

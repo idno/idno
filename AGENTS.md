@@ -456,7 +456,7 @@ Idno/
   Caching/                     PersistentCache, the old cache API (`Idno::site()->cache()`) over that pool,
                                for third-party plugins (legacy style)
   Mail/                        Mail on Symfony Mailer (modern style): MailerFactory (the mailer, from the stored
-                               settings), MailTransportDsn (the settings as a DSN), SmtpTransportFactory, CramMd5Authenticator and InvalidMailSetting. See "Mail"
+                               settings), MailTransportDsn (the settings as a DSN), SmtpTransportFactory, CramMd5Authenticator and InvalidMailSetting; MailDesign (the palette and text helpers of every mail), MailFailure (why a mail was not sent) and MailSettingsInput (the email settings form's checks): static and pure. See "Mail"
   Portability/                 Import and export (modern style): ArchiveExporter (the administrator's
                                archive), FeedExporter (RSS and WXR), WordPressImporter and BloggerImporter,
                                ImportedMedia and ImportedImages (the pictures of an import), SafeXml,
@@ -3825,8 +3825,14 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   what lets `Logging::oopsAlert()` call it from an error handler: with no container or no legacy
   application it returns 0 quietly. `Email::lastFailure()` says why the last send returned 0 in a fixed
   vocabulary, never exception text: `settings: <name>` (an `InvalidMailSetting`), `message` (an address or
-  name refused, or no sender or body) or `transport`; the admin test mail page (`Idno\Pages\Admin\EmailTest`)
-  uses it to name a bad setting. `Email::useMailer(?MailerInterface)` replaces the mailer for tests.
+  name refused, or no sender or body) or `transport`. For an administrator `Email::failureKind()` (`auth`, `tls`, `connect`, `sender`, `rejected`,
+  `temporary`, `unknown`, and `unconfigured` or `message`) and `Email::explanation()` say more: `Idno\Mail\MailFailure::classify()` reads the exception (pure) and
+  the adapter gives ONE fixed sentence for the kind, naming the host and port the settings mean, followed by the mail server's own reply with the user name and
+  password taken out in every form they travel in (as they are, base64, the AUTH PLAIN blob) and cut at 300 characters. The explanation never holds exception text, a user name,
+  a password or the DSN, and is shown to administrators only (the admin test mail page, `Idno\Pages\Admin\EmailTest`); the log line holds the exception's class and the kind. The
+  recipient's address and the sender's can be in the server's reply: administrator-only, as the page is. The email settings (`from_name`, `reply_to_email`) are stored
+  settings: the From name is `from_name`, else the title, and a Reply-To of the settings is added unless the message names one. `Email::isConfigured()` is a host and a valid
+  From address. `Email::useMailer(?MailerInterface)` replaces the mailer for tests.
   `Logging::oopsAlert()` is called from the exception handler and the fatal-error shutdown function, so
   everything in it after its early returns is in a `try`/`catch (\Throwable)`: it closes any output buffer
   a failing template left open, writes one line `Could not send the alert: <class>` through the logger if
@@ -3834,16 +3840,30 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   it still sends a short plain text alert built in PHP (the site's address and the message, which carries the file and line; nothing
   from the request) and logs `Could not draw the alert: <class>`; only if sending fails too does it log `Could not send the alert`. The email shell does not need `REQUEST_URI` (a console process
   has none).
-  The mail templates are Twig: `templates/email/**/*.html.twig` (the shell `shell.html.twig` and the eight bodies) and
+  EVERY MAIL HAS ONE SHELL AND ONE SET OF PARTS. A mail is two short Twig files, `templates/email/<name>.html.twig` and `templates/email-text/<name>.txt.twig`, written with the
+  same parts (`parts/heading`, `paragraph`, `button`, `quote`, `rows`, `code` in `templates/email/parts/*.html.twig` and `templates/email-text/parts/*.txt.twig`, drawn with
+  `idno_include`; a part escapes every value, a paragraph takes `text` or `format` (`t_format('%s ... %s')`, the translated sentence with numbered specifiers) and `values`, which the
+  HTML set in bold), inside `shell` of each (the HTML shell: tables, inline styles, a preheader, a dark-mode block, a footer saying why the reader got the mail and which site sent
+  it, right-to-left aware; the text shell: the reason and the site's name and address after `-- `). The HTML file says what the mail is with
+  `{% do mail_describe({subject, preheader, reason}) %}` (the text file needs no call: `Email::setBodyFromTemplate()` draws the HTML file first and gives the text its reason). The
+  colours are `Idno\Mail\MailDesign::PALETTE` (a light and a dark colour for each role: light inline, dark in the style block and for Outlook's `data-ogsc`/`data-ogsb`; every text sits
+  on a background the palette names, and `MailDesignTest` holds each pair to WCAG AA contrast in both looks); `mail_colour()`, `mail_font()`, `mail_dark_css()`, `mail_emphasise()`,
+  `mail_sentence()`, `mail_wrap()`, `mail_rule()`, `mail_site_name()` and the filter `mail_one_line` are the template functions over it (the two safe ones, `mail_dark_css` and
+  `mail_emphasise`, are in `IdnoTwigExtensionTest::SAFE_FUNCTIONS`). `Email::setBodyFromTemplate($name, $vars)` writes both bodies and the subject the template names;
+  `Email::drawMail()` returns the three without a message (the goldens use it); `setHTMLBodyFromTemplate()` and `setTextBodyFromTemplate()` remain for a caller that sets its own
+  subject (a third-party `.tpl.php` template still wins). A person's words are one line in a part (`mail_one_line`: a line break cannot start a line of the mail's own), and every
+  link is built from `site_url()`, the configured address, never the request's host. Ports: `MailTransportDsn` is unchanged, so a stored host with no port still means port 25; only
+  the email settings form fills in the usual port of the security chosen (587, 465, 25) when it is saved with the port empty.
+  The mail templates are Twig: `templates/email/**/*.html.twig` (the shell `shell.html.twig`, the parts and the eight bodies) and
   `templates/email-text/**/*.txt.twig`, drawn as every ported template is (a third-party `.tpl.php` mail template still wins,
   and its HTML is placed in core's shell as `body`). A `.txt.twig` is never escaped and never holds HTML: it controls its
   newlines with `{%-`/`-%}` and is compared with its original byte for byte (a `{{ }}` does not eat the newline that follows
   it, as PHP's `?>` does, so a text template has one newline fewer than the original source where an echo ended a line). The HTML
-  parts escape every value from outside. The shell has no footer address and no request-derived tracking link; the mail
-  templates use only `site_url()`, `site_title()`, `setting('from_email')`, `t()`/`t_html()` and the pure filters, so they
+  parts escape every value from outside. The shell has no postal address and no request-derived tracking link; the mail
+  templates use only `site_url()`, `site_title()`, `setting('description')`, `t()`/`t_html()`/`t_format()` and the pure `mail_*` functions and filters, so they
   draw in a console process with no request, no session and no logged-in user (`TemplateEscapingTest` draws them in a
   console subprocess). Pinned by `TemplateEscapingTest::testTheOopsMailEscapesRequestValues`, `testAnInviteEscapesTheInvitersName`,
-  `testATextMailIsNeverHtmlEscaped` and `MailFlowsTest::testTheMailShellHasNoPostalAddressAndNoRequestPath`;
+  `testATextMailIsNeverHtmlEscaped`, `testALineBreakInAnInvitersNameCannotStartALineOfTheMail` and `MailFlowsTest::testALinkInAMailIsBuiltFromTheConfiguredAddressAndNotFromTheRequest`;
   `EmailAdapterTest::testOopsAlertReturnsWithoutThrowingWhenATemplateThrows` and `testOopsAlertSendsAPlainTextAlertWhenTheTemplatesCannotBeDrawn` pin that a mail
   template that throws is logged, never escapes `oopsAlert()`, and still sends the plain text alert.
 - Secrets: `smtp_password` is in the DSN given to the transport factory and nowhere else: never in a log
@@ -4239,9 +4259,14 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
     `preview.png`: a template does not touch the file system) and `LegacyTables` passes `restored_message`; the JSON of those pages gains those keys. New
     functions: `system_info()` (`idno`, `build`, `php` and the required `extensions`), `extension_loaded(name)`, `version_compare(a, b)`,
     `can_make_site_private()` and `legacy_tables_in_menu()` (the admin menu's entry for the tables an upgrade left). The settings page and the menu read
-    stored settings with `setting()`. The email form shows the stored SMTP user name and password, which `setting()` refuses: `Pages\Admin\Email`
-    draws the body on a COPY of the page's template (`withVars()`) that holds exactly those two values, so they are printed once each, in their own fields,
-    and are never a variable of the page, which the JSON and JSONP output of a page prints (`TemplateEscapingTest::testTheEmailFormPrintsTheStoredSecretsOnlyInTheirFieldsAndNeverAsAVariableOfThePage`).
+    stored settings with `setting()`. The email form never prints the stored SMTP password (an empty password field keeps the stored one, a typed one replaces it, `smtp_password_remove` or an empty user name clears it;
+    the form has only `has_password`), and prints the stored user name only in its own field: `Pages\Admin\Email` draws the body on a COPY of the page's template (`withVars()`)
+    that holds the form's values, so none is a variable of the page, which the JSON and JSONP output of a page prints (`TemplateEscapingTest::testTheEmailFormNeverPrintsTheStoredPasswordAndPrintsTheUserNameOnlyInItsField`).
+    The form checks what was typed (`Idno\Mail\MailSettingsInput`: a host name or an IP address with no scheme, path or port; a port from 1 to 65535, filled in from the security
+    when empty; a From address once a host is set; valid addresses; a From name under 100 characters): a form with a wrong value is not saved, is answered 400 and drawn again with a message
+    beside each field (`AdminEmailSettingsTest`). The page names the mail settings that `config.ini` or the environment pins (`fixed`), which win over what the form stores; the test mail
+    shows `Email::explanation()`, and the help block `admin/email/services` lists the values of the common mail services. The styles for the page (notices, badges, field errors, the help block,
+    the invitation rows and the gate panel) are `frontend/src/css/components/settings.css`, appended to `css/idno-2026.min.css` as one `@layer components` block (the file was not rebuilt, so a rebuild is not byte-identical).
     `admin/legacytables/body` escapes every database value by autoescape, as its `$e` did (`AdminLegacyTablesTest` is unchanged). A diagnostics message is
     HTML written by the page and by the listeners of `diagnostics/basics`, so it is the one value printed with `|raw` (`raw-allowlist.php`). Values an
     administrator or a plugin supplied (a plugin's name in a dependency label, statistics labels and values, an invitation's address, a blocked address) are

@@ -99,13 +99,9 @@ final class MailpitDeliveryTest extends IdnoTestCase
         $this->deleteAll($kind);
 
         // The password reset, as Idno\Pages\Account\Password builds it.
-        $t = clone Idno::site()->template();
-        $t->setTemplateType('email');
         $reset = new Email();
-        $reset->setSubject('Password reset');
         $reset->addTo('someone@example.net');
-        $reset->setHTMLBody($t->__(['email' => 'someone@example.net', 'code' => 'code-1'])->draw('account/password'));
-        $reset->setTextBodyFromTemplate('account/password', ['email' => 'someone@example.net', 'code' => 'code-1']);
+        $reset->setBodyFromTemplate('account/password', ['email' => 'someone@example.net', 'code' => 'code-1']);
         $this->assertSame(1, $reset->send(), 'password reset ' . $this->mailErrorLogContents());
 
         // An invitation (with a Reply-To).
@@ -121,9 +117,7 @@ final class MailpitDeliveryTest extends IdnoTestCase
         // The admin's test mail.
         $test = new Email();
         $test->addTo('admin@example.net');
-        $test->setSubject('Test email from ' . Idno::site()->config()->title . '!');
-        $test->setHTMLBodyFromTemplate('admin/emailtest');
-        $test->setTextBodyFromTemplate('admin/emailtest');
+        $test->setBodyFromTemplate('admin/emailtest');
         $this->assertSame(1, $test->send(), 'test mail');
 
         // The alert for a fatal error.
@@ -140,13 +134,13 @@ final class MailpitDeliveryTest extends IdnoTestCase
             $bySubject[$message['Subject']] = $message;
         }
         $this->assertEqualsCanonicalizing([
-            'Password reset',
+            'Reset your password for Mailpit Site',
             "You've been invited to join Mailpit Site",
-            'Test email from Mailpit Site!',
-            Idno::site()->config()->host . ': Oh no',
+            'Test email from Mailpit Site',
+            'Error on ' . parse_url(Idno::site()->config()->getDisplayURL(), PHP_URL_HOST) . ': Oh no',
         ], array_keys($bySubject));
 
-        $reset = $bySubject['Password reset'];
+        $reset = $bySubject['Reset your password for Mailpit Site'];
         $this->assertSame('site@example.com', $reset['From']['Address']);
         $this->assertSame('Mailpit Site', $reset['From']['Name']);
         $this->assertSame(['someone@example.net'], array_column($reset['To'], 'Address'));
@@ -159,7 +153,7 @@ final class MailpitDeliveryTest extends IdnoTestCase
         $this->assertNotSame('', $invited['Text']);
         $this->assertNotSame('', $invited['HTML']);
 
-        $test = $bySubject['Test email from Mailpit Site!'];
+        $test = $bySubject['Test email from Mailpit Site'];
         $this->assertSame(['admin@example.net'], array_column($test['To'], 'Address'));
         $this->assertNotSame('', $test['Text']);
         $this->assertNotSame('', $test['HTML']);

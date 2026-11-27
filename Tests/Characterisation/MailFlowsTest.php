@@ -116,39 +116,39 @@ final class MailFlowsTest extends CharacterisationTestCase
 
     private function assertWrappedInTheShellWithATextPart(array $mail): void
     {
-        $this->assertStringContainsString('<html lang="en">', $mail['html']);
+        $this->assertStringContainsString('<html lang="en', $mail['html']);
         $this->assertStringContainsString('<!DOCTYPE html', $mail['html']);
         $this->assertNotSame('', $mail['text']);
         $this->assertStringNotContainsString('<html', $mail['text']);
     }
 
     /**
-     * The shell's footer says Idno and links to its home page: no postal address of a company, and no tracking link built from the path
-     * of the request (a queue worker has no request, and the link must not depend on one).
+     * A link in a mail is built from the address the site is configured with, never from the request that happens to send it (a request's
+     * Host header is whatever the sender chose, and a queue worker has no request): a reset link that named another host would hand the
+     * reset code to it.
      */
-    public function testTheMailShellHasNoPostalAddressAndNoRequestPath(): void
+    public function testALinkInAMailIsBuiltFromTheConfiguredAddressAndNotFromTheRequest(): void
     {
-        $previous = $_SERVER['REQUEST_URI'] ?? null;
+        $previous = [$_SERVER['REQUEST_URI'] ?? null, $_SERVER['HTTP_HOST'] ?? null];
         $_SERVER['REQUEST_URI'] = '/account/password/?x=1';
+        $_SERVER['HTTP_HOST'] = 'evil.example';
         try {
-            $t = clone Idno::site()->template();
-            $t->setTemplateType('email');
-            $html = (string) $t->__(['body' => '<p>Hello</p>'])->draw('shell');
+            $mail = \Idno\Core\Email::drawMail('account/password', ['email' => 'someone@example.net', 'code' => 'code-1234']);
         } finally {
-            if ($previous === null) {
-                unset($_SERVER['REQUEST_URI']);
-            } else {
-                $_SERVER['REQUEST_URI'] = $previous;
+            foreach (['REQUEST_URI', 'HTTP_HOST'] as $i => $key) {
+                if ($previous[$i] === null) {
+                    unset($_SERVER[$key]);
+                } else {
+                    $_SERVER[$key] = $previous[$i];
+                }
             }
         }
 
-        $this->assertStringContainsString('<p>Hello</p>', $html);
-        $this->assertStringContainsString('<a href="https://idno.co/" style="color: #4c93cb; text-decoration: none;">Idno</a>', $html);
-        $this->assertStringNotContainsString('utm_', $html);
-        $this->assertStringNotContainsString('account_password', $html);
-        $this->assertStringNotContainsString('Bryant', $html);
-        $this->assertStringNotContainsString('San Francisco', $html);
-        $this->assertStringNotContainsString('Idno, Inc.', $html);
+        $site = Idno::site()->config()->getDisplayURL();
+        $this->assertStringContainsString('href="' . $site . 'account/password/reset/?email=someone%40example.net&amp;code=code-1234"', $mail['html']);
+        $this->assertStringContainsString($site . 'account/password/reset/?email=someone%40example.net&code=code-1234', $mail['text']);
+        $this->assertStringNotContainsString('evil.example', $mail['html'] . $mail['text']);
+        $this->assertStringNotContainsString('x=1', $mail['html'] . $mail['text'], 'no link is built from the path of the request');
     }
 
     public function testThePasswordResetMail(): void
@@ -156,23 +156,19 @@ final class MailFlowsTest extends CharacterisationTestCase
         // As Idno\Pages\Account\Password::postContent() builds it.
         $address = 'someone@example.net';
         $code = 'code-1234';
-        $t = clone Idno::site()->template();
-        $t->setTemplateType('email');
         $email = new \Idno\Core\Email();
-        $email->setSubject('Password reset');
         $email->addTo($address);
-        $email->setHTMLBody($t->__(['email' => $address, 'code' => $code])->draw('account/password'));
-        $email->setTextBodyFromTemplate('account/password', ['email' => $address, 'code' => $code]);
+        $email->setBodyFromTemplate('account/password', ['email' => $address, 'code' => $code]);
         $email->send();
 
         $mail = $this->theOneMail();
         $this->assertSame([[$address, '']], $mail['to']);
         $this->assertSame([['site@example.com', 'Pinned Site']], $mail['from']);
         $this->assertSame([], $mail['replyTo']);
-        $this->assertSame('Password reset', $mail['subject']);
+        $this->assertStringContainsString('Pinned Site', $mail['subject'], 'the template names the subject');
         $this->assertWrappedInTheShellWithATextPart($mail);
         $link = Idno::site()->config()->getDisplayURL() . 'account/password/reset/?email=' . urlencode($address) . '&code=' . urlencode($code);
-        $this->assertStringContainsString('href="' . $link . '"', $mail['html']);
+        $this->assertStringContainsString('href="' . htmlspecialchars($link) . '"', $mail['html']);
         $this->assertStringContainsString($link, $mail['text']);
     }
 
@@ -204,16 +200,14 @@ final class MailFlowsTest extends CharacterisationTestCase
         // As Idno\Pages\Admin\EmailTest::postContent() builds it.
         $message = new \Idno\Core\Email();
         $message->addTo('admin@example.net');
-        $message->setSubject('Test email from ' . Idno::site()->config()->title . '!');
-        $message->setHTMLBodyFromTemplate('admin/emailtest');
-        $message->setTextBodyFromTemplate('admin/emailtest');
+        $message->setBodyFromTemplate('admin/emailtest');
         $message->send();
 
         $mail = $this->theOneMail();
         $this->assertSame([['admin@example.net', '']], $mail['to']);
         $this->assertSame([['site@example.com', 'Pinned Site']], $mail['from']);
         $this->assertSame([], $mail['replyTo']);
-        $this->assertSame('Test email from Pinned Site!', $mail['subject']);
+        $this->assertStringContainsString('Pinned Site', $mail['subject']);
         $this->assertWrappedInTheShellWithATextPart($mail);
     }
 
@@ -232,7 +226,8 @@ final class MailFlowsTest extends CharacterisationTestCase
         $this->assertSame([['ops@example.net', '']], $mail['to']);
         $this->assertSame([['site@example.com', 'Pinned Site']], $mail['from']);
         $this->assertSame([], $mail['replyTo']);
-        $this->assertSame(Idno::site()->config()->host . ': Oh no', $mail['subject']);
+        $this->assertStringContainsString('Oh no', $mail['subject']);
+        $this->assertStringContainsString(Idno::site()->config()->host, $mail['subject']);
         $this->assertWrappedInTheShellWithATextPart($mail);
         $this->assertStringContainsString('Something broke', $mail['html']);
         $this->assertStringContainsString('Something broke', $mail['text']);
@@ -283,8 +278,8 @@ final class MailFlowsTest extends CharacterisationTestCase
         $this->assertCount(1, $mails);
         $this->assertSame([['address' => $user->email, 'name' => '']], $mails[0]['to']);
         $this->assertSame([['address' => 'site@example.com', 'name' => 'Pinned Site']], $mails[0]['from']);
-        $this->assertSame('Password reset', $mails[0]['subject']);
-        $this->assertStringContainsString('account/password/reset/?email=' . urlencode($user->email) . '&code=', $mails[0]['html']);
+        $this->assertStringContainsString('Pinned Site', $mails[0]['subject']);
+        $this->assertStringContainsString('account/password/reset/?email=' . urlencode($user->email) . '&amp;code=', $mails[0]['html']);
         $this->assertSame([], $this->site()->request('GET', '_test/mail/log')->json(), 'The log is emptied when it is read.');
     }
 }

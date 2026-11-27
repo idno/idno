@@ -1,16 +1,27 @@
-{%- set joinus = t('Join us!') -%}
-{{ joinus }}
-{% if joinus|length > 1 %}{% for u in 2..(joinus|length) %}={% endfor %}{% endif %}
-
-
-{{ t('Hi there! Your friend *%s* has invited you to join %s', [inviter, site_title()]) }}: {{ site_url() }}.
-
-
-{{ t('You can use this space to publish your stories, share things that interest you, and discuss things that matter.') }}
-
-{{ t('Get started with *%s* by setting up your account', [site_title()]) }}.
-
-
-{{ t('Sign up now') }}: {{ site_url() }}account/register/?email={{ email|form_urlencode }}&code={{ code|form_urlencode }}
-
-{{ t('If you have any questions at all, please don\'t hesitate to contact us by sending an email to %s', [setting('from_email')]) -}}
+{#- The plain-text twin of templates/email/account/invite: the same parts, in the same order. -#}
+{%- set site = mail_site_name() -%}
+{%- set who = inviter|default('')|mail_one_line -%}
+{%- set until = expires|default(0) ? expires|date('j F Y') : '' -%}
+{%- set join = link|default('') ?: (site_url() ~ 'account/register/?email=' ~ (email|default('')|form_urlencode) ~ '&code=' ~ (code|default('')|form_urlencode)) -%}
+{%- set about = setting('description')|mail_one_line -%}
+{%- if about == 'A social website powered by Idno' -%}{%- set about = '' -%}{%- endif -%}
+{{- idno_include('parts/heading', {text: t("You're invited to join %s", [site])}) -}}
+{%- if who -%}
+{{- idno_include('parts/paragraph', {format: is_admin ? t_format('%s has invited you to join %s as an administrator.') : t_format('%s has invited you to join %s.'), values: [who, site]}) -}}
+{%- else -%}
+{{- idno_include('parts/paragraph', {format: is_admin ? t_format('You have been invited to join %s as an administrator.') : t_format('You have been invited to join %s.'), values: [site]}) -}}
+{%- endif -%}
+{%- if about -%}
+{{- idno_include('parts/quote', {text: about}) -}}
+{%- endif -%}
+{%- if is_admin -%}
+{{- idno_include('parts/paragraph', {text: t("As an administrator you will be able to change the site's settings, manage its members and invite others.")}) -}}
+{%- endif -%}
+{{- idno_include('parts/paragraph', {text: t('To accept, create your account:')}) -}}
+{{- idno_include('parts/button', {label: t('Create your account'), url: join}) -}}
+{{- idno_include('parts/rows', {rows: {
+    (t('Invitation for')): email|default(''),
+    (t('Role')): is_admin ? t('Administrator') : t('Member'),
+    (t('Works until')): until,
+}}) -}}
+{{- idno_include('parts/paragraph', {muted: true, text: (until ? t('This invitation is for %s only and works until %s.', [email|default('')|mail_one_line, until]) : t('This invitation is for %s only.', [email|default('')|mail_one_line])) ~ ' ' ~ t("If you weren't expecting it, you can ignore this email.")}) -}}

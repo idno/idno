@@ -23,7 +23,6 @@ final class LegacyResultNotifier implements ResultNotifier
         $this->send(
             $userUuid,
             $succeeded ? 'admin/import' : 'admin/import_failure',
-            $succeeded ? 'Idno - Your data import is complete' : 'Idno - Problem with your import',
             ['imported' => $imported, 'skipped' => $skipped, 'startedBefore' => $startedBefore, 'stopped' => $stopped]
         );
     }
@@ -33,7 +32,6 @@ final class LegacyResultNotifier implements ResultNotifier
         $this->send(
             $userUuid,
             $succeeded ? 'admin/export' : 'admin/export_failure',
-            $succeeded ? 'Your data export is ready' : 'Idno - Problem with your data export',
             ['unrendered' => $unrendered]
         );
     }
@@ -41,7 +39,7 @@ final class LegacyResultNotifier implements ResultNotifier
     /**
      * @param array<string, mixed> $vars
      */
-    private function send(string $userUuid, string $template, string $subject, array $vars = []): void
+    private function send(string $userUuid, string $template, array $vars = []): void
     {
         try {
             $user = User::getByUUID($userUuid, false);
@@ -51,10 +49,9 @@ final class LegacyResultNotifier implements ResultNotifier
                 return;
             }
             $mail = new Email();
-            $mail->setHTMLBodyFromTemplate($template, $vars);
-            $mail->setTextBodyFromTemplate($template, $vars);
+            // The template writes the subject
+            $mail->setBodyFromTemplate($template, $vars);
             $mail->addTo($user->email);
-            $mail->setSubject($subject);
             if ($mail->send() === 0) {
                 $this->logger->warning('The mail that ends an import or export was not sent (' . (string) $mail->lastFailure() . ').');
             }

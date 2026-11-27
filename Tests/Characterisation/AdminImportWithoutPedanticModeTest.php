@@ -97,7 +97,7 @@ final class AdminImportWithoutPedanticModeTest extends AsyncSiteTestCase
         $result = $this->scenario();
 
         $this->assertCount(1, $result['mails'], json_encode(array_column($result['mails'], 'subject')));
-        $this->assertSame('Idno - Problem with your import', $result['mails'][0]['subject']);
+        $this->assertStringEndsWith('did not finish', $result['mails'][0]['subject']);
         $this->assertSame('alice@example.com', $result['mails'][0]['to'][0]['address']);
         $this->assertStringNotContainsString('critical - ', $result['log']);
         $this->assertStringNotContainsString('Undefined variable', $result['log']);

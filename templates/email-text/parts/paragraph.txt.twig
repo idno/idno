@@ -1,0 +1,7 @@
+{#- A paragraph: `text`, or `format` and `values`: a sentence with %s for each value. -#}
+{%- if format -%}
+    {%- set words = mail_sentence(format, values) -%}
+{%- else -%}
+    {%- set words = text|trim -%}
+{%- endif -%}
+{{- mail_wrap(words) ~ "\n\n" -}}

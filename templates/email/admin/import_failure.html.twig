@@ -1,19 +1,17 @@
-<div style="font-weight: bold; font-size: 30px; line-height: 32px; color: #333" align="center">
-    Sorry, your data import was unsuccessful.
-</div><br>
-<hr/>
-<br>
-{% if stopped -%}
-The import was stopped after repeated errors. {{ (imported ?? 0)|to_int }} posts were imported before it stopped. Check the site's log for the cause, and check your posts before you import the file again, or it may add them twice.
-{% elseif startedBefore -%}
-This import was started before and did not finish, so it was not run again: running it again would import its posts twice. Some posts may already have been imported. Check your posts first; if posts are missing, upload the file again.
-{% else -%}
-The import stopped, and nothing in the file could be imported, or it did not finish. Some posts may already have been imported. Check your posts before you import the file again, or it may add them twice. Your system administrator can help: the details are in the server's log.
+{#- Tells the administrator who started an import that it did not work: `stopped` (it gave up after repeated errors), `startedBefore` (it was run before and not run again), `imported` (a count). The plain-text twin is templates/email-text/admin/import_failure. -#}
+{%- set site = mail_site_name() -%}
+{%- do mail_describe({
+    subject: t('Your import into %s did not finish', [site]),
+    preheader: t('Some or all of the file could not be imported.'),
+    reason: t('You got this email because you started an import into %s.', [site]),
+}) -%}
+{{ idno_include('parts/heading', {text: t('Your import did not finish')}) }}
+{% if stopped %}
+{{ idno_include('parts/paragraph', {text: t("The import was stopped after repeated errors. %s posts were imported before it stopped. Check the site's log for the cause, and check your posts before you import the file again, or it may add them twice.", [(imported|default(0))|to_int])}) }}
+{% elseif startedBefore %}
+{{ idno_include('parts/paragraph', {text: t('This import was started before and did not finish, so it was not run again: running it again would import its posts twice. Some posts may already have been imported. Check your posts first; if posts are missing, upload the file again.')}) }}
+{% else %}
+{{ idno_include('parts/paragraph', {format: t_format('Some or all of the file you uploaded to %s could not be imported.'), values: [site]}) }}
+{{ idno_include('parts/paragraph', {text: t("Some posts may already have been imported. Check your posts before you import the file again, or it may add them twice. If it fails again, the site's error log may say why.")}) }}
 {% endif %}
-<br><br>
-<div align="center">
-    <a href="{{ site_url() }}" style="background-color:#73B2E3;border:1px solid #73B2E3;border-radius:4px;color:#ffffff;display:inline-block;font-family:sans-serif;font-size:17px;font-weight:normal;line-height:40px;text-align:center;text-decoration:none;width:200px;-webkit-text-size-adjust:none;mso-hide:all;">Visit your site</a>
-</div>
-<br>
-<br>
-<br>
+{{ idno_include('parts/button', {label: t('Try the import again'), url: site_url() ~ 'admin/import/'}) }}

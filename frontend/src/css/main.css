@@ -10,5 +10,6 @@
 @import "./components/profile.css";
 @import "./components/admin.css";
 @import "./components/annotations.css";
+@import "./components/settings.css";
 @source "../../../templates/default/";
 @source "../../../IdnoPlugins/*/templates/default/";

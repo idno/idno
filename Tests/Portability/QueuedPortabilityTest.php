@@ -99,7 +99,7 @@ final class QueuedPortabilityTest extends AsyncSiteTestCase
         $this->assertSame(['Low tide, high hopes', 'Notes from the tide pool — café edition 🌊'], $this->titles());
         $mails = $this->mailLog();
         $this->assertCount(1, $mails);
-        $this->assertSame('Idno - Your data import is complete', $mails[0]['subject']);
+        $this->assertStringStartsWith('Your import into', $mails[0]['subject']);
         $this->assertSame('alice@example.com', $mails[0]['to'][0]['address']);
         $this->assertSame([], $this->queuedEvents());
         $this->assertSame([], $this->failedEvents());
@@ -115,7 +115,7 @@ final class QueuedPortabilityTest extends AsyncSiteTestCase
         $this->assertSame(0, $worker['exit'], $worker['output']);
         $mails = $this->mailLog();
         $this->assertCount(1, $mails);
-        $this->assertSame('Idno - Problem with your import', $mails[0]['subject']);
+        $this->assertStringEndsWith('did not finish', $mails[0]['subject']);
         $this->assertSame([], $this->titles());
         $this->assertSame([], $this->failedEvents(), 'the job reports its failure by mail and does not park the event');
     }
@@ -158,7 +158,7 @@ final class QueuedPortabilityTest extends AsyncSiteTestCase
         $this->assertSame(0, $worker['exit'], $worker['output']);
         $mails = $this->mailLog();
         $this->assertCount(1, $mails);
-        $this->assertSame('Your data export is ready', $mails[0]['subject']);
+        $this->assertStringStartsWith('Your export of', $mails[0]['subject']);
         $page = $this->site()->request('GET', 'admin/export/', ['Cookie' => $this->cookie]);
         $this->assertSame(1, preg_match('~file/([0-9a-f]{32})/([^"]+\.zip)"~', $page->body, $match), 'the page links to the archive');
         $archive = 'file/' . $match[1] . '/' . $match[2];
@@ -177,7 +177,8 @@ final class QueuedPortabilityTest extends AsyncSiteTestCase
         $this->assertSame(0, $worker['exit'], $worker['output']);
         $mails = $this->mailLog();
         $this->assertCount(1, $mails);
-        $this->assertSame('Idno - Problem with your data export', $mails[0]['subject']);
+        $this->assertStringStartsWith('Your export of', $mails[0]['subject']);
+        $this->assertStringEndsWith('did not finish', $mails[0]['subject']);
         $this->assertSame([], $this->failedEvents());
         $page = $this->site()->request('GET', 'admin/export/', ['Cookie' => $this->cookie]);
         $this->assertStringNotContainsString('is being created', $page->body, 'the flag is cleared');

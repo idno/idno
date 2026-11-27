@@ -345,13 +345,12 @@ namespace Idno\Core {
                         $notify = [$notify];
                     }
 
-                    $title = $config->host . ": $title";
-
                     foreach ($notify as $emailaddress) {
                         if (!empty($emailaddress) && filter_var($emailaddress, FILTER_VALIDATE_EMAIL)) {
 
                             $vars = [
                                 'site' => $config->getDisplayURL(),
+                                'title' => $title,
                                 'message' => $message,
                                 'user' => 'UNKNOWN',
 
@@ -378,12 +377,9 @@ namespace Idno\Core {
                             }
 
                             $email = new Email();
-                            if (!empty($title)) {
-                                $email->setSubject($title);
-                            }
                             try {
-                                $email->setHTMLBodyFromTemplate('admin/oops', $vars);
-                                $email->setTextBodyFromTemplate('admin/oops', $vars);
+                                // The template writes the subject: the site's host name and the kind of error
+                                $email->setBodyFromTemplate('admin/oops', $vars);
                             } catch (\Throwable $drawing) {
                                 // A broken engine or an unloadable template must not cost the owner the alert: a short plain text
                                 // body is built here, with the facts the text template prints (the site and the message, which
@@ -394,9 +390,7 @@ namespace Idno\Core {
                                 } catch (\Throwable $ignored) {
                                 }
                                 $email = new Email();
-                                if (!empty($title)) {
-                                    $email->setSubject($title);
-                                }
+                                $email->setSubject($config->host . ": $title");
                                 $email->setTextBody("Ooops!\n======\n\nAn error occured on your Idno site " . $vars['site'] . "!\n\n" . (is_scalar($message) ? (string) $message : '') . "\n");
                             }
                             $email->addTo($emailaddress);
