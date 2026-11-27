@@ -102,7 +102,8 @@ interface RecordStore
      * other (the record was never there, was in another collection, or another caller removed it first). One conditional
      * write decides it, so of any number of callers at once exactly one is told true. Use it where a record may be used
      * once (an invitation's link); delete() says true for an id that is not there and cannot tell the callers apart.
-     * False also when the database refuses the deletion, and for a name that is no collection.
+     * False also when the database refuses the deletion (a constraint), and for a name that is no collection. A lock wait or a deadlock is NOT a
+     * refusal: it is thrown (a Doctrine RetryableException), because "somebody else has it" and "the database was busy" must not be taken for each other.
      *
      * @throws \Throwable when the database fails otherwise
      */

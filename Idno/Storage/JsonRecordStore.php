@@ -239,8 +239,8 @@ final class JsonRecordStore implements RecordStore
             // One statement: the rows it removed are the claim, whatever else is deleting the record now
             return (int) $this->connection->executeStatement('delete from ' . $this->dialect->quoteIdentifier($table) . ' where ' . $this->dialect->quoteIdentifier('id') . ' = ?', [$id]) > 0;
         } catch (DriverException $e) {
-            if (!$this->dialect->isRefusedData($e)) {
-                throw $e;
+            if ($e instanceof \Doctrine\DBAL\Exception\RetryableException || !$this->dialect->isRefusedData($e)) {
+                throw $e; // a busy database is not "somebody else has it"
             }
 
             return false;

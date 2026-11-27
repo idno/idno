@@ -58,7 +58,7 @@ namespace Idno\Pages\Admin {
             switch ($action) {
                 case 'add_rights':
                     $uuid = $this->getTextInput('user');
-                    if ($user = User::getByUUID($uuid)) {
+                    if (($user = User::getByUUID($uuid)) instanceof User) {
                         $user->setAdmin(true);
                         $user->save();
                         \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->esc_("%s was given administration rights.", [$user->getTitle()]));
@@ -66,7 +66,7 @@ namespace Idno\Pages\Admin {
                     break;
                 case 'remove_rights':
                     $uuid = $this->getTextInput('user');
-                    if (($user = User::getByUUID($uuid)) && $this->mayDemoteOrDelete($user)) {
+                    if (($user = User::getByUUID($uuid)) instanceof User && $this->mayDemoteOrDelete($user)) {
                         $user->setAdmin(false);
                         $user->save();
                         \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->esc_("%s was stripped of their administration rights.", [$user->getTitle()]));
@@ -74,7 +74,7 @@ namespace Idno\Pages\Admin {
                     break;
                 case 'delete':
                     $uuid = $this->getTextInput('user');
-                    if (($user = User::getByUUID($uuid)) && $this->mayDemoteOrDelete($user)) {
+                    if (($user = User::getByUUID($uuid)) instanceof User && $this->mayDemoteOrDelete($user)) {
                         if ($user->delete()) {
                             \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->esc_("%s was removed from your site.", [$user->getTitle()]));
                         }
@@ -223,16 +223,11 @@ namespace Idno\Pages\Admin {
          */
         protected function mayDemoteOrDelete(User $user)
         {
-            $session  = \Idno\Core\Idno::site()->session();
-            $language = \Idno\Core\Idno::site()->language();
-            if ($user->canBeDemotedOrDeletedBy($session->currentUserUUID())) {
+            $why = $user->whyNotRemovableBy(\Idno\Core\Idno::site()->session()->currentUserUUID());
+            if ($why === '') {
                 return true;
             }
-            if ((string) $user->getUUID() === (string) $session->currentUserUUID()) {
-                $session->addErrorMessage($language->_("You can't take away your own administration rights or delete your own account here. Another administrator can."));
-            } else {
-                $session->addErrorMessage($language->esc_("%s is the only administrator, so nothing was changed.", [$user->getTitle()]));
-            }
+            $user->explainWhyNotRemovable($why);
 
             return false;
         }

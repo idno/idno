@@ -572,6 +572,8 @@ final class RepositoryDataConcierge extends \Idno\Core\DataConcierge implements 
         }
         try {
             return $this->store()->claim((string)$collection, (string)$id);
+        } catch (\Doctrine\DBAL\Exception\RetryableException $e) {
+            throw new \Idno\Exceptions\DatabaseBusyException('The database was busy.', 0, $e);
         } catch (DbalException | \PDOException $e) {
             $this->logError($e);
         }
@@ -581,7 +583,8 @@ final class RepositoryDataConcierge extends \Idno\Core\DataConcierge implements 
 
     /**
      * Run $work in one database transaction on the shared connection: committed when it returns, undone when it
-     * throws (the exception goes on) or returns false. Inside another transaction it is a savepoint.
+     * throws (the exception goes on) or returns false, or when the commit itself fails. Inside another transaction it is a savepoint.
+     * On SQLite the outermost transaction takes the write lock first. A lock that cannot be had in time is a DatabaseBusyException (nothing changed).
      *
      * @param  callable $work
      * @return mixed What $work returned
@@ -590,19 +593,27 @@ final class RepositoryDataConcierge extends \Idno\Core\DataConcierge implements 
     {
         $this->connection->beginTransaction();
         try {
+            if ($this->family === 'sqlite' && $this->connection->getTransactionNestingLevel() === 1) {
+                // A writer from the first statement: it waits for the write lock, where a transaction that read first fails the moment
+                // another connection commits
+                $this->connection->executeStatement(\Idno\Storage\Platform\SqliteDialect::TAKE_THE_WRITE_LOCK);
+            }
             $result = $work();
+            if ($result === false) {
+                $this->rollBackQuietly();
+
+                return false;
+            }
+            $this->connection->commit();
+
+            return $result;
         } catch (\Throwable $e) {
             $this->rollBackQuietly();
+            if ($e instanceof \Doctrine\DBAL\Exception\RetryableException) {
+                throw new \Idno\Exceptions\DatabaseBusyException('The database was busy.', 0, $e);
+            }
             throw $e;
         }
-        if ($result === false) {
-            $this->rollBackQuietly();
-
-            return false;
-        }
-        $this->connection->commit();
-
-        return $result;
     }
 
     private function rollBackQuietly(): void

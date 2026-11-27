@@ -183,13 +183,24 @@ namespace Idno\Pages\Account {
          *
          * @param  \Idno\Entities\User $user       The account to make, not yet saved
          * @param  Invitation|null     $invitation What it is made on
-         * @return string 'made', 'used' (somebody else used the invitation first, or it was withdrawn) or 'failed' (the
-         *                account could not be saved)
+         * @return string 'made', 'used' (somebody else used the invitation first, or it was withdrawn), 'busy' (the database
+         *                was busy: nothing was changed and the invitation is as it was) or 'failed' (the account could not be saved)
          */
         private function makeAccount(\Idno\Entities\User $user, $invitation): string
         {
             $site    = \Idno\Core\Idno::site();
             $outcome = 'failed';
+            try {
+                $this->inOneStep($site, $user, $invitation, $outcome);
+            } catch (\Idno\Exceptions\DatabaseBusyException $e) {
+                return 'busy';
+            }
+
+            return $outcome;
+        }
+
+        private function inOneStep($site, \Idno\Entities\User $user, $invitation, string &$outcome): void
+        {
             $site->db()->atomically(
                 function () use ($site, $user, $invitation, &$outcome) {
                     if ($invitation && !$invitation->consume()) {
@@ -210,8 +221,6 @@ namespace Idno\Pages\Account {
                     return true;
                 }
             );
-
-            return $outcome;
         }
 
         function postContent()
@@ -279,6 +288,14 @@ namespace Idno\Pages\Account {
                         $this->refuse('invalid');
 
                         return;
+                    }
+                    if ($outcome === 'busy') {
+                        // Nothing was changed, and the invitation is as it was: say to try again, with what was typed
+                        $session->addErrorMessage($lang->_("The site is busy just now, and your account was not made. Please try again in a moment."));
+                        $this->setResponse(503);
+                        http_response_code(503);
+                        header('Retry-After: 5');
+                        $this->drawForm($invitation, ['email' => $email, 'code' => $code, 'name' => $name, 'handle' => $handle]);
                     }
                     $made = $outcome === 'made';
                 } else {

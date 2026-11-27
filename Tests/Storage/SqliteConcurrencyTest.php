@@ -67,6 +67,29 @@ final class SqliteConcurrencyTest extends TestCase
         $this->assertSame('a', $id);
     }
 
+    /**
+     * Catches an invitation reported as used because the database was busy: a claim that cannot get the write lock in time is thrown, not answered
+     * false (which means somebody else has the record).
+     */
+    public function testAClaimThatCannotGetTheWriteLockIsThrownAndNotTakenForALostClaim(): void
+    {
+        $store = self::store($this->connect());
+        $store->save('entities', ['_id' => 'c', 'title' => 'claimed']);
+        $claimer = $this->connect();
+        $claimer->executeStatement('PRAGMA busy_timeout = 100');
+        $holder = $this->connect();
+        $holder->executeStatement('BEGIN IMMEDIATE');
+        try {
+            self::store($claimer)->claim('entities', 'c');
+            $this->fail('a busy database is thrown');
+        } catch (\Doctrine\DBAL\Exception\RetryableException) {
+            $this->addToAssertionCount(1);
+        } finally {
+            $holder->executeStatement('COMMIT');
+        }
+        $this->assertTrue(self::store($claimer)->claim('entities', 'c'), 'free again: the claim is the first, and wins');
+    }
+
     public function testAWriteWaitsForAnotherConnectionsWriteLock(): void
     {
         // Another process holds the write lock for a second, then commits.

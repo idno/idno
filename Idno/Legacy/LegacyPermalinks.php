@@ -121,6 +121,20 @@ final class LegacyPermalinks implements Permalinks
         return (bool) $entity->saveDataFromInput();
     }
 
+    public function refusesToDeleteAccount(Entity $entity): bool
+    {
+        if (!$entity instanceof User) {
+            return false;
+        }
+        $why = $entity->whyNotRemovableBy(Idno::site()->session()->currentUserUUID());
+        if ($why === '') {
+            return false;
+        }
+        $entity->explainWhyNotRemovable($why);
+
+        return true;
+    }
+
     public function delete(Entity $entity): bool
     {
         if (!$entity->delete()) {

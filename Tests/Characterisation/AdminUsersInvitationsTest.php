@@ -97,6 +97,46 @@ final class AdminUsersInvitationsTest extends PrivateSiteTestCase
     }
 
     /**
+     * Catches a member link already sent (and perhaps in a log or a history) turning into an administrator link when the address is invited again as
+     * an administrator: a different role is a new code. Asking again for the same role keeps the link.
+     */
+    public function testInvitingAnAddressAgainWithAnotherRoleMakesANewCodeAndTheOldLinkStopsWorking(): void
+    {
+        $this->prepare();
+        $this->post(['action' => 'invite_users', 'invitation_emails' => 'dana@example.test']);
+        $memberCode = (string) $this->invitationOf('dana@example.test')['code'];
+        $this->post(['action' => 'invite_users', 'invitation_emails' => 'dana@example.test']);
+        $this->assertSame($memberCode, $this->invitationOf('dana@example.test')['code'], 'the same role again: the link stays');
+
+        $this->post(['action' => 'invite_users', 'invitation_role' => 'admin', 'confirm_admin' => '1', 'invitation_emails' => 'dana@example.test']);
+        $admin = $this->invitationOf('dana@example.test');
+        $this->assertSame('admin', $admin['role']);
+        $this->assertNotSame($memberCode, $admin['code'], 'a new code for the new role');
+        $this->assertSame(403, $this->linkStatus('dana@example.test', $memberCode), 'the member link already sent no longer registers');
+
+        $this->post(['action' => 'invite_users', 'invitation_emails' => 'dana@example.test']);
+        $back = $this->invitationOf('dana@example.test');
+        $this->assertSame('member', $back['role']);
+        $this->assertNotSame($admin['code'], $back['code'], 'and back to a member: the administrator link stops working too');
+        $this->assertSame(403, $this->linkStatus('dana@example.test', (string) $admin['code']));
+    }
+
+    /**
+     * Catches the Users page answering a server error (a TypeError) when a rights or delete action is given the address of something that is not an
+     * account (a post): it answers as for an account that is not there, and the post is untouched.
+     */
+    public function testAnActionGivenThePostOfSomethingThatIsNotAUserChangesNothingAndIsNoServerError(): void
+    {
+        $this->prepare();
+        $post = (string) $this->runInSite('\Idno\Core\Idno::site()->db()->setIgnoreAccess(true); $s = new \IdnoPlugins\Status\Status(); $s->body = "a post"; $s->setAccess("PUBLIC"); $s->save(true); return $s->getUUID();');
+        foreach (['add_rights', 'remove_rights', 'delete'] as $action) {
+            $answer = $this->site()->request('POST', 'admin/users', ['Cookie' => $this->admin], ['__bTk' => $this->token, 'action' => $action, 'user' => $post]);
+            $this->assertLessThan(500, $answer->status, $action . ' with a post\'s address');
+        }
+        $this->assertTrue((bool) $this->runInSite('\Idno\Core\Idno::site()->db()->setIgnoreAccess(true); return (bool) \Idno\Common\Entity::getByUUID(' . $this->literal($post) . ');'), 'the post is still there');
+    }
+
+    /**
      * Catches a site left with nobody who can administer it: an administrator who asks to demote or delete themself is refused, a member who posts
      * the same is refused, and the last administrator cannot be demoted or deleted by anybody else either.
      */

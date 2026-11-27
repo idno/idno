@@ -823,6 +823,7 @@ abstract class RecordStoreContract extends TestCase
         $this->assertSameRecord($other, $this->store()->findById('entities', $other['_id']));
     }
 
+    /** An id that is another collection's record, or nobody's, must never use up an invitation. */
     public function testAClaimOfARecordThatWasNeverThereOrIsInAnotherCollectionWinsNothing(): void
     {
         $record = $this->put($this->r(['slug' => 'in-reader']), 'reader');

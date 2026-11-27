@@ -279,6 +279,10 @@ A page reads a field it means as one text with `$this->getTextInput('name', $def
 
 `Idno\Storage\RecordStore` has a new method, `claim(string $collection, string $id): bool`, which deletes a record and says whether this call removed it (`delete()` is true for an id that is not there). A class of yours that implements `RecordStore` adds it; `DataConcierge` has `claimRecord()` and `atomically(callable $work)` with fallbacks for a backend a plugin supplies (read then delete, and just running the work), so a backend class need not change.
 
+## Deleting an account deletes its content
+
+`Idno\Entities\User::delete()` deletes every entity the account owns (of every class, including your plugin's content types, whatever their access or publish status) before it deletes the account, each through the entity's own `delete()`: your `delete` and `deleted` listeners run for each, your `deleteData()` runs, and the files attached with `attachFile()` are deleted. A listener of `delete` that answers false for an entity keeps it, and then the account is kept too and the administrator is told; deleting the account again retries. `User::deleteContent($batch, $seconds)` does the content alone, in batches, and returns false when it stopped before it was done. A record of an entity class that no longer exists is removed as a record. Annotations a member made on other people's posts stay with those posts. `User::canBeDemotedOrDeletedBy()` and `whyNotRemovableBy()` say whether an administrator may delete or demote an account (never their own, never the last administrator's); `Page::mayDeleteRequestedEntity()` asks it, so a delete page of yours that calls it has the rule.
+
 ## A member's email address
 
 `User::jsonLDSerialise()` (the schema.org data in the head of every profile and post page) no longer has an `email` key: a member's account email is private. A plugin that read `email` from it, or from a page's JSON-LD, must read the address from the user's own settings, or from the `mailto:` links the member lists in their profile (`profile.url`).

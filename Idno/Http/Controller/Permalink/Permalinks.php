@@ -96,6 +96,12 @@ interface Permalinks
     /**
      * Deletes the entity, and tells the member so with a message (`%s was deleted.`) when it was. Whether it was deleted.
      */
+    /**
+     * Whether the signed-in administrator may not delete this account (their own, or the last administrator's): the reason is put in the
+     * session's messages and true is returned. False when they may, and for anything that is not an account.
+     */
+    public function refusesToDeleteAccount(Entity $entity): bool;
+
     public function delete(Entity $entity): bool;
 
     /**

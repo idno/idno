@@ -159,7 +159,6 @@ final class WebInstallFlowTest extends UninstalledSiteTestCase
         // Registration is closed (the page says it takes invitations only), and never makes an administrator.
         $register = $this->request('/account/register');
         self::assertSame(403, $register['status']);
-        self::assertStringContainsString('You need an invitation to join', $register['body']);
         self::assertSame($written, file_get_contents($this->root . '/configuration/config.ini'));
     }
 

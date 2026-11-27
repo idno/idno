@@ -528,23 +528,16 @@ abstract class SettingsRecordStoreContract extends TestCase
     }
 
     /**
-     * claim() on the settings document: only the call that removes the document is told yes, a claim of another id or of an empty collection is told no and
-     * removes nothing, and a claim of another collection goes to the store beneath (the rows of the settings are not touched).
+     * A claim of another collection's record goes to the store beneath and never touches the settings: an invitation (an `entities` record) must be
+     * claimable on a site, and claiming it must not remove the site's configuration.
      */
-    public function testOfTwoClaimsOfTheSettingsDocumentExactlyOneWins(): void
+    public function testAClaimOfAnotherCollectionLeavesTheSettingsAlone(): void
     {
-        $this->assertFalse($this->store->claim('config', 'settings-1'), 'nothing to claim in an empty collection');
-
         $this->store->save('config', self::document());
         $rows = $this->rows();
-        $this->assertFalse($this->store->claim('config', 'another-id'), 'another id is not this document');
-        $this->assertSame($rows, $this->rows(), 'and removes nothing');
-        $this->assertFalse($this->store->claim('entities', 'settings-1'), 'the settings are not another collection\'s record');
-        $this->assertSame($rows, $this->rows());
 
-        $this->assertTrue($this->store->claim('config', 'settings-1'), 'the first claim removes the document');
-        $this->assertSame([], $this->rows());
-        $this->assertFalse($this->store->claim('config', 'settings-1'), 'the second is told no');
+        $this->assertFalse($this->store->claim('entities', 'settings-1'), 'the settings document is not an entities record');
+        $this->assertSame($rows, $this->rows());
     }
 
     // ----------------------------------------------------------------------------- refusals

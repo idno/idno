@@ -1661,12 +1661,12 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
         $hostileInvitation->inviter_name = $hostile;
         $hostileInvitation->send_failed = true;
         $adminInvitation = new \Idno\Entities\Invitation();
+        $adminInvitation->setRole(\Idno\Entities\Invitation::ROLE_ADMIN); // before the code: a different role is a new code
         $adminInvitation->email = 'boss@example.org';
         $adminInvitation->code = 'fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210';
         $adminInvitation->created = 1773000000;
         $adminInvitation->expires = 4102444800;
         $adminInvitation->_id = '00000000000040008000000000000203';
-        $adminInvitation->setRole(\Idno\Entities\Invitation::ROLE_ADMIN);
         $was = $config->config;
         foreach ([
             'no invitations, no blocks' => [['count' => 1, 'invitations' => []], []],
@@ -1694,7 +1694,7 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
         $this->assertStringContainsString('idno-plugin-always-on', (string) $out['plugins, two always on']);
         $this->assertStringContainsString('Active', (string) $out['themes, current Alpha']);
         $this->assertStringContainsString('friend@example.org', (string) $out['users, invitations']);
-        $this->assertStringContainsString('Administrator', (string) $out['users, invitations'], 'an administrator invitation says so');
+        $this->assertStringContainsString('idno-badge-strong', (string) $out['users, invitations'], 'an administrator invitation is marked');
         $this->assertStringNotContainsString('<x-canary', (string) $out['users, invitations'], 'what an invitation holds is escaped');
     }
 

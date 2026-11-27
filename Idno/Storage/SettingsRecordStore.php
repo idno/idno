@@ -225,7 +225,7 @@ final class SettingsRecordStore implements RecordStore
             return $this->inner->delete($collection, $id);
         }
 
-        return $this->deleteDocument($id) !== false;
+        return $this->deleteDocument($id, false) !== false;
     }
 
     public function claim(string $collection, string $id): bool
@@ -234,15 +234,16 @@ final class SettingsRecordStore implements RecordStore
             return $this->inner->claim($collection, $id);
         }
 
-        return (int) $this->deleteDocument($id) > 0;
+        return (int) $this->deleteDocument($id, true) > 0;
     }
 
     /**
      * Removes the settings document when its `_id` is this id.
      *
+     * @param bool $throwWhenBusy a lock wait or deadlock is thrown, not taken for a refusal (claim() asks it)
      * @return int|false the number of `_id` rows it matched (0: another id, or no document), false when the database refuses it
      */
-    private function deleteDocument(string $id): int|false
+    private function deleteDocument(string $id, bool $throwWhenBusy): int|false
     {
         $json = json_encode($id);
         $candidates = $json === false ? [] : [$json];
@@ -275,7 +276,7 @@ final class SettingsRecordStore implements RecordStore
                 throw $e;
             }
         } catch (DriverException $e) {
-            if (!$this->dialect->isRefusedData($e)) {
+            if (!$this->dialect->isRefusedData($e) || ($throwWhenBusy && $e instanceof \Doctrine\DBAL\Exception\RetryableException)) {
                 throw $e;
             }
 

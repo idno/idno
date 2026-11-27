@@ -176,11 +176,11 @@ final class RegistrationAnswersTest extends SignInSiteCase
             $make = static function (string $id, string $email, string $code, string $expires, string $role) use ($ada): void {
                 $invitation = new \Idno\Entities\Invitation();
                 $invitation->_id = $id;
+                $invitation->setRole($role); // before the code: a different role is a new code
                 $invitation->email = $email;
                 $invitation->code = $code;
                 $invitation->created = (int) strtotime('2026-03-01 12:00:00 UTC');
                 $invitation->expires = (int) strtotime($expires);
-                $invitation->setRole($role);
                 $invitation->inviter_name = 'Ada Admin';
                 $invitation->invited_by = $ada->getUUID();
                 if (!$invitation->save(true)) {

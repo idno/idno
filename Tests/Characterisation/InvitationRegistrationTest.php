@@ -160,6 +160,26 @@ final class InvitationRegistrationTest extends PrivateSiteTestCase
     }
 
     /**
+     * Catches the reasons of a failed registration being shown again on the next page (they are used up by the answer that shows them), and a value typed
+     * into the form that ends its attribute or opens an element: the form drawn again for a refused registration prints what was typed as text.
+     */
+    public function testAFailedRegistrationShowsItsReasonsOnceAndPrintsWhatWasTypedAsText(): void
+    {
+        $this->addUser('ada', 'correct-horse-battery-9', null, true);
+        $hostile = '"><x-canary a=\'1';
+        [$cookie, $token] = $this->visitor();
+
+        $answer = $this->site()->request('POST', 'account/register', ['Cookie' => $cookie], ['__bTk' => $token] + $this->form('x y', $hostile, '', ['name' => $hostile]));
+
+        $this->assertSame(400, $answer->status);
+        $this->assertStringContainsString("We couldn't register you.", $answer->body);
+        $this->assertStringNotContainsString('<x-canary', $answer->body, 'what was typed is not markup');
+        $this->assertStringContainsString('&lt;x-canary', $answer->body, 'it is text');
+        $next = $this->site()->request('GET', '/', ['Cookie' => self::sessionCookieOrNull($answer) ?? $cookie]);
+        $this->assertStringNotContainsString("We couldn't register you.", $next->body, 'the reasons were used up by the answer that showed them');
+    }
+
+    /**
      * POSTs the registration form to the site at the same time, one request for each entry.
      *
      * @param list<array{string, array<string, string>}> $requests each a session cookie and the fields

@@ -268,6 +268,14 @@ final class SqliteDialect implements Dialect
         return null;
     }
 
+    /**
+     * A statement that takes SQLite's write lock without changing anything: run as the first statement of a transaction it makes the transaction a
+     * writer from the start (the equivalent of BEGIN IMMEDIATE, which DBAL's nesting cannot ask for), so that it waits for another writer for up to
+     * the busy timeout. A transaction that begins with a read and writes later fails at once, and unwaited, when another connection commits in between.
+     * MySQL and MariaDB need nothing of the kind.
+     */
+    public const TAKE_THE_WRITE_LOCK = 'delete from idno_settings where 1 = 0';
+
     public function isRefusedData(DriverException $exception): bool
     {
         return $exception instanceof ConstraintViolationException

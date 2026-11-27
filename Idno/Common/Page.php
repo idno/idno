@@ -996,6 +996,14 @@ namespace Idno\Common {
             }
             if ($object instanceof \Idno\Entities\User) {
                 $this->adminGatekeeper();
+                // never one's own account, never the last administrator's: a site always keeps somebody who can administer it
+                $why = $object->whyNotRemovableBy(\Idno\Core\Idno::site()->session()->currentUserUUID());
+                if ($why !== '') {
+                    $object->explainWhyNotRemovable($why);
+                    $this->forward(\Idno\Pages\Session\Login::sanitizeRedirectUrl($_SERVER['HTTP_REFERER'] ?? ''));
+
+                    return false;
+                }
             } else if (!$object->canEdit()) {
                 $this->deniedContent();
             }

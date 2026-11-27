@@ -133,6 +133,9 @@ final class PermalinkPages implements ReceivesWebmentions
             if (!$this->permalinks->isAdministrator()) {
                 return $this->renderer->denied($page);
             }
+            if ($this->permalinks->refusesToDeleteAccount($entity)) {
+                return $this->renderer->redirect($page, $this->permalinks->referrer($page));
+            }
         } elseif (!$this->permalinks->canEdit($entity)) {
             return $this->renderer->denied($page);
         }

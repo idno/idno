@@ -568,14 +568,7 @@ namespace Idno\Entities {
          */
         function canBeDemotedOrDeletedBy($by_uuid)
         {
-            if ((string) $by_uuid === (string) $this->getUUID()) {
-                return false;
-            }
-            if (!empty($this->admin) && static::countAdministrators() <= 1) {
-                return false;
-            }
-
-            return true;
+            return $this->whyNotRemovableBy($by_uuid) === '';
         }
 
         /**
@@ -1259,28 +1252,124 @@ namespace Idno\Entities {
             return $result;
         }
 
+        /// How many of an account's entities are looked up and deleted at a time
+        const CONTENT_BATCH = 100;
+
         /**
-         * Remove this user and all its objects
+         * Remove this account AND everything it owns: every entity of every class and access (public, private, drafts, the plugins'
+         * content types, files), each through its own delete() so that its hooks run (the files attached to a post go, a deleted public
+         * post is announced as any delete of it is). Annotations the account made on other people's posts are not its content: they stay on
+         * those posts.
          *
-         * @return bool
+         * The content goes first, in batches, and the account only when none is left. When a listener refuses to delete something, or the time
+         * for one request runs out (deleteContent()), the account stays, an error message says so, and false is returned: deleting it again carries
+         * on with what is left.
+         *
+         * @return bool Was the account deleted?
          */
         function delete()
         {
+            if (!$this->deleteContent()) {
+                \Idno\Core\Idno::site()->session()->addErrorMessage(\Idno\Core\Idno::site()->language()->esc_("%s still has content that could not be deleted in this request (a plugin may have refused to delete it, or there is a lot of it), so the account was not deleted. Delete it again to carry on.", [$this->getTitle()]));
 
-            // First, remove all owned objects
-            while ($objects = Entity::get(array('owner' => $this->getUUID()), array(), 100)) {
-                $deleted = 0;
-                foreach ($objects as $object) {
-                    if ($object->delete()) {
-                        $deleted++;
-                    }
-                }
-                if ($deleted === 0) {
-                    break; // a listener refuses every one that is left: they would be found again for ever
-                }
+                return false;
             }
 
             return parent::delete();
+        }
+
+        /**
+         * Delete what this account owns, a batch at a time (access ignored for the lookup and restored afterwards). Each entity is deleted through
+         * its own delete(); one that refuses (a listener says no) is skipped, so a batch that deletes nothing cannot make the loop run for ever. Records
+         * whose class no longer exists, which have no delete() to run, are removed as records.
+         *
+         * @param  int        $batch   How many to look up and delete at a time
+         * @param  float|null $seconds The time to work for before stopping after a batch (null: well inside PHP's time limit for a request, or half
+         *                             a minute where there is none)
+         * @return bool true when nothing of it is left, false when something was refused or the time ran out (call again to carry on)
+         */
+        function deleteContent($batch = self::CONTENT_BATCH, $seconds = null)
+        {
+            $batch   = max(1, (int) $batch);
+            $limit   = (int) ini_get('max_execution_time');
+            $seconds = $seconds ?? ($limit > 0 ? $limit * 0.6 : 30.0);
+            $started = microtime(true);
+            $uuid    = (string) $this->getUUID();
+            $db      = \Idno\Core\Idno::site()->db();
+            $before  = $db->getIgnoreAccess();
+            $db->setIgnoreAccess(true);
+            try {
+                $skipped = 0;
+                $refused = 0;
+                while (true) {
+                    $objects = Entity::getFromAll(['owner' => $uuid], [], $batch, $skipped);
+                    if (empty($objects)) {
+                        break;
+                    }
+                    foreach ($objects as $object) {
+                        if ((string) $object->getUUID() === $uuid) {
+                            $skipped++; // the account itself, if it names itself as its owner: not content
+                        } elseif (!$object->delete()) {
+                            $skipped++; // something refuses to delete it: left, and not found again by this loop
+                            $refused++;
+                        }
+                    }
+                    if (microtime(true) - $started >= $seconds && count($objects) >= $batch) {
+                        return false; // there may be more: the caller comes back
+                    }
+                }
+                // What an entity class that has gone left behind has no delete() to run
+                $offset = 0;
+                while ($records = $db->getRecords([], ['owner' => $uuid], $batch, $offset)) {
+                    foreach ($records as $record) {
+                        $class = (string) ($record['entity_subtype'] ?? '');
+                        if (($record['uuid'] ?? '') !== $uuid && ($class === '' || !class_exists($class))) {
+                            $db->deleteRecord($record['_id']);
+                        } else {
+                            $offset++;
+                        }
+                    }
+                }
+
+                return $refused === 0;
+            } finally {
+                $db->setIgnoreAccess($before);
+            }
+        }
+
+        /**
+         * Tells the administrator who asked, in the session's messages, why this account was not deleted or demoted (see whyNotRemovableBy()).
+         *
+         * @param string $why 'self' or 'last'
+         */
+        function explainWhyNotRemovable($why)
+        {
+            $session  = \Idno\Core\Idno::site()->session();
+            $language = \Idno\Core\Idno::site()->language();
+            if ($why === 'self') {
+                $session->addErrorMessage($language->_("You can't take away your own administration rights or delete your own account here. Another administrator can."));
+            } else {
+                $session->addErrorMessage($language->esc_("%s is the only administrator, so nothing was changed.", [$this->getTitle()]));
+            }
+        }
+
+        /**
+         * Why an administrator may not delete this account or take its rights away: 'self' (their own), 'last' (the last administrator), or ''
+         * when they may. canBeDemotedOrDeletedBy() is this as a yes or no.
+         *
+         * @param  string $by_uuid The UUID of the administrator who asks
+         * @return string
+         */
+        function whyNotRemovableBy($by_uuid)
+        {
+            if ((string) $by_uuid === (string) $this->getUUID()) {
+                return 'self';
+            }
+            if (!empty($this->admin) && static::countAdministrators() <= 1) {
+                return 'last';
+            }
+
+            return '';
         }
 
         public function jsonSerialize(): mixed

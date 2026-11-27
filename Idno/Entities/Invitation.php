@@ -363,7 +363,9 @@ namespace Idno\Entities {
                 }
             );
             if ($claimed) {
-                // What the claimed record said, as it was when it was claimed (an administrator may have changed it since this one was read)
+                // What the record said when it was read again just before the claim, which is later than when the page looked (an administrator may
+                // have changed it since). On MySQL the read is a snapshot, so a change made in the milliseconds between the read and the claim is not seen:
+                // the invitation was issued as that role by an administrator all the same
                 $this->role       = $role;
                 $this->invited_by = $invited_by;
             }
@@ -411,9 +413,17 @@ namespace Idno\Entities {
             return $this->role === self::ROLE_ADMIN ? self::ROLE_ADMIN : self::ROLE_MEMBER;
         }
 
+        /**
+         * Sets the role. A DIFFERENT role is a new code: a link already sent (and kept in a mail, a history, a log) must never become the link of
+         * another role, an administrator's least of all.
+         */
         function setRole($role)
         {
-            $this->role = $role === self::ROLE_ADMIN ? self::ROLE_ADMIN : self::ROLE_MEMBER;
+            $role = $role === self::ROLE_ADMIN ? self::ROLE_ADMIN : self::ROLE_MEMBER;
+            if ($role !== $this->getRole()) {
+                $this->generateCode();
+            }
+            $this->role = $role;
         }
 
         /**
@@ -450,13 +460,13 @@ namespace Idno\Entities {
         }
 
         /**
-         * The address the invited person opens to join, on the site's configured address
+         * The address the invited person opens to join, on the site's configured address (Email::siteAddress(): a link in a mail never follows the request)
          *
          * @return string
          */
         function getLink()
         {
-            return \Idno\Core\Idno::site()->config()->getURL() . 'account/register/?email=' . urlencode((string) $this->email) . '&code=' . urlencode((string) $this->code);
+            return Email::siteAddress() . 'account/register/?email=' . urlencode((string) $this->email) . '&code=' . urlencode((string) $this->code);
         }
 
         /**

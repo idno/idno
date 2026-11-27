@@ -510,6 +510,11 @@ final class PermalinksDouble implements Permalinks
         return $this->saved;
     }
 
+    public function refusesToDeleteAccount(Entity $entity): bool
+    {
+        return false;
+    }
+
     public function delete(Entity $entity): bool
     {
         $this->calls[] = 'delete';
