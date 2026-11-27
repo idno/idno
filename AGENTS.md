@@ -671,8 +671,15 @@ like the modern look of the site and work in mail clients, which are not browser
   the address. A new kind of block is a new part in both directories, not markup in a
   mail's template.
 - **Addresses** in a mail come from `Email::siteUrl($path)`, the address the site is
-  configured with. Not `getDisplayURL()`, which takes its scheme from the request at hand:
-  a mail sent from the queue of an https site would link to http.
+  configured with (`url` in `config.ini`), scheme included. Not `Config::getDisplayURL()`
+  or an entity's `getURL()` / `getDisplayURL()`, which take their scheme from the request
+  at hand: a reset asked for over plain http on an https site would mail the member an http
+  link holding the code, and a mail sent from the queue would link to http. An address
+  that was built elsewhere (a reported post's, kept in a moderation case) goes through
+  `Email::onSiteUrl($url)`, which gives an address of this site the configured scheme and
+  leaves any other alone. A site with no `url` configured has only the address detected
+  from the request, and its mails use that. `Tests/Core/MailLinkAddressTest.php` sends the
+  reset and the invitation in a process of their own, as a plain http request and as none.
 - **Subjects** name the site, are one line, and have no exclamation mark. A value in the
   text body is made one line (`Email::oneLine()`), and text is wrapped to 72 characters
   (`Email::wrapText()`) with an address on a line of its own.

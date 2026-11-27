@@ -118,6 +118,32 @@ namespace IdnoPlugins\Moderation\Tests {
             }
         }
 
+        /**
+         * The report that led to a takedown was filed over plain http on a site configured
+         * as https: the mail that tells the author their post is back links to it on the
+         * site's own address, not on the one the reporter's request happened to use.
+         */
+        public function testARestoredPostIsLinkedOnTheConfiguredAddressNotTheReportersRequest()
+        {
+            $config = Idno::site()->config();
+            $before = $config->url;
+            $config->url = 'https://press.example/';
+            try {
+                $reporter = static::member('mailscheme');
+                $entry = $this->post(static::$author, 'Heron ' . static::marker());
+                $case = $this->report($reporter, 'post', $entry)['case'];
+                $this->assertStringStartsWith('http://press.example/', $case->getTargetURL(), 'This process is a plain http request, so that is the address the case holds');
+
+                $mail = $this->mailParts(Mailer::message(['to' => 'reader@example.com'] + Mailer::compose('restored', ['case' => $case])));
+
+                $path = substr($case->getTargetURL(), strlen('http://press.example/'));
+                $this->assertContains('https://press.example/' . $path, $this->mailLinks($mail['html']));
+                $this->assertStringNotContainsString('http://press.example', $mail['html'] . $mail['text']);
+            } finally {
+                $config->url = $before;
+            }
+        }
+
         public function testAMailQueuedBeforeMailsHadAPreheaderIsStillSent()
         {
             $mail = $this->mailParts(Mailer::message(['to' => 'reader@example.com', 'subject' => 'Your report has been reviewed', 'html' => '<div>Old body</div>', 'text' => "Old body\n"]));
