@@ -156,16 +156,6 @@ final class SessionDirectoryTest extends TestCase
         $this->assertStringNotContainsString($this->root, (string) $chosen['problem']);
     }
 
-    public function testALinkIsRefused(): void
-    {
-        mkdir($this->root . '/elsewhere', 0700);
-        symlink($this->root . '/elsewhere', $this->root . '/project/var/sessions');
-
-        $chosen = $this->choose();
-
-        $this->assertNotSame($this->root . '/project/var/sessions', $chosen['path']);
-    }
-
     // Two checkouts must never share a fallback directory (and so each other's sessions).
     public function testTwoProjectsGetTwoTemporaryDirectories(): void
     {

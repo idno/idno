@@ -79,10 +79,10 @@ namespace Idno\Core {
             return $this->native ??= Idno::container()->get(\Idno\Security\NativeSession::class);
         }
 
-        private static bool $sessionDirectoryWarned = false;
+        private static ?\Idno\Security\SessionDirectoryReport $sessionDirectoryReport = null;
 
         /**
-         * Where file sessions are kept (see Idno\Security\SessionDirectory); one warning a process when none could be made.
+         * Where file sessions are kept (see Idno\Security\SessionDirectory); the line saying one cannot be used is throttled in the site's cache (Idno\Security\SessionDirectoryReport).
          *
          * @return array{path: ?string, own: bool, problem: ?string}
          */
@@ -98,32 +98,22 @@ namespace Idno\Core {
                 Idno::container()->getParameter('kernel.project_dir'),
                 sys_get_temp_dir()
             );
-            if ($chosen['problem'] !== null && !self::$sessionDirectoryWarned) {
-                self::$sessionDirectoryWarned = true;
-                if ($this->shouldSaySessionDirectoryProblem($chosen['problem'], $override)) {
-                    Idno::site()->logging()->warning($chosen['problem']);
+            if ($chosen['problem'] !== null) {
+                // the pool and the logger are asked for only now, when there is something to say
+                $setting = is_string($override) && $override !== '' && str_contains($chosen['problem'], 'IDNO_SESSION_DIR') ? 'IDNO_SESSION_DIR' : 'session';
+                self::$sessionDirectoryReport ??= new \Idno\Security\SessionDirectoryReport(
+                    static fn () => Idno::container()->get(\Psr\Cache\CacheItemPoolInterface::class)
+                );
+                if (self::$sessionDirectoryReport->shouldSay($setting, $chosen['problem'])) {
+                    try {
+                        Idno::site()->logging()->warning($chosen['problem']);
+                    } catch (\Throwable $e) {
+                        // a warning must never block a sign-in
+                    }
                 }
             }
 
             return $chosen;
-        }
-
-        /**
-         * A web request is a process of its own as far as a static is concerned, so "once" needs a memory that outlives it: a marker file in the
-         * temporary directory, one for each project, setting and problem, which lets the line out once an hour. Where the marker cannot be
-         * written the line is said every time (never silently dropped).
-         */
-        private function shouldSaySessionDirectoryProblem(string $problem, mixed $override): bool
-        {
-            $marker = sys_get_temp_dir() . '/idno-session-directory-' . substr(hash('sha256', Idno::container()->getParameter('kernel.project_dir') . "\0" . (is_string($override) ? $override : '') . "\0" . $problem), 0, 16);
-            $age    = is_file($marker) ? time() - (int) @filemtime($marker) : null;
-            if ($age !== null && $age >= 0 && $age < 3600) {
-                return false;
-            }
-
-            @touch($marker);
-
-            return true;
         }
 
         function init()
