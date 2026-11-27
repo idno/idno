@@ -90,15 +90,15 @@ final class PermalinkPagesTest extends TestCase
         $this->assertNotContains('find:0', $this->site->calls);
     }
 
-    public function testAPostTheViewerMayNotReadIsDenied(): void
+    public function testAPostTheViewerMayNotReadIsAnsweredAsAMissingOne(): void
     {
         $this->site->entity = $this->entity();
         $this->site->readable = false;
 
         $response = $this->pages->view($this->context());
 
-        $this->assertSame(403, $response->getStatusCode());
-        $this->assertSame(['pages/403'], array_column($this->drawer->templates, 0));
+        $this->assertSame(410, $response->getStatusCode());
+        $this->assertSame(['pages/410'], array_column($this->drawer->templates, 0));
         $this->assertNotContains('updated', $this->site->calls, 'nothing of the post is asked before the viewer may read it');
     }
 
@@ -194,7 +194,7 @@ final class PermalinkPagesTest extends TestCase
         $this->site->updated = 1_700_000_000;
         $page = $this->context('a-note', 'GET', ['If-Modified-Since' => 'Sat, 01 Jan 2050 00:00:00 GMT']);
 
-        $this->assertSame(403, $this->pages->view($page)->getStatusCode());
+        $this->assertSame(410, $this->pages->view($page)->getStatusCode());
     }
 
     public function testTheBodyAndShellVariables(): void
@@ -224,7 +224,7 @@ final class PermalinkPagesTest extends TestCase
         $this->site->entity = $this->entity();
         $this->site->markdown = true;
         $this->site->readable = false;
-        $this->assertSame(403, $this->pages->view($this->context())->getStatusCode());
+        $this->assertSame(410, $this->pages->view($this->context())->getStatusCode());
         $this->assertNotContains('markdown', $this->site->calls, 'a post the viewer may not read is never drawn as Markdown');
 
         $this->site->readable = true;

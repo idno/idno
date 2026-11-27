@@ -6,7 +6,7 @@ namespace Idno\Http\Page;
 
 /**
  * Marks a controller action that is routed by the legacy route table and has no `#[Route]`: its address is one the site decides at run time (a
- * permalink's pattern is a stored setting, and plugins register their own at boot), which a compiled route cannot say. The action carries its
+ * post's permalink pattern: content types and plugins register their own at boot), which a compiled route cannot say. The action carries its
  * `#[SitePage]` as any page's, and is NAMED by exactly one legacy class's public constant `ACTION` (`[Controller::class, 'method']`): its kept shell
  * or, for a page whose class was deleted, a placeholder of its own under `Idno\Legacy\Placeholder\`. `Idno\Legacy\LegacyRoutedPages` hands a request
  * to the action when the legacy router itself would have served the request with that class, with the arguments it would have been called with.

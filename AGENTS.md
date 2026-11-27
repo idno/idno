@@ -58,13 +58,13 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
   `test:up:mysql`, `test:down`) is a list whose first entry is `Composer\Config::disableProcessTimeout`:
   Composer's default 300-second process timeout would kill the whole suite on MySQL (about four
   minutes). Arguments after `--` still reach the command. Keep that entry when you change one.
-  Rough times: the unit tier about ten seconds; the whole suite (7,707 tests) about 22 minutes on SQLite (measured with other work running beside it), and, measured
-  at 6,508 tests, 32 minutes on MySQL 8.0 and 29 minutes on MariaDB 10.6 (all on one development machine; the figures move with the machine's load).
+  Rough times: the unit tier about ten seconds; the whole suite (7,696 tests) about 21 minutes on SQLite (measured with other work running beside it), and, measured
+  at 7,681 tests, 40 minutes on MySQL 8.0 and 33 minutes on MariaDB 10.6 (all on one development machine; the figures move with the machine's load).
 - Likewise run the console as `composer console -- <command>` against the rig; on a site without
   `pedantic_mode` it is `php bin/console <command>` (`idno.php` and `known.php` are aliases). See
   "Console commands" below.
 - PHPUnit config: `phpunit.xml` (bootstrap: `Tests/_bootstrap.php`; `phpunit.xml` sets `memory_limit` to 512M, because the
-  whole suite runs in one process: the peak is 237 MB on SQLite (391 skipped) of 7,707 tests, and was 221 MB on MySQL 8.0 (22 skipped) and 221 MB on MariaDB 10.6 (23 skipped) of 6,508, well under the guard's 380 MB; the largest classes each leave about 20 MB or
+  whole suite runs in one process: the peak is 243 MB on SQLite (391 skipped) of 7,696 tests, and was 243 MB on MySQL 8.0 (23 skipped) and 245 MB on MariaDB 10.6 (24 skipped) of 7,681, well under the guard's 380 MB; the largest classes each leave about 20 MB or
   less behind: a second kernel's container, the export archive tests), and it peaked at 455 MB when every entity a test
   built was kept alive for the rest of the run by the event listener `Entity::registerEventHooks()` added for each object
   (see below)) for `composer test`. The extension `Tests\Support\MemoryGuard` and its listener
@@ -857,6 +857,8 @@ error pages, as a legacy page's was, by `Idno\Http\Page\PageExceptionListener` (
 
 ### Adding a route (the new way)
 
+Which way in a page uses. A page with a fixed address is a `#[Route]` plus `#[SitePage]`; when a plugin has taken the path in the legacy route table, `LegacyRouteOverride` hands the request back to the legacy router. A page whose addresses core, content types or plugins register at boot (the post permalink, its annotation pages, the profile) is a `#[RoutedByLegacyTable]` action with a `#[SitePage]` and NO `#[Route]`: the legacy route table chooses the page class for an address, and when that class names an action in its `ACTION` constant, the request is served by that controller action. A deprecated shell is never chosen for a new page: it exists only where third-party classes extend the old page class (`Idno\Pages\Homepage`, `Idno\Pages\Entity\View`, `Idno\Pages\User\View`).
+
 To replace the site's home page (the root) from a plugin, do not add a route or `hijackRoute()` the root: listen to the event `homepage/replace` (see "Replacing the home page: the event `homepage/replace`" under "Legacy pages and routes").
 
 New HTTP endpoints are Symfony controllers, not `Idno\Common\Page` classes, with one
@@ -1215,7 +1217,7 @@ for classes that extend `PageShell`, and holds each to the rule); it is `Idno\Pa
   `Idno\Http\Controller\Permalink\PermalinkPages::view()`; the shell's `getContent()` (a subclass's), `postContent()`, `deleteContent()` and `webmentionContent()` call `view()`, `save()`, `delete()` and
   `receiveWebmention()` of the same service, so the permalink has one implementation. What the service asks the site is the interface `Permalinks` (`Idno\Legacy\LegacyPermalinks`: the lookup by id, else by slug, `canRead()`,
   `canEdit()`, who is signed in, the display address, the owner, the title and description, `updated`, the Markdown form, `saveDataFromInput()`, the delete and its message, `addWebmentions()`, the referrer through
-  `Login::sanitizeRedirectUrl()`). `view()` does what `getContent()` did, in order: select the Markdown type when asked, find the post (none: 410), refuse a viewer who may not read it (403), send an account to
+  `Login::sanitizeRedirectUrl()`). `view()` does what `getContent()` did, in order: select the Markdown type when asked, find the post (none: 410), answer a post the viewer may not read as a missing one (410: the address does not tell which posts exist), send an account to
   its profile, set the owner and the permalink flag, answer a conditional request (`PageContext::answerConditionally()`, only when the post has a date, and only once the viewer is known to be allowed to read it) and
   send `Last-Modified`, then the Markdown document or the page (`entity/wrapper` in the shell). `save()` and `delete()` establish permission BEFORE any side effect, as the legacy handlers do after the security
   fixes: a visitor is refused, a post the member may not read is answered as a missing one is (a forward home, which for a script's request, that cannot be redirected, is the empty answer that ends the page), a member who may not edit it is refused, an account is deleted only by an administrator's
@@ -1225,7 +1227,7 @@ for classes that extend `PageShell`, and holds each to the rule); it is `Idno\Pa
   conditional request is answered 304 when its `If-Modified-Since` is a valid HTTP-date not before the post's last change (the legacy comparison was the wrong way round), and an XHR GET or HEAD gets the headers of the
   same request that is not XHR; (2) a PUT or a DELETE with no valid form token is the site's 403 page, for EVERY legacy page (`Page::put()` and `delete()` call `refuseWithoutToken()`, which is `deniedContent()`: they threw
   `SecurityException`, which is the reported 500 page and mails the administrator, and a stranger can send one; a POST with no token only logs a line and forwards, and stays as it was); (3) the JSON `{"location": ...}` that answers a signed API request
-  is `application/json` (the rule of every site page; the legacy page sent it as `text/html`). Where `Vary: Accept` is and is not sent is as the legacy page's recordings have it (a GET or HEAD of a permalink, every answer, a 304 included; not
+  is `application/json` (the rule of every site page; the legacy page sent it as `text/html`); (4) a post the finder returned that the viewer may not read (a plugin's `canRead()` rule can make one) is the 410 page of a post that is not there, where it was a 403 that said the address names a post (the walled garden's 403 and the refusals of a POST or DELETE are unchanged). Where `Vary: Accept` is and is not sent is as the legacy page's recordings have it (a GET or HEAD of a permalink, every answer, a 304 included; not
   the answer to OPTIONS, the refusal of a visitor of a private site, or a POST or DELETE: see "Legacy pages and routes"). A post with no `updated` gets no `Last-Modified` (the permalink asks nothing of a date it has not got; no
   recording holds that case). A permalink asked for as ActivityPub (`Accept: application/activity+json`, or `application/ld+json` with the ActivityStreams profile) is the post's object, as the
   plugin's `PageDocument` decides from the page (see "ActivityPub Plugin": the page service decides who may read the post first, as for HTML). A database statement
@@ -4314,7 +4316,7 @@ standalone implementation, https://github.com/jevdemon/idno-markdown, was the re
 - A permalink page calls `Page::sendVaryAccept()` and `Page::selectMarkdownIfWanted()` FIRST in `getContent()` (the type is
   selected when `Page::wantsMarkdown()`), then makes its own checks (the entity exists, `canRead()`, the static page's
   forward), then `Page::drawMarkdown($object)` when `wantsMarkdown()`. So a private post, a draft and a missing post answer with
-  the STATUS the HTML permalink has for that viewer (410, 403), as a Markdown document of that error page (its title and text),
+  the STATUS the HTML permalink has for that viewer (410 for a post that is missing or that the viewer may not read), as a Markdown document of that error page (its title and text),
   and never with anything of the post: `drawMarkdown()` is the only thing that names the entity to the shell (the template
   variable `markdown_entity`), and it is called only after the checks. A third-party permalink page does the same three calls and
   implements `MarkdownPermalink` (next bullet).
@@ -5125,7 +5127,7 @@ Each content plugin has an `Entry.php` entity class that defines
    the plugin draws no ActivityPub form) and prints what `PageDocument::forPage($currentPage)` decides, from the PAGE (the entity it is the permalink of, and the status it
    answers with), never from template variables, which stay set between draws (drawing a member's default picture sets `user`, which once made every post answer with its
    owner). The page service has decided who may read the post before the shell is drawn, as for HTML, so a post the viewer may not read, a deleted post and a slug nobody has
-   are the 403, 410 and 404 the page answers (`{"error": ...}`, `application/json`, by `ShellHeaders::for('activitypub', $status)`), and a visitor of a private site is
+   are the 410 (all three: a slug nobody has is a post that is not there) the page answers (`{"error": ...}`, `application/json`, by `ShellHeaders::for('activitypub', $status)`), and a visitor of a private site is
    refused before the page is served, as HTML. A post that is not given to other servers (`ActivityBuilder::isFederated()`: public, published or with no status, of a
    content type, by a member) is a 406 `{"error": ...}` even for a viewer who may read it (a draft read by its owner, a post for the members), and so is any page that is no
    post or member (the home page, a static page). The shell sets the status with `http_response_code()` (a template sends no header) and `LegacyPageDrawer::drawPage()`
@@ -5403,7 +5405,7 @@ no installer writes one.
   answers a POST only when `Session::isAPIRequest()` is true, which the IndiePub plugin
   makes so (`Session::authenticateStatelessly()`) after an access token (`Authorization: Bearer`
   or the `access_token` field) has matched, and core makes so after a signed API request; otherwise it answers 401 (a GET, for
-  `q=config`, `q=syndicate-to` and `q=source`, is held to the same rule). The
+  `q=config` and `q=syndicate-to`, the two queries the endpoint has, and nothing for any other `q`, is held to the same rule). The
   IndieAuth `Auth` and `Token` pages act on the authorization code in the request, not
   on the session. `IdnoPlugins/IndiePub/Tests/MicropubEndpointAuthTest.php` checks this
   over HTTP with a logged-in browser.
@@ -5603,9 +5605,7 @@ no installer writes one.
   ONE RULE FOR AUTHORS: the post page's like toggle (a second like is an unlike) removes a like by the same check as the author's delete, `Entity::authoredAnnotationKey()` (made on this site, by the member), and removes exactly the key it returns; a like a webmention sent in the member's name is not theirs, so the toggle leaves it and adds their own. `removeAnnotation()` removes by key, and by an address only when it names one annotation (two that share a `permalink` are removed by neither); invented keys never take an existing one.
   WHO MAY REMOVE one: the post's editor, an administrator, and the annotation's AUTHOR (`Entity::canEditAnnotation()` = `canEdit()` or `isAnnotationAuthor()`; the templates draw the link with the same call, passing the annotation's key). The author is the member whose
   profile address is the stored `owner_url` of an annotation marked `made_here`, the mark the site's own paths alone set (the post page's like and reply, Micropub, imports). Honestly: Micropub lets any token holder name any `userurl`, and an import takes the comment author's address from
-  the file, so such an annotation names whom its writer chose, and that member may delete it. A webmention is never `made_here`. The key it is stored under is the key of the annotation the same source stored before, else one `addAnnotation()` invents (never one that any kind of annotation of the post holds: a key names one annotation among all the kinds, because it is looked up in every one), and its `permalink` is the SOURCE's: the address the source page declares for itself (`u-url`) is used only when it is NOT on this site's
-  host (`TargetHosts::isOnSiteHost()`, any scheme, port or spelling), else the webmention's source is; a webmention never replaces an annotation made here (`addAnnotation()` skips them, and `removeWebmentionAnnotations()`, which a repeated mention and a 410 use, removes only annotations
-  whose `permalink` is the source), and a repeated webmention from the same source updates its own. Before this rule a remote page could declare the address of an existing local annotation and overwrite a member's words, or declare an address in the key format; records stored that way before are
+  the file, so such an annotation names whom its writer chose, and that member may delete it. A webmention is never `made_here`. An annotation a webmention stores records the page that sent it (`webmention_source`, the source the endpoint fetched), and is known by the address that page declares for itself (`u-url`, its `permalink`) only when that is an address of another site (`TargetHosts::isOnSiteHost()`: any scheme, port or spelling of this site's host is refused) and is not the `permalink` of an annotation another source stored; otherwise it is known by the source itself. Which annotation a webmention replaces: `addAnnotation()` takes over the key of one stored with the SAME `webmention_source`, and, for one stored before the source was recorded (no `webmention_source`), of one with the same address; never one made here (`addAnnotation()` skips them), and never one another source stored SINCE sources are recorded, whatever address the new page declares, so a second page that declares the first page's `u-url` is stored under its own source and the first annotation is untouched. A record stored before sources were recorded has none, and can be taken over once by any page that declares its address (it then belongs to that source). Every address (the declared one, the source, the author's) is cleaned once, as `addAnnotation()` stores it (http or https, no bytes outside ASCII, no tags), BEFORE any of these checks; `addAnnotation()` reports the key it used and the removal of the source's stale annotations leaves exactly that key. A new annotation takes a key that no annotation of any kind holds (a key names one annotation among all the kinds, because it is looked up in every one). An author address (`owner_url`) on this site's host is stored only when the source is on this site's host too: a remote page cannot show a member as the author of a comment (it is stored empty). `removeWebmentionAnnotations()` (what a webmention leaves out that its source sent before, and a 410) removes the annotations whose `webmention_source` is the source (those with none, whose `permalink` is the source), never one made here and never another source's, and a repeated webmention from the same source updates its own. Before this rule a remote page could declare the address of an existing annotation (a member's, or another page's webmention) and overwrite its words, declare an address in the key format, or name a member of this site as the author; records stored that way before are
   unmarked, look locally made by `permalink === key`, and may name any member: all they allow is that the member named deletes that forged annotation (the post's editor could always). The author's removal saves the post with override as an annotation-only change (`saveAnnotations()`: `updated` fires with `annotations_only` and sends no ActivityPub `Update`), as an editor's delete does.
   `Tests/Characterisation/WebmentionAnnotationKeysTest` sends real webmentions through the endpoint over HTTP (the source is a page the site fetches from a public address that the test environment answers from the site itself) and asks what members can do afterwards over HTTP.
 - Passwords: `Idno\Security\Passwords` (a public container service in a scanned directory, `Idno/Security/`; it needs nothing of the legacy
@@ -5859,8 +5859,11 @@ no installer writes one.
   - The file page's `Content-Security-Policy: sandbox` has one exception, `application/pdf`, whose viewer needs it; it has not been tried in a browser by any test: the release checklist has the check.
   - The API signature (`X-IDNO-SIGNATURE`) covers only the request URI (no method, body or time), so a signed request can be replayed.
   - The form token is accepted from the query string as well as the body, and lasts as long as the session.
-  - Five POST handlers skip the form token check (`Idno/Pages/File/Upload.php`, `Idno/Pages/File/Picker.php`, `Idno/Pages/Entity/Autosave.php`,
-    `IdnoPlugins/StaticPages/Pages/Admin/ReorderCategory.php`, `ReorderPage.php`) and rely on `SameSite=Lax` on the session cookie.
+  - Six handlers skip the form token check (`Idno/Pages/File/Upload.php`, `Idno/Pages/File/Picker.php`, `Idno/Pages/Entity/Autosave.php`,
+    `IdnoPlugins/StaticPages/Pages/Admin/ReorderCategory.php`, `ReorderPage.php`, and `IdnoPlugins/Like/Pages/Callback.php`, whose POST is its GET: a member's request for the title of an address) and rely on `SameSite=Lax` on the session cookie.
+  - A webmention annotation stored before sources were recorded (every one on an upgraded site) has no `webmention_source` and is still replaced by any page that declares its address, once: the record then belongs to that page.
+  - A private site (`walled_garden`) still delivers its public posts to ActivityPub followers, pings its hub, sends webmentions and syncs to a PDS: the private-site check of `dev` (`c1048f68a`) is not ported here.
+  - On a private site the webmention endpoint (public, as a sender is no visitor) tells a stranger which public-access posts exist (`target_not_found` or not) and stores mentions of them, which members then see.
   - IndieAuth access tokens are stored in plain text, never expire, and their scope is not enforced by the Micropub endpoint.
   - `Page::isSSL()` trusts `X-Forwarded-Proto` from any client (there are no trusted proxies), and the login throttle counts by account
     for that reason.

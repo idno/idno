@@ -16,7 +16,7 @@ use Symfony\Component\HttpKernel\KernelEvents;
 
 /**
  * Serves a request with a controller action that is routed by the legacy route table (`#[RoutedByLegacyTable]`), for the addresses the site decides at
- * run time: a permalink's pattern is a stored setting and plugins register their own at boot, so no compiled `#[Route]` can say them.
+ * run time: content types and plugins register their own permalink patterns at boot, so no compiled `#[Route]` can say them.
  *
  * It acts on a request Symfony matched to the catch-all (`idno_legacy`: the legacy router's, a request `LegacyRouteOverride` handed back included) and asks the
  * legacy router what it will do with it (`PageHandler::choiceFor()`: the page class, the arguments, the `.md` rule, an exact key first and then the patterns in

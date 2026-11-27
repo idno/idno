@@ -65,6 +65,68 @@ final class AnnotationOnlySaveTest extends \Tests\IdnoTestCase
         return (int) Entity::getByID($this->post->getID())->updated;
     }
 
+    /** @return array<string, array<string, array<string, mixed>>> */
+    private function storedAnnotations(): array
+    {
+        $annotations = Entity::getByID($this->post->getID())->annotations;
+
+        return is_array($annotations) ? $annotations : [];
+    }
+
+    public function testASourceThatCleansToNothingStoresNothingAndChangesNothing(): void
+    {
+        // no byte of this address is left once it is cleaned the way an annotation stores it
+        $this->assertTrue($this->mention("http://\u{e9}/"), 'the answer is that of a mention that changes nothing');
+
+        $this->assertSame([], $this->storedAnnotations(), 'no annotation with an empty address and an invented key');
+        $this->assertSame([], $this->updates, 'nothing is saved or announced');
+    }
+
+    public function testASourceThatCleansToAnotherAddressIsStoredUpdatedAndRemovedAsItself(): void
+    {
+        $source = 'http://remote.example/caf' . "\u{e9}";
+        $this->assertTrue($this->mention($source));
+        $stored = $this->storedAnnotations()['reply'] ?? [];
+        $this->assertCount(1, $stored);
+        $one = array_values($stored)[0];
+        $this->assertSame('http://remote.example/caf', $one['permalink'], 'the address is stored cleaned');
+        $this->assertSame($source, $one['webmention_source'], 'and the source as it was sent');
+
+        // sent again it is the same annotation, in place
+        $this->assertTrue($this->mention($source, 'Other words.'));
+        $again = $this->storedAnnotations()['reply'];
+        $this->assertSame(array_keys($stored), array_keys($again));
+        $this->assertStringContainsString('Other words.', array_values($again)[0]['content']);
+
+        // and a 410 from the same source removes it
+        $this->assertTrue($this->mention($source, '', 410));
+        $this->assertSame([], $this->storedAnnotations()['reply'] ?? []);
+    }
+
+    public function testAnAddressThatIsOneOfThisSitesOnlyOnceItIsCleanedIsNotStoredAsOne(): void
+    {
+        $post = Entity::getByID($this->post->getID());
+        $target = $post->getURL();
+        $parts = parse_url($target);
+        $host = (string) $parts['host'];
+        $port = isset($parts['port']) ? ':' . $parts['port'] : '';
+        $own = $parts['scheme'] . '://' . $host . $port . $parts['path'] . '/annotations/' . md5('own');
+        $forged = $parts['scheme'] . '://' . substr($host, 0, 2) . "\u{e9}" . substr($host, 2) . $port . $parts['path'] . '/annotations/' . md5('own');
+        $source = 'http://remote.example/forging';
+        $html = '<!doctype html><html><body><div class="h-entry"><a class="u-url" href="' . $forged . '">permalink</a><div class="p-author h-card"><a class="p-name u-url" href="http://remote.example/">A</a></div>'
+            . '<a class="u-in-reply-to" href="' . htmlspecialchars($target, ENT_QUOTES) . '">a post</a><div class="e-content">Forged.</div></div></body></html>';
+        $parsed = Webmention::parseContent($html, $source);
+        // the character is in the parsed page: it reaches the cleaning, it is not dropped before
+        $this->assertSame($forged, $parsed['items'][0]['properties']['url'][0]);
+
+        $this->assertTrue((bool) $post->addWebmentions($source, $target, ['response' => 200, 'content' => $html], $parsed));
+
+        $replies = $this->storedAnnotations()['reply'] ?? [];
+        $this->assertCount(1, $replies);
+        $this->assertSame($source, array_values($replies)[0]['permalink'], 'it is known by its source');
+        $this->assertNotSame($own, array_values($replies)[0]['permalink']);
+    }
+
     public function testAnAnnotationAddedToAPostIsAnAnnotationOnlyUpdate(): void
     {
         $post = Entity::getByID($this->post->getID());

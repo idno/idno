@@ -35,7 +35,7 @@ final class PermalinkPages implements ReceivesWebmentions
 
     /**
      * The post an address names, in its shell, or as Markdown when the request asks for it. The checks come first and in this order: a post that is not
-     * there is gone (410), one the viewer may not read is refused (403), an account is the profile page, and only then is a conditional request
+     * there is gone (410), one the viewer may not read is answered as one that is not there (410), an account is the profile page, and only then is a conditional request
      * answered (never before the viewer's right to see the post is known) and the Markdown form drawn.
      */
     public function view(PageContext $page): Response
@@ -47,7 +47,8 @@ final class PermalinkPages implements ReceivesWebmentions
             return $this->renderer->gone($page);
         }
         if (!$this->permalinks->canRead($entity)) {
-            return $this->renderer->denied($page);
+            // answered as a post that is not there: the address does not tell which posts exist
+            return $this->renderer->gone($page);
         }
         // An account's address is its profile
         if ($this->permalinks->isUser($entity)) {

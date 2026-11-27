@@ -12,6 +12,7 @@ stored: {
             "content": "A reply from another site.",
             "time": "{time}",
             "title": "https://remote.example/reply-to-the-post",
+            "webmention_source": "https://remote.example/reply-to-the-post",
             "made_here": false
         }
     }

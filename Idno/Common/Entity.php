@@ -2586,8 +2586,20 @@ namespace Idno\Common {
                         $mentions['title'] = '';
                     }
                     $before = is_array($this->annotations) ? $this->annotations : [];
-                    $this->removeWebmentionAnnotations($source);
                     $hosts = new \Idno\Http\Webmention\TargetHosts((string)\Idno\Core\Idno::site()->config()->getURL());
+                    // A member of this site cannot be shown as the author of a page of another site
+                    // (every address is judged as it will be stored: cleaned once, here, the way addAnnotation() cleans it)
+                    $cleanSource = self::cleanAnnotationAddress($source);
+                    if ($cleanSource === '') {
+                        // no address of the page can be kept: nothing is stored, and nothing changes
+                        return $return;
+                    }
+                    $ownerUrl = self::cleanAnnotationAddress($mentions['owner']['url']);
+                    if ($ownerUrl !== '' && $hosts->isOnSiteHost($ownerUrl) && !$hosts->isOnSiteHost($cleanSource)) {
+                        $ownerUrl = '';
+                    }
+                    $mentions['owner']['url'] = $ownerUrl;
+                    $kept = [];
 
                     foreach ($mentions['mentions'] as $mention) {
                         if (!empty($mention['url'])) {
@@ -2602,23 +2614,36 @@ namespace Idno\Common {
                         }
                         // An address that can't be kept is replaced by the page that sent the
                         // webmention, so that the same page sending again replaces its annotation
-                        if (\Idno\Core\UrlValidator::httpUrl($permalink) === '') {
-                            $permalink = $source;
+                        $permalink = self::cleanAnnotationAddress($permalink);
+                        if ($permalink === '') {
+                            $permalink = $cleanSource;
                         }
                         // The address the source page declares for itself is its identity only when it is another site's: anyone can write one of
                         // this site's, and it would name (and replace) an annotation made here
                         if ($hosts->isOnSiteHost($permalink)) {
-                            $permalink = $source;
+                            $permalink = $cleanSource;
+                        }
+                        // ... and the address another page's annotation is known by is that page's, never this one's
+                        if ($permalink !== $cleanSource && $this->isAnnotationAddressOfAnotherSource($permalink, $source)) {
+                            $permalink = $cleanSource;
                         }
                         // a source that gives no date is dated by the first time it was stored: sending it again is not a change
                         $created = $mention['created'];
                         if (empty($created)) {
                             $created = $this->storedWebmentionTime($before, $permalink);
                         }
-                        if (!$this->addAnnotation($mention['type'], $mentions['owner']['name'], $mentions['owner']['url'], $mentions['owner']['photo'], $mention['content'], $permalink, $created, $mention['title'], $mention['fields'], true, false, false)) {
+                        $fields = is_array($mention['fields']) ? $mention['fields'] : [];
+                        $fields['webmention_source'] = $source;
+                        $key = null;
+                        if (!$this->addAnnotation($mention['type'], $mentions['owner']['name'], $mentions['owner']['url'], $mentions['owner']['photo'], $mention['content'], $permalink, $created, $mention['title'], $fields, true, false, false, $key)) {
                             $return = false;
+                        } elseif ($key !== null) {
+                            // the key addAnnotation() actually used
+                            $kept[] = $key;
                         }
                     }
+                    // What this page sent before and does not say any more
+                    $this->removeWebmentionAnnotations($source, $kept);
                     $after = is_array($this->annotations) ? $this->annotations : [];
                     if (self::annotationValues($before) === self::annotationValues($after)) {
                         // what the source says is what is stored: nothing is saved, announced or sent on (the annotations keep the keys they had)
@@ -2694,23 +2719,28 @@ namespace Idno\Common {
         }
 
         /**
-         * Removes the annotations a webmention from $source stored (those whose `permalink` is exactly $source: an annotation stored under an address the
-         * source declared for itself is not found by it) and no other: never an annotation made here, whatever the source names.
+         * Removes the annotations the page at $source sent as webmentions and no other: never an annotation made here and never another page's. An
+         * annotation stored with the page that sent it (`webmention_source`) is that page's alone; one stored before that was recorded belongs to the page
+         * whose address is its `permalink`.
          *
-         * @param string $source The webmention's source URL
+         * @param string   $source The webmention's source URL
+         * @param string[] $keep   Keys of annotations to leave
          * @return bool Whether any was removed
          */
-        function removeWebmentionAnnotations($source)
+        function removeWebmentionAnnotations($source, array $keep = [])
         {
             $removed = false;
             if (!empty($this->annotations) && is_array($this->annotations)) {
                 $annotations = $this->annotations;
                 foreach ($annotations as $subtype => $list) {
                     foreach (is_array($list) ? $list : [] as $key => $stored) {
-                        if (!is_array($stored) || !empty($stored['made_here']) || !isset($stored['permalink']) || (string)$key === $stored['permalink']) {
+                        if (!is_array($stored) || !empty($stored['made_here']) || !isset($stored['permalink']) || (string)$key === $stored['permalink'] || in_array((string) $key, $keep, true)) {
                             continue;
                         }
-                        if ($stored['permalink'] === $source) {
+                        $theirs = isset($stored['webmention_source']) && is_string($stored['webmention_source']) && $stored['webmention_source'] !== ''
+                            ? $stored['webmention_source'] === $source
+                            : $stored['permalink'] === $source || $stored['permalink'] === self::cleanAnnotationAddress($source);
+                        if ($theirs) {
                             unset($annotations[$subtype][$key]);
                             $removed = true;
                         }
@@ -2720,6 +2750,39 @@ namespace Idno\Common {
             }
 
             return $removed;
+        }
+
+        /**
+         * An address as an annotation stores it (an http or https address with no bytes outside ASCII and no tags), or an empty string.
+         *
+         * @param mixed $url
+         * @return string
+         */
+        private static function cleanAnnotationAddress($url)
+        {
+            return \Idno\Core\UrlValidator::httpUrl(strip_tags((string) filter_var(is_string($url) ? $url : '', FILTER_SANITIZE_URL)));
+        }
+
+        /**
+         * Is an annotation that another page sent as a webmention known by this address?
+         *
+         * @param string $permalink
+         * @param string $source The page that is sending now
+         * @return bool
+         */
+        private function isAnnotationAddressOfAnotherSource($permalink, $source)
+        {
+            foreach (is_array($this->annotations) ? $this->annotations : [] as $list) {
+                foreach (is_array($list) ? $list : [] as $stored) {
+                    if (is_array($stored) && empty($stored['made_here']) && ($stored['permalink'] ?? null) === $permalink
+                        && !empty($stored['webmention_source']) && $stored['webmention_source'] !== $source
+                    ) {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
         }
 
         /**
@@ -2939,9 +3002,11 @@ namespace Idno\Common {
          * @param array $extra_fields Any extra fields and values that should be stored on the annotation object
          * @param bool $send_notification Should this call trigger a notifiation? (Default: yes)
          * @param bool $made_here True only for an annotation this site makes for a member (the post page's like or reply, Micropub, an import): it is stored with the mark `made_here`, which a webmention can never replace and which the author's right to delete rests on
+         * @param bool $persist Save the annotations now (default); a caller that passes false saves them itself
+         * @param string|null $key Set to the key the annotation was stored under (the address it is known by on this site)
          * @return bool Depending on success
          */
-        function addAnnotation($subtype, $owner_name, $owner_url, $owner_image, $content, $annotation_url = null, $time = null, $title = '', $extra_fields = [], $send_notification = true, $made_here = false, $persist = true)
+        function addAnnotation($subtype, $owner_name, $owner_url, $owner_image, $content, $annotation_url = null, $time = null, $title = '', $extra_fields = [], $send_notification = true, $made_here = false, $persist = true, &$key = null)
         {
             // These are printed as the addresses of links and images, and may come from
             // another site: keep them only if they are http or https addresses.
@@ -2952,6 +3017,16 @@ namespace Idno\Common {
             $title = strip_tags($title);
 
             if (empty($subtype)) return false;
+            // The page that sent this annotation as a webmention, if one did: never recorded for an annotation made here
+            $source = '';
+            if (is_array($extra_fields) && isset($extra_fields['webmention_source'])) {
+                $source = is_string($extra_fields['webmention_source']) && !$made_here ? \Idno\Core\UrlValidator::httpUrl($extra_fields['webmention_source']) : '';
+                if ($source === '') {
+                    unset($extra_fields['webmention_source']);
+                } else {
+                    $extra_fields['webmention_source'] = $source;
+                }
+            }
             if (empty($annotation_url)) {
                 $annotation_url = $this->getURL() . '/annotations/' . md5(time() . $content); // Invent a URL for this annotation
             }
@@ -2962,7 +3037,13 @@ namespace Idno\Common {
                     if (!empty($existing_annotation['made_here']) || (!isset($existing_annotation['made_here']) && $existing_annotation['permalink'] == $existing_local_url)) {
                         continue;
                     }
-                    if ($existing_annotation['permalink'] == $annotation_url) {
+                    // one stored with the page that sent it is replaced by that page only; one stored before the page was recorded, by the same address
+                    if (!empty($existing_annotation['webmention_source'])) {
+                        $same = $source !== '' && $existing_annotation['webmention_source'] === $source;
+                    } else {
+                        $same = $existing_annotation['permalink'] == $annotation_url;
+                    }
+                    if ($same) {
                         $local_url = $existing_local_url;
                         $post_existed = true;
                     }
@@ -3006,6 +3087,7 @@ namespace Idno\Common {
 
             $annotations[$subtype][$local_url] = $annotation;
             $this->annotations = $annotations;
+            $key = (string) $local_url;
             if (!$persist) {
                 // (the caller saves, and announces the annotation, when what it did changed something)
                 return true;

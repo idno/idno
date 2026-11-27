@@ -89,7 +89,7 @@ final class UnlikeRuleTest extends PermalinkSiteCase
         $this->seedPermalinkContent();
         $carol = $this->profile('carol');
         $this->webmentionLikeNaming($carol);
-        $this->assertSame([$carol], $this->owners());
+        $this->assertSame([''], $this->owners(), 'a remote page cannot show a member as the author');
         $this->assertFalse(array_values($this->likes())[0]['made_here'], 'it was made elsewhere');
 
         $this->toggle('member');

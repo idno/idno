@@ -209,6 +209,160 @@ final class WebmentionAnnotationKeysTest extends PermalinkSiteCase
         $this->assertCount(1, $this->stored()['reply']);
     }
 
+    public function testASourceThatDeclaresTheAddressAnotherSourceStoredLeavesThatAnnotationAsItWas(): void
+    {
+        $this->note();
+        $declared = 'https://alice.example/reply/1';
+        $this->assertTrue($this->mention('reply', 'alice-source', $declared, 'https://alice.example/', 'Alice says this.'));
+        $before = $this->stored();
+        $alice = $this->byPermalink($before, $declared);
+        $this->assertNotNull($alice);
+        $this->assertSame(self::SOURCES . 'alice-source', $alice[1]['webmention_source'] ?? null, 'a webmention records the page that sent it');
+
+        // another page declares Alice's address as its own, with other words and another name
+        $this->assertTrue($this->mention('reply', 'mallory-source', $declared, 'https://mallory.example/', 'Mallory rewrites Alice.'));
+        $after = $this->stored();
+
+        $this->assertSame($alice[1], $this->byPermalink($after, $declared)[1] ?? null, 'Alice\'s annotation is byte-identical');
+        $this->assertSame($alice[0], $this->byPermalink($after, $declared)[0], 'under the key it had');
+        $mallory = $this->byPermalink($after, self::SOURCES . 'mallory-source');
+        $this->assertNotNull($mallory, 'the second page is stored under its source');
+        $this->assertNotSame($alice[0], $mallory[0]);
+        $this->assertSame(self::SOURCES . 'mallory-source', $mallory[1]['webmention_source']);
+
+        // a repeat from the first page still updates its own, and a repeat from the second its own
+        $this->assertTrue($this->mention('reply', 'alice-source', $declared, 'https://alice.example/', 'Alice, edited.'));
+        $edited = $this->stored();
+        $this->assertSame($alice[0], $this->byPermalink($edited, $declared)[0]);
+        $this->assertSame('Alice, edited.', trim((string) $this->byPermalink($edited, $declared)[1]['content']));
+        $this->assertSame('Mallory rewrites Alice.', trim((string) $this->byPermalink($edited, self::SOURCES . 'mallory-source')[1]['content']));
+
+        // a 410 from the second page removes only its own
+        $this->assertTrue($this->mention('reply', 'mallory-source', $declared, 'https://mallory.example/', '', 410));
+        $gone = $this->stored();
+        $this->assertNull($this->byPermalink($gone, self::SOURCES . 'mallory-source'));
+        $this->assertNotNull($this->byPermalink($gone, $declared), 'Alice\'s stays');
+
+        // and a 410 from the first removes the first
+        $this->assertTrue($this->mention('reply', 'alice-source', $declared, 'https://alice.example/', '', 410));
+        $this->assertNull($this->byPermalink($this->stored(), $declared));
+    }
+
+    /**
+     * @dataProvider kinds
+     */
+    public function testASecondSourceThatDeclaresTheFirstSourcesAddressLeavesItsAnnotationAloneForEveryKind(string $kind): void
+    {
+        $this->note();
+        $declared = 'https://alice.example/' . $kind . '/1';
+        $this->assertTrue($this->mention($kind, $kind . '-first', $declared, 'https://alice.example/', 'Alice, first.'));
+        $first = $this->byPermalink($this->stored(), $declared);
+        $this->assertNotNull($first);
+
+        $this->assertTrue($this->mention($kind, $kind . '-second', $declared, 'https://mallory.example/', 'Mallory, second.'));
+        $after = $this->stored();
+
+        $this->assertSame($first, $this->byPermalink($after, $declared), 'the first annotation is byte-identical');
+        $second = $this->byPermalink($after, self::SOURCES . $kind . '-second');
+        $this->assertNotNull($second, 'the second is stored under its own source');
+        $this->assertNotSame($first[0], $second[0]);
+    }
+
+    public function testASourceThatChangesKindLeavesOneAnnotationOfTheNewKind(): void
+    {
+        $this->note();
+        $declared = 'https://remote.example/changes-kind';
+        $this->assertTrue($this->mention('reply', 'kind-change', $declared, 'https://remote.example/', 'A reply.'));
+        $this->assertNotNull($this->byPermalink($this->stored(), $declared));
+
+        $this->assertTrue($this->mention('like', 'kind-change', $declared, 'https://remote.example/', ''));
+        $stored = $this->stored();
+
+        $mine = [];
+        foreach ($stored as $kind => $list) {
+            foreach ($list as $annotation) {
+                if (($annotation['webmention_source'] ?? null) === self::SOURCES . 'kind-change') {
+                    $mine[] = $kind;
+                }
+            }
+        }
+        $this->assertSame(['like'], $mine, 'one annotation remains, of the new kind');
+    }
+
+    public function testAnAddressWithANonAsciiCharacterIsStoredAsItIsCleanedAndStaysStored(): void
+    {
+        $this->note();
+        // as the annotation is stored: every byte outside ASCII removed
+        $this->assertTrue($this->mention('reply', 'non-ascii-url', 'https://remote.example/caf' . "\u{e9}", 'https://remote.example/', 'Words.'));
+        $this->assertNotNull($this->byPermalink($this->stored(), 'https://remote.example/caf'), 'the annotation is stored and not removed again');
+
+        // sent again, it is still one annotation, updated in place
+        $key = $this->byPermalink($this->stored(), 'https://remote.example/caf')[0];
+        $this->assertTrue($this->mention('reply', 'non-ascii-url', 'https://remote.example/caf' . "\u{e9}", 'https://remote.example/', 'Other words.'));
+        $again = $this->byPermalink($this->stored(), 'https://remote.example/caf');
+        $this->assertSame($key, $again[0]);
+        $this->assertSame('Other words.', trim((string) $again[1]['content']));
+        // (the endpoint refuses a source with a non-ASCII character itself: source_not_allowed)
+    }
+
+    public function testAnAddressOfThisSiteThatIsOnlyOneOnceItIsCleanedIsNotUsed(): void
+    {
+        $note = $this->note();
+        $host = (string) parse_url($this->baseUrl(), PHP_URL_HOST);
+        $port = (int) parse_url($this->baseUrl(), PHP_URL_PORT);
+        $id = md5('cleaned');
+        $own = 'http://' . $host . ':' . $port . $note . '/annotations/' . $id;
+        $forged = 'http://' . substr($host, 0, 2) . "\u{e9}" . substr($host, 2) . ':' . $port . $note . '/annotations/' . $id;
+
+        $this->assertTrue($this->mention('reply', 'cleaned-host', $forged, 'https://remote.example/', 'Forged.'));
+        $stored = $this->stored();
+
+        // (that the é survives the parser and reaches the cleaning is asserted where addWebmentions() is called directly:
+        // AnnotationOnlySaveTest::testAnAddressThatIsOneOfThisSitesOnlyOnceItIsCleanedIsNotStoredAsOne)
+        $this->assertNull($this->byPermalink($stored, $own), 'it is not stored as an address of this site');
+        $this->assertNull($this->byPermalink($stored, $forged), 'nor as it was sent');
+        $this->assertNotNull($this->byPermalink($stored, self::SOURCES . 'cleaned-host'), 'it is known by its source');
+    }
+
+    public function testAnAddressThatIsNoHttpAddressFallsBackToTheSource(): void
+    {
+        $this->note();
+        $this->assertTrue($this->mention('reply', 'js-url', 'javascript:alert(1)', 'https://remote.example/', 'Words.'));
+        $stored = $this->stored();
+        $this->assertNotNull($this->byPermalink($stored, self::SOURCES . 'js-url'));
+    }
+
+    public function testAnAnnotationStoredBeforeTheSourceWasRecordedIsStillUpdatedByTheSameAddress(): void
+    {
+        $this->note();
+        $declared = 'https://old.example/reply/1';
+        $this->assertTrue($this->mention('reply', 'old-source', $declared, 'https://old.example/', 'Old words.'));
+        $key = $this->byPermalink($this->stored(), $declared)[0];
+        $id = $this->literal(self::NOTE_ID);
+        $this->runInSite('$e = \Idno\Common\Entity::getByID(' . $id . '); $a = $e->annotations; unset($a[\'reply\'][' . $this->literal($key) . '][\'webmention_source\']); $e->annotations = $a; $e->save(true); return true;');
+        $this->assertArrayNotHasKey('webmention_source', $this->stored()['reply'][$key]);
+
+        // another page declaring the same address updates it, as before the source was recorded
+        $this->assertTrue($this->mention('reply', 'other-source', $declared, 'https://other.example/', 'New words.'));
+        $stored = $this->stored();
+        $found = $this->byPermalink($stored, $declared);
+        $this->assertSame($key, $found[0], 'the same key');
+        $this->assertSame('New words.', trim((string) $found[1]['content']));
+        $this->assertSame(self::SOURCES . 'other-source', $found[1]['webmention_source'], 'and it records its source from then on');
+    }
+
+    public function testARemoteSourceCannotShowAMemberOfThisSiteAsTheAuthor(): void
+    {
+        $this->note();
+        $this->assertTrue($this->mention('reply', 'author-forged', 'https://remote.example/a', $this->carolsUrl(), 'Pretending to be Carol.'));
+        $mine = $this->byPermalink($this->stored(), 'https://remote.example/a');
+        $this->assertNotNull($mine);
+        $this->assertSame('', $mine[1]['owner_url'], 'no profile address of this site is stored for a remote page');
+
+        $this->assertTrue($this->mention('reply', 'author-remote', 'https://remote.example/b', 'https://remote.example/me', 'As herself.'));
+        $this->assertSame('https://remote.example/me', $this->byPermalink($this->stored(), 'https://remote.example/b')[1]['owner_url'], 'another site\'s address is kept');
+    }
+
     /**
      * Bridgy's mentions (a like, a share or an RSVP sent by its server) are known by their source and the address they carry, which is the one
      * place the address is rewritten before it is judged: a source that says it is from Bridgy still cannot declare the address of an annotation made here.
