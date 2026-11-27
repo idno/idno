@@ -176,7 +176,7 @@ final class RegistrationAnswersTest extends SignInSiteCase
             $make = static function (string $id, string $email, string $code, string $expires, string $role) use ($ada): void {
                 $invitation = new \Idno\Entities\Invitation();
                 $invitation->_id = $id;
-                $invitation->setRole($role); // before the code: a different role is a new code
+                $invitation->setRole($role);
                 $invitation->email = $email;
                 $invitation->code = $code;
                 $invitation->created = (int) strtotime('2026-03-01 12:00:00 UTC');

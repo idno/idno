@@ -414,13 +414,13 @@ namespace Idno\Entities {
         }
 
         /**
-         * Sets the role. A DIFFERENT role is a new code: a link already sent (and kept in a mail, a history, a log) must never become the link of
-         * another role, an administrator's least of all.
+         * Sets the role. A DIFFERENT role on a stored invitation is a new code: a link already sent (and kept in a mail, a history, a log) must never
+         * become the link of another role, an administrator's least of all. An invitation that was never saved has had no link sent, so it keeps its code.
          */
         function setRole($role)
         {
             $role = $role === self::ROLE_ADMIN ? self::ROLE_ADMIN : self::ROLE_MEMBER;
-            if ($role !== $this->getRole()) {
+            if ($role !== $this->getRole() && !empty($this->_id)) {
                 $this->generateCode();
             }
             $this->role = $role;

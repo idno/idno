@@ -306,6 +306,23 @@ final class PermalinkPagesTest extends TestCase
         $this->assertContains('delete', $this->site->calls);
     }
 
+    /**
+     * Catches an account the site refuses to delete (their own, the last administrator's) being deleted all the same: the administrator is sent back, and nothing is deleted.
+     */
+    public function testAnAccountTheSiteRefusesToDeleteIsNotDeleted(): void
+    {
+        $this->site->entity = $this->entity();
+        $this->site->user = true;
+        $this->site->administrator = true;
+        $this->site->refusesAccount = true;
+
+        $response = $this->pages->delete($this->context());
+
+        $this->assertSame(302, $response->getStatusCode());
+        $this->assertContains('refusesToDeleteAccount', $this->site->calls);
+        $this->assertNotContains('delete', $this->site->calls);
+    }
+
     public function testOnlyThePermalinkRouteReceives(): void
     {
         $this->assertTrue($this->pages->receivesFor('idno_permalink'));
@@ -384,6 +401,7 @@ final class PermalinksDouble implements Permalinks
     public bool $loggedIn = true;
 
     public bool $administrator = false;
+    public bool $refusesAccount = false;
 
     public bool $user = false;
 
@@ -512,7 +530,9 @@ final class PermalinksDouble implements Permalinks
 
     public function refusesToDeleteAccount(Entity $entity): bool
     {
-        return false;
+        $this->calls[] = 'refusesToDeleteAccount';
+
+        return $this->refusesAccount;
     }
 
     public function delete(Entity $entity): bool

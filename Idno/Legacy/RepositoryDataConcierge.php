@@ -97,6 +97,9 @@ final class RepositoryDataConcierge extends \Idno\Core\DataConcierge implements 
 
     private ?EntityRepository $entityRepository = null;
 
+    /** How many atomically() steps are running: the write that meets a busy database is thrown in one, see inAtomicStep() */
+    private int $atomicDepth = 0;
+
     /**
      * @param string                       $family       'mysql' or 'sqlite' (ConnectionParameters::driverFamily())
      * @param Connection                   $connection   the shared DBAL connection; construction connects it
@@ -322,11 +325,25 @@ final class RepositoryDataConcierge extends \Idno\Core\DataConcierge implements 
 
         try {
             return $this->store()->save((string)$collection, $array);
+        } catch (\Doctrine\DBAL\Exception\RetryableException $e) {
+            if ($this->inAtomicStep()) {
+                // The store throws a busy database only in an atomic step: the step is told, and undone
+                throw new \Idno\Exceptions\DatabaseBusyException('The database was busy.', 0, $e);
+            }
+            $this->logError($e);
         } catch (DbalException | \PDOException $e) {
             $this->logError($e);
         }
 
         return false;
+    }
+
+    /**
+     * Whether the code that is running is inside atomically(): a write that meets a lock wait or a deadlock there is a DatabaseBusyException.
+     */
+    function inAtomicStep(): bool
+    {
+        return $this->atomicDepth > 0;
     }
 
     /**
@@ -586,14 +603,21 @@ final class RepositoryDataConcierge extends \Idno\Core\DataConcierge implements 
      * throws (the exception goes on) or returns false, or when the commit itself fails. Inside another transaction it is a savepoint.
      * On SQLite the outermost transaction takes the write lock first. A lock that cannot be had in time is a DatabaseBusyException (nothing changed).
      *
+     * A commit that fails is undone on the native connection: DBAL has already lowered its own count of open transactions by then (in a `finally`), so
+     * asking it to roll back would do nothing and leave the connection inside the failed transaction. When the work was a savepoint inside another
+     * transaction, the failed release leaves the caller's transaction as it is, and the exception reaches the caller, whose own rollback undoes everything.
+     *
      * @param  callable $work
      * @return mixed What $work returned
      */
     function atomically(callable $work)
     {
         $this->connection->beginTransaction();
+        $this->atomicDepth++;
+        $outermost  = $this->connection->getTransactionNestingLevel() === 1;
+        $committing = false;
         try {
-            if ($this->family === 'sqlite' && $this->connection->getTransactionNestingLevel() === 1) {
+            if ($this->family === 'sqlite' && $outermost) {
                 // A writer from the first statement: it waits for the write lock, where a transaction that read first fails the moment
                 // another connection commits
                 $this->connection->executeStatement(\Idno\Storage\Platform\SqliteDialect::TAKE_THE_WRITE_LOCK);
@@ -604,15 +628,22 @@ final class RepositoryDataConcierge extends \Idno\Core\DataConcierge implements 
 
                 return false;
             }
+            $committing = true;
             $this->connection->commit();
 
             return $result;
         } catch (\Throwable $e) {
-            $this->rollBackQuietly();
+            if ($committing) {
+                $this->undoAfterFailedCommit($outermost);
+            } else {
+                $this->rollBackQuietly();
+            }
             if ($e instanceof \Doctrine\DBAL\Exception\RetryableException) {
                 throw new \Idno\Exceptions\DatabaseBusyException('The database was busy.', 0, $e);
             }
             throw $e;
+        } finally {
+            $this->atomicDepth--;
         }
     }
 
@@ -624,6 +655,21 @@ final class RepositoryDataConcierge extends \Idno\Core\DataConcierge implements 
             }
         } catch (\Throwable) {
             // The failure that made us roll back is the one to report
+        }
+    }
+
+    private function undoAfterFailedCommit(bool $outermost): void
+    {
+        if (!$outermost) {
+            return;
+        }
+        try {
+            $native = $this->connection->getNativeConnection();
+            if ($native instanceof \PDO && $native->inTransaction()) {
+                $native->rollBack();
+            }
+        } catch (\Throwable) {
+            // The failure of the commit is the one to report
         }
     }
 

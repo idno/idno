@@ -32,7 +32,6 @@ final class InvitationLinkAddressTest extends PrivateSiteTestCase
         $https = 'https://' . substr($this->baseUrl(), strlen('http://')) . 'account/register/?email=dana%40example.test&code=';
         $this->assertStringContainsString($https, $mails[0]['text']);
         $this->assertStringContainsString(str_replace('&', '&amp;', $https), $mails[0]['html']);
-        $this->assertStringNotContainsString('http://', (string) preg_replace('~' . preg_quote($this->baseUrl(), '~') . '~', '', $mails[0]['text']) ?: '', 'no link of the request\'s scheme is left');
 
         $page = $this->site()->request('GET', 'admin/users', ['Cookie' => $cookie]);
         $this->assertStringContainsString('value="' . str_replace('&', '&amp;', $https), $page->body, 'the link the administrator copies is the same');

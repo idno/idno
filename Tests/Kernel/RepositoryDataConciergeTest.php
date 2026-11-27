@@ -400,6 +400,43 @@ final class RepositoryDataConciergeTest extends IdnoTestCase
     }
 
     /**
+     * Catches a failed COMMIT leaving the transaction open. DBAL lowers its nesting count even when the commit fails, so a rollback that asks it
+     * whether a transaction is active does nothing and the connection stays inside the work's transaction: every later write then waits to be
+     * committed, and is lost when the connection closes. Made to fail by a foreign key that is checked at the commit (SQLite).
+     */
+    public function testACommitThatFailsLeavesNoTransactionOpen(): void
+    {
+        $this->requireSqlite('a foreign key checked at the commit is SQLite\'s (MySQL checks it at once)');
+        $db = Idno::site()->db();
+        $pdo = $db->getClient();
+        $suffix = bin2hex(random_bytes(4));
+        $parent = 'zz_parent_' . $suffix;
+        $child = 'zz_child_' . $suffix;
+        $pdo->exec("create table $parent (id integer primary key)");
+        $pdo->exec("create table $child (parent_id integer references $parent (id) deferrable initially deferred)");
+        try {
+            try {
+                $db->atomically(function () use ($pdo, $child) {
+                    $pdo->exec("insert into $child (parent_id) values (42)");
+
+                    return true;
+                });
+                $this->fail('the commit fails: nothing has the parent');
+            } catch (\Throwable $e) {
+                $this->assertStringContainsString('FOREIGN KEY', $e->getMessage());
+            }
+            $this->assertFalse($pdo->inTransaction(), 'the connection is not left inside the failed transaction');
+            $this->assertSame(0, (int) $pdo->query("select count(*) from $child")->fetchColumn(), 'what the work wrote was undone');
+        } finally {
+            if ($pdo->inTransaction()) {
+                $pdo->exec('rollback');
+            }
+            $pdo->exec("drop table $child");
+            $pdo->exec("drop table $parent");
+        }
+    }
+
+    /**
      * The same, through Entity::save(): an existing entity re-saved with another record's uuid
      * returns false and fires no `updated` (nor `saved`) event, and both records are left as they
      * were; the old backend reported success and fired them for a record it had not stored.

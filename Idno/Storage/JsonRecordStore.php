@@ -77,6 +77,8 @@ final class JsonRecordStore implements RecordStore
      * @param bool|\Closure(): bool     $booleanSearch  the site's `boolean_search` setting, or a closure that
      *                                                   reads it: called each time a search condition is built
      * @param bool|\Closure(): bool     $bypassFulltext the site's `bypass_fulltext_search` setting, or a closure, likewise
+     * @param (\Closure(): bool)|null   $throwWhenBusy  asked when a write meets a lock wait, a deadlock or a busy database: true throws it
+     *                                                   (the caller is in a step that must be told to try again) where it is otherwise refused data
      */
     public function __construct(
         private readonly Connection $connection,
@@ -87,6 +89,7 @@ final class JsonRecordStore implements RecordStore
         private readonly \Closure $uncurlQuotes,
         private readonly bool|\Closure $booleanSearch,
         private readonly bool|\Closure $bypassFulltext,
+        private readonly ?\Closure $throwWhenBusy = null,
     )
     {
     }
@@ -142,7 +145,7 @@ final class JsonRecordStore implements RecordStore
                 array_map(static fn (string $column): string => $values[$column], self::COLUMNS),
             );
         } catch (DriverException $e) {
-            if (!$this->dialect->isRefusedData($e)) {
+            if (!$this->dialect->isRefusedData($e) || ($e instanceof \Doctrine\DBAL\Exception\RetryableException && $this->throwWhenBusy !== null && ($this->throwWhenBusy)())) {
                 throw $e;
             }
 

@@ -7,7 +7,11 @@ namespace Tests\Storage;
 use Doctrine\DBAL\Connection;
 use Idno\Storage\Criteria;
 use Idno\Storage\Platform\SqliteDialect;
+use Idno\Storage\FixedRecordDefaults;
+use Idno\Storage\IdentityTypeMap;
+use Idno\Storage\JsonRecordStore;
 use Idno\Storage\RecordStore;
+use Idno\Storage\SchemaCatalog;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -88,6 +92,32 @@ final class SqliteConcurrencyTest extends TestCase
             $holder->executeStatement('COMMIT');
         }
         $this->assertTrue(self::store($claimer)->claim('entities', 'c'), 'free again: the claim is the first, and wins');
+    }
+
+    /**
+     * Catches a lock that could not be had being answered as refused data: a save made while the caller is in a step that must be told to try again
+     * (a registration's transaction) is thrown when the store is told so, where it is otherwise false (the record's data was refused).
+     */
+    public function testASaveThatCannotGetTheLockIsThrownWhenTheStoreIsToldToThrowWhenBusy(): void
+    {
+        $saver = $this->connect();
+        $saver->executeStatement('PRAGMA busy_timeout = 100');
+        $dialect = PrivateDatabase::dialect($saver);
+        $build = static fn (bool $throw): JsonRecordStore => new JsonRecordStore($saver, $dialect, new FixedRecordDefaults(), new IdentityTypeMap(), new SchemaCatalog($saver), static fn (string $text): string => $text, true, false, static fn (): bool => $throw);
+        $holder = $this->connect();
+        $holder->executeStatement('BEGIN IMMEDIATE');
+        try {
+            $this->assertFalse($build(false)->save('entities', ['_id' => 'busy-1', 'title' => 'one']), 'told nothing: the busy database is refused data');
+            try {
+                $build(true)->save('entities', ['_id' => 'busy-2', 'title' => 'two']);
+                $this->fail('a busy database is thrown when the store is told to');
+            } catch (\Doctrine\DBAL\Exception\RetryableException) {
+                $this->addToAssertionCount(1);
+            }
+        } finally {
+            $holder->executeStatement('COMMIT');
+        }
+        $this->assertSame('busy-2', $build(true)->save('entities', ['_id' => 'busy-2', 'title' => 'two']), 'free again: the save is made');
     }
 
     public function testAWriteWaitsForAnotherConnectionsWriteLock(): void

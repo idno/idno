@@ -18,7 +18,7 @@ namespace Idno\Storage;
  *    unparseable search term, a condition that can never hold) matches nothing: find() returns
  *    [], count() 0;
  *  - a write whose data the database refuses (a constraint, an invalid or too long value, a
- *    deadlock or lock wait) returns false (save(), delete(), claim(), deleteAll()); a record that cannot be
+ *    deadlock or lock wait: a JsonRecordStore built to throw when busy throws those from save(), see its constructor) returns false (save(), delete(), claim(), deleteAll()); a record that cannot be
  *    encoded as JSON is refused the same way;
  *  - a record whose `created` is not a timestamp makes save() throw \InvalidArgumentException
  *    (RecordIndex cannot index it);

@@ -79,6 +79,8 @@ final class LegacyRecordStoreFactory
             // merged, and whatever a plugin changes at runtime).
             static fn (): bool => (bool) Idno::site()->config()->boolean_search,
             static fn (): bool => (bool) Idno::site()->config()->bypass_fulltext_search,
+            // A save inside atomically() is a step that must be told when the database was busy, to try again
+            static fn (): bool => ($db = Idno::site()->db()) instanceof RepositoryDataConcierge && $db->inAtomicStep(),
         );
 
         return new SettingsRecordStore($documents, $connection, $dialect, $this->defaults);

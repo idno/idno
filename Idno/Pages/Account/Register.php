@@ -296,6 +296,8 @@ namespace Idno\Pages\Account {
                         http_response_code(503);
                         header('Retry-After: 5');
                         $this->drawForm($invitation, ['email' => $email, 'code' => $code, 'name' => $name, 'handle' => $handle]);
+
+                        return;
                     }
                     $made = $outcome === 'made';
                 } else {

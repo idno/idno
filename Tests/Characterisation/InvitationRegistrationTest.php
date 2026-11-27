@@ -172,11 +172,11 @@ final class InvitationRegistrationTest extends PrivateSiteTestCase
         $answer = $this->site()->request('POST', 'account/register', ['Cookie' => $cookie], ['__bTk' => $token] + $this->form('x y', $hostile, '', ['name' => $hostile]));
 
         $this->assertSame(400, $answer->status);
-        $this->assertStringContainsString("We couldn't register you.", $answer->body);
+        $this->assertGreaterThan(0, substr_count($answer->body, 'class="idno-message"'), 'the failed registration says why, in a message');
         $this->assertStringNotContainsString('<x-canary', $answer->body, 'what was typed is not markup');
         $this->assertStringContainsString('&lt;x-canary', $answer->body, 'it is text');
         $next = $this->site()->request('GET', '/', ['Cookie' => self::sessionCookieOrNull($answer) ?? $cookie]);
-        $this->assertStringNotContainsString("We couldn't register you.", $next->body, 'the reasons were used up by the answer that showed them');
+        $this->assertSame(0, substr_count($next->body, 'class="idno-message"'), 'the reasons were used up by the answer that showed them');
     }
 
     /**

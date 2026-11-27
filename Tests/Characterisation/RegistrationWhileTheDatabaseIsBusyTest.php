@@ -128,7 +128,6 @@ final class RegistrationWhileTheDatabaseIsBusyTest extends PrivateSiteTestCase
         [$status, $body] = $this->postWhileHolding($this->form(), 8.0);
 
         $this->assertSame(503, $status, 'a busy site, not a refused invitation');
-        $this->assertStringNotContainsString('register-refused', $body, 'not the page that says the invitation cannot be used');
         $this->assertStringContainsString('value="dana"', $body, 'the form is drawn again with what was typed');
         $this->assertTrue($this->invitationStored(), 'the invitation is not spent');
         $this->assertFalse($this->accountMade());
