@@ -19,6 +19,14 @@ use Tests\Support\RecordedAnswers;
  * as they were before it runs again (it runs twice when a capture is verified). A form token and a session id are secrets of a session: no recording
  * holds one; the address a redirect carries as base64 is recorded decoded.
  *
+ * More: where a refusal sends the browser back to (no Referer, a foreign one, one with a query, one of another path; an invitee's, whose Referer carries
+ * the email and code); what a registered account can do (the session id and form token are new, it signs in with the password typed and no other, a
+ * password over 72 bytes, a name holding markup shown escaped); the events a registration and each refusal trigger (`Tests\Fixtures\RegistrationEventHook`:
+ * its mode makes a listener refuse the password, veto the registration or say the site is full); the user limit (`users/add/check`), which the form asks and
+ * the POST does not; a private site (`walled_garden`); and the setting pinned closed by the boot configuration (`IDNO_OPEN_REGISTRATION`) over a stored open one.
+ * The two GETs with an array for `email` or `code` are 500 pages only because the rig's and CI's sites run `pedantic_mode` (a notice for an array to string
+ * conversion is an exception); the array handle, email, password and name POSTs fail on `trim()` whatever the mode.
+ *
  * A site closed to new users with no invitation to give (`users/add/check` answering false: nothing in core listens to it) is not recorded: nothing
  * of core or the bundled plugins can make a site say so.
  */
@@ -46,6 +54,82 @@ final class RegistrationAnswersTest extends SignInSiteCase
     protected function seedsOwnedPosts(): bool
     {
         return false;
+    }
+
+    private string $eventsDirectory = '';
+
+    /** The directory the registration events are recorded in, and the mode of the listeners is chosen by (`RegistrationEventHook`). */
+    private function eventsDirectory(): string
+    {
+        if ($this->eventsDirectory === '') {
+            $this->eventsDirectory = sys_get_temp_dir() . '/idno-registration-events-' . bin2hex(random_bytes(6));
+            mkdir($this->eventsDirectory, 0700);
+        }
+
+        return $this->eventsDirectory;
+    }
+
+    protected function siteEnvironment(): array
+    {
+        $environment = ['IDNO_TEST_REGISTRATION_EVENTS' => $this->eventsDirectory()];
+        $test = $this->getName(false);
+        if (str_contains($test, 'PrivateSite')) {
+            $environment['IDNO_WALLED_GARDEN'] = '1';
+        }
+        if (str_contains($test, 'BootConfiguration')) {
+            // the setting is pinned closed by the boot configuration, whatever the stored one says
+            $environment['IDNO_OPEN_REGISTRATION'] = '0';
+        }
+
+        return $environment;
+    }
+
+    protected function tearDown(): void
+    {
+        parent::tearDown();
+        if ($this->eventsDirectory !== '') {
+            array_map('unlink', glob($this->eventsDirectory . '/*') ?: []);
+            rmdir($this->eventsDirectory);
+        }
+    }
+
+    /** What the listeners of the registration's events saw since the last call (the name, and the handle when there is one), and forgets it. @return list<string> */
+    private function events(): array
+    {
+        $file = $this->eventsDirectory() . '/events.jsonl';
+        $seen = [];
+        foreach (is_file($file) ? (file($file, FILE_IGNORE_NEW_LINES) ?: []) : [] as $line) {
+            $event = json_decode($line, true);
+            $seen[] = $event['event'] . ($event['handle'] !== null ? ':' . $event['handle'] : '');
+        }
+        @unlink($file);
+
+        return $seen;
+    }
+
+    /** Makes the listeners answer false for one event (`deny-add`, `veto-validate`, `weak-password`), or none (''). */
+    private function mode(string $mode): void
+    {
+        file_put_contents($this->eventsDirectory() . '/mode', $mode);
+    }
+
+    /** Whether a login with a password signs the browser in as the handle. */
+    private function canSignIn(string $handle, string $password): bool
+    {
+        [$cookie, $token] = $this->visitorSession();
+        $login = $this->site()->request('POST', '/session/login', ['Cookie' => $cookie], ['__bTk' => $token, 'email' => $handle, 'password' => $password]);
+        $who = $this->site()->request('GET', '/currentUser?_t=json', ['Cookie' => self::sessionCookieOrNull($login) ?? $cookie]);
+
+        return $who->status === 200 && str_contains((string) ($who->json()['user']['url'] ?? ''), '/profile/' . $handle);
+    }
+
+    /** A POST of a registration as a browser makes it, recording nothing. @param array<string, mixed> $fields */
+    private function register(array $fields, string $path = '/account/register'): SiteResponse
+    {
+        [$cookie, $token] = $this->visitorSession();
+        $this->events();
+
+        return $this->site()->request('POST', $path, ['Cookie' => $cookie, 'Referer' => $this->baseUrl() . 'account/register'], ['__bTk' => $token] + $fields);
     }
 
     /** The fields of a valid registration. @return array<string, string> */
@@ -150,7 +234,7 @@ final class RegistrationAnswersTest extends SignInSiteCase
      *
      * @param array{answer: string, then?: string, after?: string, user?: string, admin?: string} $names the recordings' names (literals at each call)
      * @param array<string, mixed> $fields
-     * @param array{path?: string, headers?: array<string, string>, token?: bool, cookie?: string, referer?: bool, chain?: bool} $options
+     * @param array{path?: string, headers?: array<string, string>, token?: bool, cookie?: string, referer?: bool|string, chain?: bool} $options
      */
     private function submit(array $names, array $fields, array $options = []): SiteResponse
     {
@@ -161,13 +245,18 @@ final class RegistrationAnswersTest extends SignInSiteCase
         } else {
             [$cookie, $token] = $this->visitorSession();
         }
+        $this->events();
         $s = $this->scrubWithNonce($token);
         $xhr = isset($options['headers']['X-Requested-With']);
         // the legacy router's lines for a script's request hold the time of the request
         $strip = static fn (SiteResponse $r): SiteResponse => $xhr ? self::withoutLastModified(self::withoutTheTrace($s($r))) : self::withoutTheTrace($s($r));
         $headers = ['Cookie' => $cookie] + ($options['headers'] ?? []);
-        if (($options['referer'] ?? true) === true) {
+        $referer = $options['referer'] ?? true;
+        if ($referer === true) {
             $headers += ['Referer' => $this->baseUrl() . 'account/register'];
+        } elseif (is_string($referer)) {
+            // an address of this site (as a path) or another
+            $headers += ['Referer' => str_starts_with($referer, '/') ? rtrim($this->baseUrl(), '/') . $referer : $referer];
         }
         $body = (($options['token'] ?? true) ? ['__bTk' => $token] : []) + $fields;
         $answer = $this->site()->request('POST', $path, $headers, $body);
@@ -214,11 +303,12 @@ final class RegistrationAnswersTest extends SignInSiteCase
      *
      * @param array{answer: string, then?: string, after?: string, user?: string} $names
      * @param array<string, mixed> $changed
+     * @param array<string, mixed> $options as submit()'s
      */
-    private function refused(array $names, array $changed, bool $accepted): void
+    private function refused(array $names, array $changed, bool $accepted, array $options = []): void
     {
         $this->putBack(true);
-        $made = $this->attempt($names, $changed + self::dana(), [], true);
+        $made = $this->attempt($names, $changed + self::dana(), $options, true);
         $this->assertSame($accepted, $made, $names['answer'] . ($accepted ? ' makes an account' : ' makes no account'));
     }
 
@@ -367,6 +457,11 @@ final class RegistrationAnswersTest extends SignInSiteCase
             $this->refused(['answer' => 'register-post-no-second-password', 'then' => 'register-post-no-second-password-then', 'after' => 'register-post-no-second-password-after'], ['password2' => ''], false);
             $this->refused(['answer' => 'register-post-no-name', 'then' => 'register-post-no-name-then', 'after' => 'register-post-no-name-after', 'user' => 'register-post-no-name-user', 'admin' => 'register-post-no-name-admin'], ['name' => ''], true);
             $this->refused(['answer' => 'register-post-every-fault-at-once', 'then' => 'register-post-every-fault-at-once-then', 'after' => 'register-post-every-fault-at-once-after'], ['handle' => 'bob/!', 'email' => 'bob@example.com', 'password' => 'x', 'password2' => 'y'], false);
+            // where a refusal sends the browser back to: the Referer, through the same-origin rule
+            $this->refused(['answer' => 'register-post-refused-no-referer', 'then' => 'register-post-refused-no-referer-then', 'after' => 'register-post-refused-no-referer-after'], ['password2' => 'another-passphrase-1'], false, ['referer' => false]);
+            $this->refused(['answer' => 'register-post-refused-foreign-referer', 'then' => 'register-post-refused-foreign-referer-then', 'after' => 'register-post-refused-foreign-referer-after'], ['password2' => 'another-passphrase-1'], false, ['referer' => 'https://evil.example/steal']);
+            $this->refused(['answer' => 'register-post-refused-query-referer', 'then' => 'register-post-refused-query-referer-then', 'after' => 'register-post-refused-query-referer-after'], ['password2' => 'another-passphrase-1'], false, ['referer' => '/account/register?email=ada%40example.test&x=1']);
+            $this->refused(['answer' => 'register-post-refused-other-path-referer', 'then' => 'register-post-refused-other-path-referer-then', 'after' => 'register-post-refused-other-path-referer-after'], ['password2' => 'another-passphrase-1'], false, ['referer' => '/account/settings/']);
             $this->putBack(true);
         });
     }
@@ -451,8 +546,8 @@ final class RegistrationAnswersTest extends SignInSiteCase
             $this->assertTrue($this->invitationFor('dana@example.test'), 'a refusal leaves the invitation');
 
             // the invitation is right, the details are not: the invitation stays
-            $this->submit(['answer' => 'register-post-closed-valid-code-taken-handle', 'then' => 'register-post-closed-valid-code-taken-handle-then', 'after' => 'register-post-closed-valid-code-taken-handle-after'], ['handle' => 'bob'] + self::dana() + ['code' => self::CODE_DANA]);
-            $this->submit(['answer' => 'register-post-closed-valid-code-mismatched-passwords', 'then' => 'register-post-closed-valid-code-mismatched-passwords-then', 'after' => 'register-post-closed-valid-code-mismatched-passwords-after'], ['password2' => 'another-passphrase-1'] + self::dana() + ['code' => self::CODE_DANA]);
+            $this->submit(['answer' => 'register-post-closed-valid-code-taken-handle', 'then' => 'register-post-closed-valid-code-taken-handle-then', 'after' => 'register-post-closed-valid-code-taken-handle-after'], ['handle' => 'bob'] + self::dana() + ['code' => self::CODE_DANA], ['referer' => '/account/register?email=dana%40example.test&code=' . self::CODE_DANA]);
+            $this->submit(['answer' => 'register-post-closed-valid-code-mismatched-passwords', 'then' => 'register-post-closed-valid-code-mismatched-passwords-then', 'after' => 'register-post-closed-valid-code-mismatched-passwords-after'], ['password2' => 'another-passphrase-1'] + self::dana() + ['code' => self::CODE_DANA], ['referer' => '/account/register?email=dana%40example.test&code=' . self::CODE_DANA]);
             $this->assertSame($before, $this->handles());
             $this->assertTrue($this->invitationFor('dana@example.test'), 'a failed registration leaves the invitation');
 
@@ -474,7 +569,7 @@ final class RegistrationAnswersTest extends SignInSiteCase
             $this->putBack(false);
             $this->runInSite('$i = new \Idno\Entities\Invitation(); $i->_id = "00000000000040008000000000000103"; $i->email = "blocked@example.test"; $i->code = ' . $this->literal(self::CODE_DANA) . '; $i->created = (int) strtotime("2026-03-01 12:00:00 UTC"); $i->save(true); return true;');
             $before = $this->handles();
-            $this->submit(['answer' => 'register-post-closed-blocked-address', 'then' => 'register-post-closed-blocked-address-then', 'after' => 'register-post-closed-blocked-address-after'], ['email' => 'blocked@example.test'] + self::dana() + ['code' => self::CODE_DANA]);
+            $this->submit(['answer' => 'register-post-closed-blocked-address', 'then' => 'register-post-closed-blocked-address-then', 'after' => 'register-post-closed-blocked-address-after'], ['email' => 'blocked@example.test'] + self::dana() + ['code' => self::CODE_DANA], ['referer' => '/account/register?email=blocked%40example.test&code=' . self::CODE_DANA]);
             $this->assertSame($before, $this->handles());
             $this->assertTrue($this->invitationFor('blocked@example.test'), 'and its invitation stays');
             $this->putBack(true);
@@ -506,6 +601,154 @@ final class RegistrationAnswersTest extends SignInSiteCase
             $admin = $this->loginCookie('ada', self::PASSWORD);
             $this->submit(['answer' => 'register-post-admin-valid', 'then' => 'register-post-admin-valid-then', 'after' => 'register-post-admin-valid-after', 'user' => 'register-post-admin-valid-user', 'admin' => 'register-post-admin-valid-admin'], self::dana(), ['cookie' => $admin]);
             $this->assertSame(['handle' => 'dana', 'email' => 'dana@example.test', 'title' => 'Dana Newcomer', 'admin' => false], $this->accountOf('dana'));
+            $this->putBack(true);
+        });
+    }
+
+    public function testWhatARegisteredAccountCanDo(): void
+    {
+        $this->seedRegistration();
+        $this->twice(function (): void {
+            $this->putBack(true);
+            // registering starts a new session: another id and another form token, and the browser's old session is nobody's
+            [$cookie, $token] = $this->visitorSession();
+            $s = $this->scrubWithNonce($token);
+            $post = $this->site()->request('POST', '/account/register', ['Cookie' => $cookie, 'Referer' => $this->baseUrl() . 'account/register'], ['__bTk' => $token] + self::dana());
+            $this->assertSame(302, $post->status);
+            $new = self::sessionCookieOrNull($post);
+            $this->assertNotNull($new, 'the answer sets a session cookie');
+            $this->assertNotSame($cookie, $new, 'the session id is not the one the visitor had');
+            $this->assertNotSame($token, $this->tokenWith(['Cookie' => $new]), 'nor is the form token');
+            $this->answer('register-post-session-old-cookie-user', $this->site()->request('GET', '/currentUser?_t=json', ['Cookie' => $cookie]), $s);
+            $this->answer('register-post-session-new-cookie-user', $this->site()->request('GET', '/currentUser?_t=json', ['Cookie' => $new]), $s);
+            // the account signs in with the password it was made with, and with no other
+            $this->assertTrue($this->canSignIn('dana', self::NEW_PASSWORD), 'the typed password signs in');
+            $this->assertFalse($this->canSignIn('dana', 'another-passphrase-1'), 'another does not');
+            $this->assertFalse($this->canSignIn('dana', substr(self::NEW_PASSWORD, 0, -1)), 'nor does the password less its last character');
+
+            // a password typed with spaces around it is the trimmed one
+            $this->putBack(true);
+            $this->register(['password' => '  ' . self::NEW_PASSWORD . '  ', 'password2' => self::NEW_PASSWORD . ' '] + self::dana());
+            $this->assertTrue($this->canSignIn('dana', self::NEW_PASSWORD), 'the stored password is the trimmed one');
+
+            // a password over 72 bytes
+            $this->putBack(true);
+            $long = str_repeat('long-passphrase-', 6);
+            $this->submit(['answer' => 'register-post-long-password', 'then' => 'register-post-long-password-then', 'after' => 'register-post-long-password-after'], ['password' => $long, 'password2' => $long] + self::dana());
+            $this->assertNotSame([], $this->accountOf('dana'), 'a password of ' . strlen($long) . ' bytes is accepted');
+            $this->assertTrue($this->canSignIn('dana', $long), 'and signs in');
+            $this->assertSame(false, $this->canSignIn('dana', substr($long, 0, 72)), 'whether its first 72 bytes sign in');
+
+            // a name that holds markup is stored as typed and must be shown escaped
+            $this->putBack(true);
+            $this->submit(['answer' => 'register-post-markup-name', 'then' => 'register-post-markup-name-then', 'after' => 'register-post-markup-name-after', 'user' => 'register-post-markup-name-user'], ['name' => '<b>x</b> <script>alert(1)</script>'] + self::dana());
+            $this->assertSame('<b>x</b> <script>alert(1)</script>', $this->accountOf('dana')['title'], 'the name is stored as typed');
+            $member = $this->loginCookie('dana', self::NEW_PASSWORD);
+            $home = $this->site()->request('GET', '/', ['Cookie' => $member]);
+            $profile = $this->site()->request('GET', '/profile/dana');
+            $profileAsMember = $this->site()->request('GET', '/account/settings/', ['Cookie' => $member]);
+            $this->answer('register-post-markup-name-home', $home, $this->scrubWithNonce());
+            // the profile's Last-Modified is the time the account was made
+            $this->answer('register-post-markup-name-profile', self::withoutLastModified($profile), $this->scrubWithNonce());
+            $this->answer('register-post-markup-name-settings', $profileAsMember, $this->scrubWithNonce());
+            foreach (['home' => $home, 'profile' => $profile, 'settings' => $profileAsMember] as $page => $response) {
+                $this->assertStringNotContainsString('<script>alert(1)</script>', $response->body, 'the name is escaped on the ' . $page . ' page');
+                $this->assertStringNotContainsString('<b>x</b>', $response->body, 'and its markup too');
+            }
+            $this->putBack(true);
+        });
+    }
+
+    public function testTheEventsOfARegistration(): void
+    {
+        $this->seedRegistration();
+        $this->twice(function (): void {
+            $this->putBack(true);
+            $this->mode('');
+            $this->events();
+            // a registration on an open site: the strength and validation events, the new account's, and the login
+            $this->register(self::dana());
+            $this->assertSame(['user/password/checkstrength', 'user/register/validate:dana', 'site/newuser:dana', 'user/logon:dana'], $this->events(), 'a registration');
+            $this->putBack(true);
+            $this->events();
+            // refusals: how far the page got before it said no
+            $this->register(['handle' => 'bob'] + self::dana());
+            $this->assertSame(['user/password/checkstrength'], $this->events(), 'a taken handle');
+            $this->register(['email' => 'not-an-address'] + self::dana());
+            $this->assertSame([], $this->events(), 'an invalid email address');
+            $this->register(['email' => 'blocked@example.test'] + self::dana());
+            $this->assertSame(['user/password/checkstrength'], $this->events(), 'a blocked address');
+            $this->register(['password2' => 'another-passphrase-1'] + self::dana());
+            $this->assertSame(['user/password/checkstrength'], $this->events(), 'passwords that differ');
+            $this->register(['password' => 'six-pw', 'password2' => 'six-pw'] + self::dana());
+            $this->assertSame(['user/password/checkstrength', 'user/password/checkstrength'], $this->events(), 'a short password');
+
+            // a listener that finds the password too weak, and one that vetoes the registration
+            $this->mode('weak-password');
+            $this->submit(['answer' => 'register-post-event-weak-password', 'then' => 'register-post-event-weak-password-then', 'after' => 'register-post-event-weak-password-after'], self::dana());
+            $this->assertSame(['ada', 'bob', 'carol'], $this->handles(), 'a listener can refuse the password');
+            $this->events();
+            $this->mode('veto-validate');
+            $this->submit(['answer' => 'register-post-event-vetoed', 'then' => 'register-post-event-vetoed-then', 'after' => 'register-post-event-vetoed-after'], self::dana());
+            $this->assertSame(['ada', 'bob', 'carol'], $this->handles(), 'a listener can veto the registration');
+            $this->assertSame(['user/password/checkstrength', 'user/register/validate:dana', 'user/password/checkstrength'], $this->events(), 'a listener can veto');
+            $this->mode('');
+        });
+    }
+
+    public function testTheUserLimitIsAskedByTheFormAndNotByThePost(): void
+    {
+        $this->seedRegistration(false);
+        $this->twice(function (): void {
+            $this->putBack(false);
+            $this->mode('deny-add');
+            $this->events();
+            // `users/add/check` says no (a full site): the form refuses, with the message of a closed site
+            $this->visit(['answer' => 'form-closed-no-room-valid-code', 'then' => 'form-closed-no-room-valid-code-then'], '/account/register?email=dana%40example.test&code=' . self::CODE_DANA);
+            $this->assertSame(['users/add/check'], $this->events(), 'the form asks the limit');
+            // the POST never asks it, and registers the invited address
+            $this->register(self::dana() + ['code' => self::CODE_DANA]);
+            $this->assertSame(['user/password/checkstrength', 'user/register/validate:dana', 'site/newuser:dana', 'user/logon:dana'], $this->events(), 'the POST does not ask the limit');
+            $this->assertNotSame([], $this->accountOf('dana'), 'a full site still registers by POST');
+            $this->putBack(false);
+            $this->submit(['answer' => 'register-post-closed-no-room-valid-code', 'then' => 'register-post-closed-no-room-valid-code-then', 'after' => 'register-post-closed-no-room-valid-code-after', 'user' => 'register-post-closed-no-room-valid-code-user'], self::dana() + ['code' => self::CODE_DANA]);
+            $this->assertSame(['handle' => 'dana', 'email' => 'dana@example.test', 'title' => 'Dana Newcomer', 'admin' => false], $this->accountOf('dana'), 'a full site still registers by POST');
+            $this->putBack(false);
+            $this->mode('');
+        });
+    }
+
+    public function testTheRegistrationPageOfAPrivateSite(): void
+    {
+        $this->seedRegistration();
+        $this->twice(function (): void {
+            $this->putBack(true);
+            $this->visit(['answer' => 'form-walled-open-html'], '/account/register');
+            $this->visit(['answer' => 'form-walled-open-json'], '/account/register?_t=json');
+            $this->refused(['answer' => 'register-walled-post-open-mismatched-passwords', 'then' => 'register-walled-post-open-mismatched-passwords-then', 'after' => 'register-walled-post-open-mismatched-passwords-after'], ['password2' => 'another-passphrase-1'], false);
+            $this->refused(['answer' => 'register-walled-post-open-valid', 'then' => 'register-walled-post-open-valid-then', 'after' => 'register-walled-post-open-valid-after', 'user' => 'register-walled-post-open-valid-user'], [], true);
+            $this->putBack(false);
+            $this->visit(['answer' => 'form-walled-closed-no-code', 'then' => 'form-walled-closed-no-code-then'], '/account/register');
+            $this->visit(['answer' => 'form-walled-closed-valid-code'], '/account/register?email=dana%40example.test&code=' . self::CODE_DANA);
+            $this->submit(['answer' => 'register-walled-post-closed-no-code', 'then' => 'register-walled-post-closed-no-code-then', 'after' => 'register-walled-post-closed-no-code-after'], self::dana());
+            $this->submit(['answer' => 'register-walled-post-closed-valid-code', 'then' => 'register-walled-post-closed-valid-code-then', 'after' => 'register-walled-post-closed-valid-code-after', 'user' => 'register-walled-post-closed-valid-code-user'], self::dana() + ['code' => self::CODE_DANA]);
+            $this->assertNotSame([], $this->accountOf('dana'));
+            $this->putBack(true);
+        });
+    }
+
+    public function testRegistrationWhenTheBootConfigurationPinsTheSetting(): void
+    {
+        // the stored setting says open; the environment says closed, and wins
+        $this->seedRegistration(true);
+        $this->twice(function (): void {
+            $this->putBack(true);
+            $this->visit(['answer' => 'form-pinned-closed-no-code', 'then' => 'form-pinned-closed-no-code-then'], '/account/register');
+            $this->visit(['answer' => 'form-pinned-closed-valid-code'], '/account/register?email=dana%40example.test&code=' . self::CODE_DANA);
+            $this->submit(['answer' => 'register-post-pinned-closed-no-code', 'then' => 'register-post-pinned-closed-no-code-then', 'after' => 'register-post-pinned-closed-no-code-after'], self::dana());
+            $this->assertSame(['ada', 'bob', 'carol'], $this->handles(), 'the stored setting does not open the site');
+            $this->submit(['answer' => 'register-post-pinned-closed-valid-code', 'then' => 'register-post-pinned-closed-valid-code-then', 'after' => 'register-post-pinned-closed-valid-code-after', 'user' => 'register-post-pinned-closed-valid-code-user'], self::dana() + ['code' => self::CODE_DANA]);
+            $this->assertNotSame([], $this->accountOf('dana'));
             $this->putBack(true);
         });
     }

@@ -9,7 +9,7 @@ link: <{site}/webmention/>; rel="http://webmention.org/"
 link: <{site}/webmention/>; rel="webmention"
 link: <https://hub.example/>; rel="hub"
 link: <{site}/account/register>; rel="self"
-location: {site}/account/register
+location: {site}/account/register?email=dana%40example.test&code=0123456789abcdef0123456789abcd01
 pragma: no-cache
 vary: Accept
 x-clacks-overhead: GNU Terry Pratchett
