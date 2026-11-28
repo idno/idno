@@ -28,7 +28,10 @@ final class SettingsRedactor
 {
     public const MARKER = '** REDACTED **';
 
-    private const SECRET = '/pass(?:word|wd|phrase)|[A-Za-z0-9]pass$|secret|token|api_?key|(?:^|[_.\-])private(?:$|[_.\-])|credential|signature|jwt|hmac|csrf|xsrf|authoriz|bearer|oauth|indieauth|cookie|salt|dsn$|^dbuser$|^dbstring$|^proxy_string$|pass(?:code|key)|(?:^|[_.\-])(?:pass|pw|key|keys|auth|sig|username)(?:$|[_.\-])|(?-i:[A-Za-z0-9](?:Key|Pass|Auth|Salt)$)/i';
+    private const SECRET = '/pass(?:word|wd|phrase)|[A-Za-z0-9]pass$|secret|token|api_?key|(?:^|[_.\-])private(?:$|[_.\-])|credential|signature|jwt|hmac|csrf|xsrf|authoriz|bearer|oauth|indieauth|cookie|salt|dsn$|^dbuser$|^dbstring$|^proxy_string$|pass(?:code|key)|(?:^|[_.\-])(?:pass|pw|pwd|key|keys|auth|sig|username)(?:$|[_.\-])|(?-i:[A-Za-z0-9](?:Key|Pass|Auth|Salt)$)/i';
+
+    /** The shell's working-directory variables are no secret, though `PWD` ends like `MYSQL_PWD`, the MySQL client's password variable (dev's rule redacts `PWD` too; it shows nothing worth hiding, and is shown here). */
+    private const WORKING_DIRECTORY = '/^(?:OLD)?PWD$/';
 
     private const WEBHOOK = '/webhook/i';
 
@@ -46,7 +49,7 @@ final class SettingsRedactor
      */
     public static function isSecretKey(string $key, mixed $value = null): bool
     {
-        if (preg_match(self::SECRET, $key) !== 1 || preg_match(self::PUBLIC_IDENTIFIER, $key) === 1) {
+        if (preg_match(self::SECRET, $key) !== 1 || preg_match(self::PUBLIC_IDENTIFIER, $key) === 1 || preg_match(self::WORKING_DIRECTORY, $key) === 1) {
             return false;
         }
 
@@ -83,14 +86,25 @@ final class SettingsRedactor
         return $result;
     }
 
-    /** An address without the user name and password in it (they run to the last @ before the path, so a password holding an @ goes whole); anything else as it is. */
+    /**
+     * An address without the user name and password in it. It fails closed: the user information is everything after `//` up to the LAST `@`,
+     * wherever the password has an `@`, `:`, `/`, `?` or `#` in it. Two rules:
+     *  - after `scheme://`, up to the first `/`, any `@` ends user information (so `https://host?to=a@b` loses `host?to=a@`: a value nobody
+     *    needs whole in a report);
+     *  - after `scheme://`, or at the start of a value with no scheme (a proxy or a DSN, `user:secret@host:3128`), text that has a colon before an
+     *    `@`, before any white space, is `user:secret@`: it is removed through the last `@`, whatever the secret holds. So `https://host/@user`
+     *    (no colon before the `@`) and an e-mail address stay as they are, while `https://host:8080/@user` (a port before a later `@`) is
+     *    over-redacted to `https://user`. That is accepted: a report that hides too much is safe, one that shows part of a password is not.
+     */
     public static function withoutUserInfo(string $value): string
     {
-        if (!str_contains($value, '@') || !str_contains($value, '://')) {
+        if (!str_contains($value, '@')) {
             return $value;
         }
+        $value = (string) preg_replace('~(?<=://)[^/\s:@]*:[^\s]*@~', '', $value);
+        $value = (string) preg_replace('~^[^/\s:@]+:(?!//)[^\s]*@~', '', $value);
 
-        return (string) preg_replace('~(?<=://)[^/?#\s]*@~', '', $value);
+        return str_contains($value, '://') ? (string) preg_replace('~(?<=://)[^/\s]*@~', '', $value) : $value;
     }
 
     /**

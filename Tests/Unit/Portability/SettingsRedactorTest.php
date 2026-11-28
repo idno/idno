@@ -14,7 +14,7 @@ final class SettingsRedactorTest extends TestCase
      */
     public static function secrets(): array
     {
-        $keys = ['smtp_password', 'dbpass', 'dbuser', 'site_secret', 'aws_key', 'aws_secret', 'apikey', 'api_key', 'consumerKey', 'consumer_secret', 'access_token', 'oauth-token', 'client-secret', 'private_key', 'privateKey', 'smtp_username', 'password', 'passwd', 'key', 'salt', 'webhook_signature', 'auth', 'database_dsn', 'github_pass', 'jwt_secret', 'jwt', 'hmac_key', 'hmac', 'authorization', 'HTTP_AUTHORIZATION', 'auth_token', 'credential', 'private', 'cookie', 'HTTP_COOKIE', 'password_salt', 'IDNO_DBPASS', 'IDNO_SITE_SECRET', 'bearer', 'bearer_value', 'oauth_secret_x', 'oauth', 'github_oauth', 'indieauth_codes', 'indieauth_code', 'access_token', 'refresh_token', 'session_secret', 'session_key', 'form_token', 'PHP_AUTH_PW', 'sessiontoken', 'dbstring', 'proxy_string', 'passcode', '_csrf', 'csrf', 'CSRF', 'xsrf', 'XSRF-TOKEN', 'csrf_token', 'HTTP_X_CSRF_TOKEN'];
+        $keys = ['smtp_password', 'dbpass', 'dbuser', 'site_secret', 'aws_key', 'aws_secret', 'apikey', 'api_key', 'consumerKey', 'consumer_secret', 'access_token', 'oauth-token', 'client-secret', 'private_key', 'privateKey', 'smtp_username', 'password', 'passwd', 'key', 'salt', 'webhook_signature', 'auth', 'database_dsn', 'github_pass', 'jwt_secret', 'jwt', 'hmac_key', 'hmac', 'authorization', 'HTTP_AUTHORIZATION', 'auth_token', 'credential', 'private', 'cookie', 'HTTP_COOKIE', 'password_salt', 'IDNO_DBPASS', 'IDNO_SITE_SECRET', 'bearer', 'bearer_value', 'oauth_secret_x', 'oauth', 'github_oauth', 'indieauth_codes', 'indieauth_code', 'access_token', 'refresh_token', 'session_secret', 'session_key', 'form_token', 'PHP_AUTH_PW', 'MYSQL_PWD', 'DB_PWD', 'PGPASSWORD_PWD', 'IDNO_SMTP_PWD', 'sessiontoken', 'dbstring', 'proxy_string', 'passcode', '_csrf', 'csrf', 'CSRF', 'xsrf', 'XSRF-TOKEN', 'csrf_token', 'HTTP_X_CSRF_TOKEN'];
 
         return array_combine($keys, array_map(static fn (string $key): array => [$key], $keys));
     }
@@ -24,7 +24,7 @@ final class SettingsRedactorTest extends TestCase
      */
     public static function notSecrets(): array
     {
-        $keys = ['title', 'description', 'plugins', 'timezone', 'url', 'theme', 'items_per_page', 'hub', 'smtp_host', 'smtp_port', 'from_email', 'dbname', 'author', 'keywords', 'monkey', 'hashtags', 'export_file_id', 'client_id', 'oauth_client_id', 'github_client_id', 'session_hash_function', 'session_path', 'sessionname', 'sessions_database', 'sessions_storage', 'loglevel', 'single_user', 'default_plugins'];
+        $keys = ['title', 'description', 'plugins', 'timezone', 'url', 'theme', 'items_per_page', 'hub', 'smtp_host', 'smtp_port', 'from_email', 'dbname', 'author', 'keywords', 'monkey', 'hashtags', 'export_file_id', 'client_id', 'oauth_client_id', 'github_client_id', 'session_hash_function', 'session_path', 'sessionname', 'sessions_database', 'sessions_storage', 'loglevel', 'single_user', 'default_plugins', 'PWD', 'OLDPWD'];
 
         return array_combine($keys, array_map(static fn (string $key): array => [$key], $keys));
     }
@@ -138,15 +138,38 @@ final class SettingsRedactorTest extends TestCase
         $this->assertSame(['publishable' => 'pk_live_abc'], SettingsRedactor::redact(['stripe' => 'sk_live_abc123', 'publishable' => 'pk_live_abc'], null), 'removed, with no marker, for the archive');
     }
 
-    /** A database password holding an @, a colon or an encoded slash must not be partly shown in the diagnostics report or the archive. */
-    public function testAPasswordHoldingAnAtSignIsRemovedWhole(): void
+    /** @return array<string, array{string, string}> */
+    public static function addressesWithPasswords(): array
     {
-        foreach (['p@ss', 'p@ss@word', 'pa:ss', 'p%40ss', 'pa%2Fss'] as $password) {
-            $redacted = SettingsRedactor::redact(['mirror' => 'mysql://u:' . $password . '@db.example/idno?x=a@b']);
-
-            $this->assertSame('mysql://db.example/idno?x=a@b', $redacted['mirror'], $password);
+        $db = 'mysql://u:%s@db.example/idno';
+        $rows = [];
+        foreach (['p@ss', 'p@ss@word', 'pa:ss', 'p%40ss', 'pa%2Fss', 'p?ss', 'p#ss', 'p/ss', 'p/s?s#s@s'] as $password) {
+            $rows['password ' . $password] = [sprintf($db, $password), 'mysql://db.example/idno'];
         }
-        $this->assertSame('https://host.example/@user', SettingsRedactor::withoutUserInfo('https://host.example/@user'));
-        $this->assertSame('https://host.example?to=a@b', SettingsRedactor::withoutUserInfo('https://host.example?to=a@b'));
+        $rows['a list of hosts'] = ['mongodb://u:p@ss@h1,h2/db', 'mongodb://h1,h2/db'];
+        $rows['no scheme, a proxy'] = ['u:p@ss@host.example:3128', 'host.example:3128'];
+        $rows['no scheme, a password with a slash'] = ['u:p/ss@host.example:3128', 'host.example:3128'];
+
+        return $rows;
+    }
+
+    /**
+     * A database password holding an @, a colon, a slash, a ? or a # must not be partly shown in the diagnostics report or the archive.
+     *
+     * @dataProvider addressesWithPasswords
+     */
+    public function testAPasswordIsRemovedWholeWhateverItHolds(string $value, string $expected): void
+    {
+        $this->assertSame($expected, SettingsRedactor::withoutUserInfo($value));
+        $this->assertSame(['mirror' => $expected], SettingsRedactor::redact(['mirror' => $value]));
+    }
+
+    /** An address with no user name and password in it, and an e-mail address, are shown as they are. */
+    public function testAddressesThatHoldNoPasswordSurvive(): void
+    {
+        // (an address with a port before a later @, `https://host:8080/@user`, is over-redacted on purpose: see withoutUserInfo())
+        foreach (['https://host.example/@user', 'https://example.test/a@b', 'someone@example.test', 'Mail me@example.test about it', 'https://host.example/a:b@c'] as $value) {
+            $this->assertSame($value, SettingsRedactor::withoutUserInfo($value));
+        }
     }
 }

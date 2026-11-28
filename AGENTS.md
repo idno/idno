@@ -4998,7 +4998,7 @@ work). `Idno\Core\Migration`'s static methods are deprecated delegates for one r
   key that names a duration (`form_token_expiry`) is no secret; a value that starts `sk_live_`, `sk_test_`,
   `rk_live_` or `rk_test_` is removed whatever its key). It is a DENYLIST of key names: a secret under another name is
   not found, so an archive's `config.json` is to be reviewed before it is shared; a string that is an address with a user name or
-  password has them removed wherever it is; a key that names a `webhook` keeps its entries with each address
+  password has them removed wherever it is, through the LAST `@` (`withoutUserInfo()` fails closed: a secret holding `/`, `?`, `#` or `@` goes whole, and `https://host:8080/@user` is over-redacted; `PWD` and `OLDPWD` are not secrets, `MYSQL_PWD` is); a key that names a `webhook` keeps its entries with each address
   reduced to scheme and host (the path is the secret). The diagnostics page (marker `** REDACTED **`, on a
   copy, for the configuration, `$_SESSION` and `$_SERVER`) and the archive's `config.json` (keys removed) use it.
 - An import reads its upload from a file in a private directory this install makes
