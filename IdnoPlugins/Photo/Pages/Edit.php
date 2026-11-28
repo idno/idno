@@ -31,7 +31,7 @@ namespace IdnoPlugins\Photo\Pages {
                 if (($kept['id'] ?? '') === (string) $object->getID() && (empty($object->_id) || $object->canEdit())) {
                     $object->title = (string) ($kept['title'] ?? '');
                     $object->body = \Idno\Core\Idno::site()->template()->sanitize_html((string) ($kept['body'] ?? ''));
-                    $object->tags = $kept['tags'] ?? null;
+                    $object->tags = \Idno\Core\Tags::clean($kept['tags'] ?? null);
                 }
             }
 

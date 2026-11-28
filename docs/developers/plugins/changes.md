@@ -27,6 +27,21 @@ the database back end supports. Any other array makes the query match nothing, o
 * A page that reads one text from the request should use `$this->getTextInput('name')`, which gives an empty string
   when the field was sent as an array (`name[]=x`).
 
+## Tags of a post
+
+The `tags` field of a post holds what whoever made the post sent, and it used to be stored and printed as it came.
+It is now handled by `\Idno\Core\Tags`.
+
+- **A theme that has its own `forms/output/tags` template** (a copy of the one in `templates/default`, for
+  example) must print each tag as text. Read the value with `\Idno\Core\Tags::texts($vars['tags'])`, which gives a
+  list of texts whatever was stored (one text, a list, or a list that holds other things), print each with
+  `htmlspecialchars()`, and build the link with `htmlspecialchars(\Idno\Core\Tags::url($tag))`. A copy of the
+  earlier template lets a member put markup into the page of every visitor. The same goes for any template of
+  yours that prints `$object->tags` itself.
+- **A content type that stores tags from the request** should store
+  `\Idno\Core\Tags::clean($page->getInput('tags'))`: one line of plain text, or a list of them, or `null`.
+  Posts stored earlier are not rewritten, so escape when printing whether or not you clean when storing.
+
 ## Deleting an account
 
 Deleting an account is a job in two stages (`Idno\Entities\User::delete()`): the account is closed

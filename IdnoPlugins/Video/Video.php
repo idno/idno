@@ -304,7 +304,7 @@ namespace IdnoPlugins\Video {
                 $this->title = trim(strip_tags($this->titleFromHost));
             }
             $this->body  = $t->sanitize_html((string) $page->getInput('body'));
-            $this->tags  = $page->getInput('tags');
+            $this->tags  = \Idno\Core\Tags::clean($page->getInput('tags'));
             $this->setAccess($page->getInput('access'));
 
             if ($time = $page->getInput('created')) {
