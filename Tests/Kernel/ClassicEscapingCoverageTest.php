@@ -17,7 +17,7 @@ final class ClassicEscapingCoverageTest extends IdnoTestCase
     /** @return array<string, array{string}> */
     public static function drawnWithClassic(): array
     {
-        return ['annotations' => ['content/end/annotations'], 'like' => ['entity/Like'], 'checkin' => ['entity/Checkin'], 'rsvp' => ['entity/RSVP'], 'link preview card' => ['entity/LinkPreviewCard'], 'embed' => ['content/embed']];
+        return ['annotations' => ['content/end/annotations'], 'like' => ['entity/Like'], 'checkin' => ['entity/Checkin'], 'rsvp' => ['entity/RSVP'], 'link preview card' => ['entity/LinkPreviewCard'], 'embed' => ['content/embed'], 'tags' => ['forms/output/tags']];
     }
 
     /** @dataProvider drawnWithClassic */

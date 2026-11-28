@@ -125,7 +125,7 @@ namespace IdnoPlugins\Like {
             }
             $body = \Idno\Core\Idno::site()->currentPage()->getInput('body');
             $description = \Idno\Core\Idno::site()->currentPage()->getInput('description');
-            $tags = \Idno\Core\Idno::site()->currentPage()->getInput('tags');
+            $tags = \Idno\Core\Tags::clean(\Idno\Core\Idno::site()->currentPage()->getInput('tags'));
             $title = \Idno\Core\Idno::site()->currentPage()->getInput('title');
             $access = \Idno\Core\Idno::site()->currentPage()->getInput('access');
             $bookmarkof = \Idno\Core\Idno::site()->currentPage()->getInput('bookmark-of');
