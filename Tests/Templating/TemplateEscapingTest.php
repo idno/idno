@@ -887,7 +887,7 @@ final class TemplateEscapingTest extends RenderedSiteTestCase
     }
 
     /**
-     * The diagnostics and logs pages ask for their own address in a script, and the address holds what a visitor typed: it is written as
+     * The diagnostics page asks for its own address in a script, and the address holds what a visitor typed: it is written as
      * one JavaScript string, so a query with `</script>` in it opens no tag. (The old templates printed it as it was.)
      */
     public function testTheAdminScriptsWriteThePagesAddressForAScript(): void
@@ -902,11 +902,11 @@ final class TemplateEscapingTest extends RenderedSiteTestCase
             return (string) $template->__($vars)->draw($name);
         };
 
-        return ['diagnostics' => $draw('admin/diagnostics', ['basics' => ['status' => 'Ok', 'report' => []]]), 'logs' => $draw('admin/logs')];
+        return ['diagnostics' => $draw('admin/diagnostics', ['basics' => ['status' => 'Ok', 'report' => []]])];
         PHP);
         $this->assertIsArray($out);
 
-        foreach (['diagnostics', 'logs'] as $page) {
+        foreach (['diagnostics'] as $page) {
             $this->assertSame(1, substr_count($out[$page], '<script'), $page . ': the page has its one script, and the address did not open another');
             $this->assertStringNotContainsString('alert(1)</script>', $out[$page]);
             $this->assertStringContainsString("'http\\u003A\\/\\/", $out[$page], $page . ': the address is one JavaScript string');

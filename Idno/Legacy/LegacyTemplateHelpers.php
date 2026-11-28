@@ -37,7 +37,7 @@ final class LegacyTemplateHelpers implements TemplateHelpers
         'the site\'s name, address and look, drawn in the page shell and the mails' => ['title', 'description', 'homepagetitle', 'url', 'items_per_page', 'user_avatar_favicons', 'assets'],
         'who may register, post and see the site' => ['open_registration', 'walled_garden', 'single_user', 'show_privacy', 'blocked_emails'],
         'what the site says to the IndieWeb and when it shares' => ['hub', 'indieweb_citation', 'indieweb_reference', 'share_backup_url'],
-        'what the administration pages show and edit' => ['alwaysplugins', 'capture_logs', 'debug', 'from_email', 'smtp_host', 'smtp_port', 'smtp_secure'],
+        'what the administration pages show and edit' => ['alwaysplugins', 'debug', 'from_email', 'smtp_host', 'smtp_port', 'smtp_secure'],
     ];
 
     /** @var array<string, true> the names a plugin allowed for its own settings, for this helper */

@@ -370,7 +370,7 @@ abstract class RenderedSiteTestCase extends PrivateSiteTestCase
      * page, the bundled plugins' admin and account pages.
      *
      * Left out: /admin/styles (the Styles plugin is not enabled on the rig or in CI); and, because they are not the same twice: /admin/statistics (counts since a time), /admin/diagnostics (the
-     * server's paths and versions), /admin/logs (the server's log), /admin/dependencies (the installed packages and
+     * server's paths and versions), /admin/dependencies (the installed packages and
      * their versions), /admin/about (the version of the build).
      *
      * @param array<string, string> $paths from seedSite()

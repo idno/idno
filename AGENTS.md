@@ -2218,8 +2218,8 @@ the tag pages and the small public endpoints are served through them (and the fi
   `DataConcierge`'s. It holds no SQL and never creates or changes the schema (the upgrade does):
   `getVersions()` is one object, label `schema`, whose value is `SchemaMigrator::latest()` (the
   newest schema migration executed, `'0'` when none; false, written to PHP's error log, when it
-  cannot be read); `checkAndUpgradeSchema()` does nothing; `optimize()` (the daily
-  `/service/db/optimise` an admin's home page triggers: `analyze table` on `idno_entities`,
+  cannot be read); `checkAndUpgradeSchema()` does nothing; `optimize()` (nothing calls it
+  on a schedule and no page triggers it: `analyze table` on `idno_entities`,
   `idno_reader`, `idno_site`, `idno_settings` and `idno_sessions` on MySQL and MariaDB, which
   refreshes the index statistics without rebuilding the table or blocking writes (observed on both),
   never `optimize table`, which on InnoDB rebuilds the whole table, full-text index and generated

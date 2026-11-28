@@ -135,7 +135,6 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
         ['admin', 'admin/homepage/'],
         ['admin', 'admin/import/'],
         ['admin', 'admin/legacytables/'],
-        ['admin', 'admin/logs/'],
         ['admin', 'admin/plugins/'],
         ['admin', 'admin/statistics/'],
         ['admin', 'admin/themes/'],
@@ -147,8 +146,6 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
         ['admin', 'account/settings/'],
         ['admin', 'account/settings/tools/'],
         ['admin', 'account/settings/following/'],
-        ['admin', 'account/settings/feedback/'],
-        ['admin', 'account/settings/feedback/confirm/'],
         ['admin', 'account/export/'],
         ['admin', 'account/bridgy/'],
         ['admin', 'account/indiepub/'],
@@ -1294,7 +1291,6 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
         $out['settings'] = $draw('account/settings');
         $out['export'] = $draw('account/export');
         $out['following settings'] = $draw('account/settings/following') . $draw('account/settings/following/bookmarklet');
-        $out['feedback'] = $draw('account/settings/feedback') . $draw('account/settings/feedback/confirm');
         $site->session()->logUserOff();
 
         $cards = [
@@ -1593,11 +1589,8 @@ final class TemplateDrawCasesTest extends RenderedSiteTestCase
             $out['legacy tables, ' . $label] = $draw('admin/legacytables', $vars);
         }
 
-        $out['logs'] = $draw('admin/logs');
-        $config->config['capture_logs'] = true;
-        $out['menu, with logs'] = $draw('admin/menu');
         $config->config = $saved;
-        $out['menu, without logs'] = $draw('admin/menu');
+        $out['menu'] = $draw('admin/menu');
 
         $visible = static function (array $stored) use ($site) {
             $method = new \ReflectionMethod(\Idno\Pages\Admin\Plugins::class, 'visiblePlugins');

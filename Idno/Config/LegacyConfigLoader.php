@@ -104,7 +104,7 @@ final class LegacyConfigLoader
      * anything but the text given, so `none` or `no` there reaches its own validation as written.
      */
     private const BOOLEAN_SETTINGS = [
-        'boolean_search', 'bypass_fulltext_search', 'capture_logs', 'debug', 'disable_cleartext_warning', 'disable_ssl_verify',
+        'boolean_search', 'bypass_fulltext_search', 'debug', 'disable_cleartext_warning', 'disable_ssl_verify',
         'experimental', 'forward_trace', 'indieweb_citation', 'indieweb_reference', 'lang_debug', 'multi_syndication',
         'open_registration', 'pedantic_mode', 'sessions_database', 'show_privacy', 'single_user', 'standardsitesync_enabled',
         'unique_urls', 'user_avatar_favicons', 'walled_garden',

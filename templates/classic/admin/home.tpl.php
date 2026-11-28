@@ -279,14 +279,3 @@
     </div>
 
 </div>
-<script>
-    /**
-     * Trigger service calls
-     */
-    $(document).ready(function(){
-
-       /* Optimise DB */
-       $.get(wwwroot() + 'service/db/optimise');
-
-    });
-</script>

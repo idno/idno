@@ -21,7 +21,7 @@ final class LegacySqlMaintenance
     public const TABLES = ['idno_entities', 'idno_reader', 'idno_site', 'idno_settings', 'idno_sessions'];
 
     /**
-     * The legacy daily "optimise" (an admin's home page triggers /service/db/optimise once a day):
+     * The statistics refresh the old daily "optimise" ran (nothing calls it on a schedule now):
      * on MySQL and MariaDB `analyze table` on each of TABLES, which refreshes the index statistics
      * the query planner uses without rebuilding the table or blocking writes; SQLite's
      * `pragma optimize`. Not `optimize table`: on InnoDB that rebuilds the whole table (a copy that

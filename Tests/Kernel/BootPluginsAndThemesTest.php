@@ -21,9 +21,9 @@ final class BootPluginsAndThemesTest extends \Tests\Characterisation\Characteris
         $this->assertTrue(is_string($config->url) && $config->url !== '');
     }
 
-    public function testTheFeedbackPageIsServed(): void
+    public function testAPageOfThePluginsAndThemesDirectoriesBootsWithTheSite(): void
     {
-        $this->assertNotSame(404, $this->site()->request('GET', 'account/settings/feedback/')->status);
+        $this->assertNotSame(404, $this->site()->request('GET', 'account/settings/tools/')->status);
     }
 
     /**

@@ -235,7 +235,6 @@ return [
         ['admin/home', 'templates/classic/admin/home.tpl.php'],
         ['admin/import', 'templates/classic/admin/import.tpl.php'],
         ['admin/legacytables', 'templates/classic/admin/legacytables.tpl.php'],
-        ['admin/logs', 'templates/classic/admin/logs.tpl.php'],
         ['admin/menu', 'templates/classic/admin/menu.tpl.php'],
         ['admin/plugins', 'templates/classic/admin/plugins.tpl.php'],
         ['admin/plugins/plugin', 'templates/classic/admin/plugins/plugin.tpl.php'],

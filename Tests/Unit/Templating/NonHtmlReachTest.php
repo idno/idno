@@ -159,8 +159,6 @@ final class NonHtmlReachTest extends TestCase
         'templates/default/account/password/sent.html.twig',
         'templates/default/account/register.html.twig',
         'templates/default/account/register/refused.html.twig',
-        'templates/default/account/settings/feedback.html.twig',
-        'templates/default/account/settings/feedback/confirm.html.twig',
         'templates/default/account/settings/following.html.twig',
         'templates/default/account/settings/following/bookmarklet.html.twig',
         'templates/default/account/settings/following/mf2user.html.twig',

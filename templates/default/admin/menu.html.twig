@@ -34,13 +34,6 @@
         {{ idno_include('shell/icon', {icon: 'bar-chart-3'}) }}
         <span>{{ t('Statistics') }}</span>
     </a>
-    {% if setting('capture_logs') %}
-    <a href="{{ site_url() }}admin/logs/"
-       class="idno-admin-nav-item{% if path_matches('/admin/logs/') %} active{% endif %}">
-        {{ idno_include('shell/icon', {icon: 'scroll-text'}) }}
-        <span>{{ t('Logs') }}</span>
-    </a>
-    {% endif %}
     {% if legacy_tables_in_menu() %}
     <a href="{{ site_url() }}admin/legacytables/"
        class="idno-admin-nav-item{% if path_matches('/admin/legacytables/') %} active{% endif %}">

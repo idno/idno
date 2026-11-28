@@ -45,7 +45,6 @@ namespace Idno\Core {
             \Idno\Core\Idno::site()->routes()->addRoute('/admin/users/?', '\Idno\Pages\Admin\Users');
             \Idno\Core\Idno::site()->routes()->addRoute('/admin/export/?', '\Idno\Pages\Admin\Export');
             \Idno\Core\Idno::site()->routes()->addRoute('/admin/export/generate/?', '\Idno\Pages\Admin\Export\Generate');
-            //\Idno\Core\Idno::site()->routes()->addRoute('/admin/export/download/?', '\Idno\Pages\Admin\Export\Download');
             \Idno\Core\Idno::site()->routes()->addRoute('/admin/export/rss/?', '\Idno\Pages\Admin\Export\RSS');
             \Idno\Core\Idno::site()->routes()->addRoute('/admin/export/wxr/?', '\Idno\Pages\Admin\Export\WXR');
             \Idno\Core\Idno::site()->routes()->addRoute('/admin/import/?', '\Idno\Pages\Admin\Import');
@@ -53,10 +52,6 @@ namespace Idno\Core {
             \Idno\Core\Idno::site()->routes()->addRoute('/admin/statistics/?', '\Idno\Pages\Admin\Statistics');
             \Idno\Core\Idno::site()->routes()->addRoute('/admin/legacytables/?', '\Idno\Pages\Admin\LegacyTables');
             \Idno\Core\Idno::site()->routes()->addRoute('/admin/welcome/?', '\Idno\Pages\Admin\Welcome');
-
-            if (!empty(\Idno\Core\Idno::site()->config()->capture_logs) && \Idno\Core\Idno::site()->config()->capture_logs) {
-                \Idno\Core\Idno::site()->routes()->addRoute('/admin/logs/?', '\Idno\Pages\Admin\Logs');
-            }
 
             // Override the page shell
             \Idno\Core\Idno::site()->template()->addUrlShellOverride('admin', 'settings-shell');

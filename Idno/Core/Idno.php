@@ -226,7 +226,6 @@ namespace Idno\Core {
             /**
              * Add some services
             */
-            $this->routes()->addRoute('/service/db/optimise/?', '\Idno\Pages\Service\Db\Optimise');
             $this->routes()->addRoute('/service/security/csrftoken/?', \Idno\Legacy\ControllerRoute::class);
             $this->routes()->addRoute('/service/system/log/?', '\Idno\Pages\Service\System\Log');
             $this->routes()->addRoute('/service/geo/geocoder/?', '\Idno\Pages\Service\Geo\Geocoder');
