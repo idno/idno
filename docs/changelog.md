@@ -35,6 +35,7 @@ These changes are on the `dev` branch and will be part of the next release.
 * Core's translations are in the gettext domain `idno`, like their template `idno.pot`: a language's catalogue is `languages/<locale>/LC_MESSAGES/idno.mo`. A catalogue compiled as `known.mo` is still read, so a translated site needs nothing done; see [the changes for plugin and theme authors](developers/plugins/changes.md)
 * The MongoDB driver was upgraded to version 2 and is now an optional dependency
 * TinyMCE upgraded to version 8
+* Security: on a private site, a file that belongs to a post or a member (a photo, an audio file, a profile picture) was served to anybody who had its address, signed in or not. A visitor who is not signed in is now refused such a file, as they are refused the post
 * Security: fixes for cross-site scripting, server-side request forgery, an open redirect, access control on uploaded files, and ActivityPub actor spoofing
 * Security: outbound requests verify TLS certificates, and requests to URLs supplied by other sites are checked at every redirect
 * Security: error pages and JSON error responses no longer show file names, line numbers or stack traces unless `debug` is set

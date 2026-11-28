@@ -37,6 +37,17 @@ namespace Idno\Pages\File {
             // Enforce access control: if file is attached to an entity, check canRead()
             $restricted = false;
             if (!empty($object->file['attached_entity'])) {
+                // A private site shows a visitor who is not signed in no post and no member, so
+                // no file of one either, whatever the access of the post: its address may be
+                // known to somebody who was sent it, or to a server the post once went to.
+                // (This page is a public route, so the site's gatekeeper does not ask.) A file
+                // that belongs to no entity is the site's own, and is served.
+                if (!\Idno\Core\Idno::site()->config()->isPublicSite() && !\Idno\Core\Idno::site()->session()->isLoggedOn()) {
+                    $this->setResponse(403);
+                    header('Cache-Control: private, no-store');
+                    echo '';
+                    return;
+                }
                 // Load the entity whether or not the current user can see it: a lookup that
                 // respects access would not find it, and the check below would be skipped
                 $db = \Idno\Core\Idno::site()->db();
