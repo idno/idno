@@ -69,6 +69,16 @@ namespace Tests {
         }
 
         /**
+         * The keyId of the HTTP signature of each of those requests, '' for one that was not signed
+         *
+         * @return string[]
+         */
+        public function signers(): array
+        {
+            return json_decode(file_get_contents($this->url('/signers'), false, $this->context()), true);
+        }
+
+        /**
          * Forget the requests received so far
          */
         public function reset(): void

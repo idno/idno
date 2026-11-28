@@ -26,7 +26,7 @@ class WellKnownPublication extends Page
         $admins = User::get(['admin' => true], [], 100, 0);
         if (!empty($admins)) {
             foreach ($admins as $admin) {
-                if (Main::isUserConnected($admin)) {
+                if (self::canSpeakForSite($admin)) {
                     $session = Main::getATProtoSessionForUser($admin);
                     $did = $session['did'];
                     break;
@@ -39,7 +39,7 @@ class WellKnownPublication extends Page
             $users = User::get([], [], 100, 0);
             if (!empty($users)) {
                 foreach ($users as $user) {
-                    if (Main::isUserConnected($user)) {
+                    if (self::canSpeakForSite($user)) {
                         $session = Main::getATProtoSessionForUser($user);
                         $did = $session['did'];
                         break;
@@ -60,5 +60,15 @@ class WellKnownPublication extends Page
         header('Cache-Control: public, max-age=3600');
         echo $atUri;
         exit;
+    }
+
+    /**
+     * Can this member's identity be given as the owner of the site's publication? Only a
+     * connected member who can still sign in: not one who is banned, and not one whose
+     * account is closed (being deleted).
+     */
+    private static function canSpeakForSite(User $user): bool
+    {
+        return !$user->isBanned() && !$user->isClosed() && Main::isUserConnected($user);
     }
 }

@@ -1169,6 +1169,16 @@ something). What existing sites, hubs and plugins hold was kept, and must stay:
     Users page's `release_handle` action. A newcomer is otherwise taken for the old
     ActivityPub actor. Both account records (`Idno\Entities\AccountRecord`) are for
     administrators only, like invitations, and belong to no member.
+  - **An account that acts for the site is an open one.** Code that picks a member to stand for
+    the site rather than for themself asks `isClosed()` and `isBanned()` of each candidate and
+    goes on to the next: the member whose key signs the site's own ActivityPub fetches
+    (`RemoteActor::getSigningUser()`; a server that checks the signer fetches that actor, which
+    answers 410 for both, and then refuses every fetch), the administrators mailed about a
+    moderation report (`Moderation::canHandle()`), and the identity named at
+    `/.well-known/site.standard.publication` (Atmosphere). A listing of `User` includes closed
+    accounts, because the account record is kept until the end.
+    `IdnoPlugins/ActivityPub/Tests/SigningUserTest.php`, the Moderation `MailTest` and
+    `IdnoPlugins/Atmosphere/Tests/PublicationOwnerTest.php` check these.
   - Known limits: comments the member left on other people's posts stay (they are part of
     those posts); two deletions started in the same moment can both pass the last-administrator
     check; the `Delete` of the actor is not sent again if its deliveries fail; a mark whose
