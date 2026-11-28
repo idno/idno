@@ -951,6 +951,22 @@ something). What existing sites, hubs and plugins hold was kept, and must stay:
 - Key settings: `database`, `dbname`, `dbhost`, `dbuser`, `dbpass`, `event_queue`,
   `filesystem`, `uploadpath`, `site_secret`
 - `event_queue = 'AsynchronousQueue'` enables the async pipeline (required for ActivityPub)
+- Where a setting comes from, later ones winning (`Config::loadIniFiles()`): the database, `config.ini`,
+  `config.json`, the per-domain file, then every `IDNO_<SETTING>` server variable. A `KNOWN_<SETTING>`
+  variable only fills a setting that nothing else set.
+- A value from the environment goes through `Config::environmentValue()`: one that is exactly `true`, `on`,
+  `yes`, `false`, `off`, `no` or `none` (any letter case; `Config::ENVIRONMENT_WORDS`) becomes that boolean,
+  as the word means in `config.ini`; anything else is the text it was. Without it `IDNO_DEBUG=false` is a
+  text that is not empty, and debugging is on. Don't copy a server variable into the configuration any
+  other way, and test a boolean setting with `empty()` or as a condition, never against the text `'false'`
+  (`parse_ini_file()` gives `"1"` and `""` for the same words, not booleans).
+- The per-domain file is `<host>.ini` beside `config.ini`. `Config::hostConfigurationNames()` gives the names
+  tried, in order: the host of the site's address, then, for a host that begins with `www.`, the host without
+  it, which is what the host is called everywhere else (`host` after `init()`, `hosts/<host>/`, the
+  multitenant database, the upload folder). Only the first file found is read. On the command line the host
+  comes from `IDNO_DOMAIN`.
+- `Tests/Core/ConfigLoadingTest.php` checks both, with a configuration that reads a folder of the test's
+  (`Config::configurationPaths()` is the seam).
 - Sensitive files: `.env`, `config.ini`, `configuration/` — never commit these
 
 ## Security
