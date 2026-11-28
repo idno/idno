@@ -32,7 +32,7 @@ interface PasswordResets
     /**
      * Mails the code to the account, in a link to the reset page that carries the address as it was typed.
      */
-    public function mailCode(User $account, string $email, string $code): void;
+    public function mailCode(User $account, string $email, #[\SensitiveParameter] string $code): void;
 
     /**
      * The member whose address this is, when the code is their current one (less than three hours old, not used) and they may reset: an account that is

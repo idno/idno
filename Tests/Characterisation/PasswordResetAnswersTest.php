@@ -339,7 +339,7 @@ final class PasswordResetAnswersTest extends SignInSiteCase
 
     /**
      * Catches: an XHR GET answered with the legacy router's second `Cache-Control` line, a request with a malformed Host served by a page that does not
-     * exist for it, and a script's POST with no form token forwarded where a script cannot follow (an empty 200 that looks like success) instead of refused,
+     * exist for it, a PUT or DELETE reaching a handler, and a script's POST with no form token forwarded where a script cannot follow (an empty 200 that looks like success) instead of refused,
      * with the password changed behind it.
      */
     public function testWhatTheControllersAnswerDifferentlyFromTheLegacyPages(): void
@@ -362,6 +362,16 @@ final class PasswordResetAnswersTest extends SignInSiteCase
         foreach ([$valid, '/account/password'] as $path) {
             $this->assertSame(404, $this->site()->request('GET', $path, ['Host' => 'bad host!'])->status, $path);
         }
+
+        // the other methods, by a visitor with the token in the address and with none: the legacy router's 404 page, and nothing changes
+        [$cookie, $token] = $this->visitorSession();
+        foreach (['/account/password', '/account/password/reset'] as $path) {
+            foreach (['PUT', 'DELETE'] as $method) {
+                $this->assertSame(404, $this->site()->request($method, $path, [], self::reset())->status, $method . ' ' . $path);
+                $this->assertSame(404, $this->site()->request($method, $path . '?__bTk=' . $token, ['Cookie' => $cookie], self::reset())->status, $method . ' ' . $path . ' with a token');
+            }
+        }
+        $this->assertTrue($this->signsIn('bob', self::PASSWORD), 'no PUT or DELETE reset anything');
 
         $before = $this->recoveryOf('bob');
         $refused = $this->site()->request('POST', '/account/password/reset', ['Cookie' => $this->visitorSession()[0], 'X-Requested-With' => 'XMLHttpRequest'], self::reset());
