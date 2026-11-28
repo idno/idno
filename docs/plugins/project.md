@@ -1,49 +1,65 @@
 # Official Plugins
 
-The following plugins for Idno were created by the core project team. Most are bundled with Idno
-and live in the main repository under `IdnoPlugins/`. They are listed here so you know what each one does.
+These plugins come with Idno. The web plugins live in `IdnoPlugins/` and are turned on and off from the
+[Plugins page](../admin/plugins-and-themes.md) of your site. The console plugins live in `ConsolePlugins/` and add
+commands to Idno's command line tool, `idno.php`.
 
-## Bundled plugins
+The name in bold is the one the Plugins page shows; the folder name follows in brackets where it is different.
 
-### Content types
+A new site starts with Status updates, Text posts, Photos, IndiePub, ActivityPub and Portfolios turned on.
 
-* **Status updates** – Simple status updates and replies.
-* **Text posts** – A lightweight blogging engine for long-form articles.
-* **Photos** – Simple photo uploader.
-* **Audio** – Upload audio or music and turn your site into a podcast (the `Media` plugin; it also handles video).
-* **Events** – A lightweight way to post or reply to events, including RSVPs.
-* **Checkin** – An easy way to check into a geographic location.
-* **Bookmark** – Bookmark a page (the `Like` plugin).
-* **Static pages** – Host static pages in Idno.
+## Kinds of post
 
-### Federation, syndication and APIs
+* **Status updates** (`Status`): short notes and replies.
+* **Text posts** (`Text`): articles of any length, with a title.
+* **Photos** (`Photo`): one or more photos with a caption.
+* **Audio** (`Media`): audio files, such as music or podcast episodes. It also takes video files.
+* **Video** (`Video`): a video posted by its address, from YouTube, Vimeo, Dailymotion, TikTok, a Bluesky post, or a
+  PeerTube or Loops site. The video stays where it is and your site shows its player. See
+  [Plugin settings](../admin/plugin-settings.md#video).
+* **Events** (`Event`): events, and RSVPs to events on other sites.
+* **Checkin** (`Checkin`): check in to a place, shown on a map. A member can protect their location for 24 hours.
+* **Bookmark** (`Like`): save and share a link to a page.
 
-* **ActivityPub** – Federation support. Lets people follow your profile from Mastodon and other compatible
-  platforms, and delivers your posts to followers. Requires the asynchronous event queue.
-* **IndiePub** – Support for IndieAuth and Micropub on single-user Idno sites. Must be used with a single-user theme.
-* **Webhooks** – Syndicate via webhooks.
-* **Atmosphere** (formerly StandardSiteSync) – Save what you publish to your own account on the AT Protocol network: articles as standard.site documents, status updates, videos and audio as records of their own. Supports OAuth
-  authentication, automatic sync of new content, and backfill of existing posts.
+## Features
 
-### Appearance
+* **Static pages** (`StaticPages`): pages that stand apart from the stream of posts, such as an "about" page, with
+  categories and the option to use a page as the homepage. See [Plugin settings](../admin/plugin-settings.md#pages).
+* **Portfolios** (`Portfolios`): members collect their own posts into named lists, shown from their profile.
+* **Moderation** (`Moderation`): members report posts, comments and people; administrators review reports, take
+  content down and ban accounts. See [Moderation](../admin/moderation.md).
+* **Custom CSS** (`Styles`): add your own CSS to change how your site looks. See
+  [Plugin settings](../admin/plugin-settings.md#custom-css).
 
-* **Custom CSS** – A stylesheet editor to modify the visual style of your site (the `Styles` plugin).
+## Federation and other services
+
+* **ActivityPub** (`ActivityPub`): members can be followed from Mastodon and other fediverse services, and their
+  public posts are delivered to their followers. Needs the asynchronous event queue. See
+  [Federation](../admin/federation.md#activitypub).
+* **Atmosphere** (`Atmosphere`): members save what they publish to their own AT Protocol account (the network
+  Bluesky is built on), and can choose to post their status updates, videos and audio to Bluesky as well. It was
+  called StandardSiteSync before. See [Federation](../admin/federation.md#the-at-protocol-atmosphere).
+* **IndiePub** (`IndiePub`): IndieAuth, so members can sign in to IndieWeb apps with their own address, and
+  Micropub, so they can post from apps that support it. See [Federation](../admin/federation.md#indieauth-and-micropub).
+* **Webhooks** (`Webhooks`): send new posts to webhook addresses on other services, such as Slack. See
+  [Plugin settings](../admin/plugin-settings.md#webhooks).
 
 ## Console plugins
 
-These add commands to Idno's command-line interface (they live under `ConsolePlugins/`).
+Run these from the folder Idno is installed in, for example `./idno.php service-event-queue`.
 
-* **EventQueueService** – Runs the asynchronous event queue dispatch worker.
-* **CronService** – Runs periodic cron events (cron/minute, cron/hourly, cron/daily).
-* **Export** – Exports Idno posts to a simple JSON format.
-* **GhostExport** – Exports Idno posts to Ghost's Lexical JSON format.
-* **BuildLanguage** – Extracts translatable strings from PHP files and generates `.pot` files.
-* **Example** – An example plugin showing how to use the console plugin interface.
+* **EventQueueService** (`service-event-queue`): runs the worker for the asynchronous event queue. See
+  [Advanced options](../install/advanced.md).
+* **CronService** (`service-cron`): triggers events every minute, hour and day, for plugins that need to do work
+  regularly. See [Advanced options](../install/advanced.md).
+* **Export** (`export`): writes the site's public posts, and the members who wrote them, as JSON. See
+  [Importing and exporting](../admin/import-export.md#exporting-from-the-command-line).
+* **GhostExport** (`ghost-export`): writes posts in the JSON format the Ghost blogging platform imports.
+* **BuildLanguage** (`build-lang`): collects the text that can be translated into `.pot` files, for translators.
+* **Example** (`example`): an example for developers of how a console plugin is written.
 
-## Plugins distributed separately
+## Where next
 
-### [Markdown](https://github.com/idno/Markdown)
-
-Replaces Idno's rich text editor with a markdown editor.
-
-Requires: Idno 0.7
+* Plugins written by others: [Community plugins](community.md).
+* Turning plugins on and off: [Plugins and themes](../admin/plugins-and-themes.md).
+* Writing your own: [Writing plugins](../developers/plugins/index.md).

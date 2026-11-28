@@ -1,20 +1,28 @@
-# Installing Idno
+# Installing and running Idno
 
-* [Instructions](instructions.md)
+These pages help you install Idno on your own server, configure it, keep it running and upgrade it.
+
+## Installing
+
 * [System requirements](requirements.md)
+* [Installing Idno](instructions.md)
 * [Command line installer](cliinstaller.md)
+
+## Configuring
+
+* [Configuration reference](config.md)
+* [Running background services](advanced.md)
+
+## Keeping it running
+
+* [Logs and diagnostics](debugging.md)
+* [Upgrading Idno](upgrade.md)
+
+## Moving a site
+
 * [Moving from an idno.co hosted site to your own hosting](data_migration.md)
 
-# Upgrading Idno
+## Where next
 
-* [Upgrade instructions](upgrade.md)
-
-# Configuring Idno
-
-* [Using config.ini to configure Idno](config.md)
-* [Advanced options: asynchronous event queue and periodic execution](advanced.md)
-
-# Debugging Idno
-
-* [Using logs](debugging.md)
-* [Diagnostics](debugging.md)
+* Once the site is running: [Administering an Idno site](../admin/index.md).
+* To extend Idno: [Idno for developers](../developers/index.md).

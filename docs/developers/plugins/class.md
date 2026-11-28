@@ -1,70 +1,152 @@
 # The plugin class
 
+After this page you will know which methods of your plugin's main class Idno calls, in what order, and what
+belongs in each.
+
 ## Name, namespace and inheritance
 
-The main plugin class must have the name Main, and sit inside the IdnoPlugins\PluginName namespace, where PluginName is
-the name of your plugin.
+The main class must be called `Main`, live in the namespace `IdnoPlugins\PluginName`, and extend
+`\Idno\Common\Plugin`. For a plugin called Banana, in `IdnoPlugins/Banana/Main.php`:
 
-It must also inherit the \Idno\Common\Plugin class.
+```php
+<?php
 
-For example, a declaration of the main plugin class for a plugin called Banana might look like:
+namespace IdnoPlugins\Banana {
 
-     namespace IdnoPlugins\Banana {
-        class Main extends \Idno\Common\Plugin {
-        }
-     }
-
-At its very simplest, this is all the code you need for a working plugin. For example, if you just want to replace or
-add some templates, this is fine.
-
-## Useful methods
-
-Idno provides a handful of useful methods that you can register in your main plugin class.
-
-### registerPages()
-
-If this exists, this function will be called when the plugin is loaded. It's suggested that you define your
-page URLs here.
-
-If you're extending any templates, it's a good idea to include those declarations here too.
-
-For example, the Status plugin's registerPages() function starts like this (it also registers `/reply/...` routes
-for replies):
-
-    function registerPages() {
-        \Idno\Core\Idno::site()->routes()->addRoute('/status/edit/?', '\IdnoPlugins\Status\Pages\Edit');
-        \Idno\Core\Idno::site()->routes()->addRoute('/status/edit/:id/?', '\IdnoPlugins\Status\Pages\Edit');
-        \Idno\Core\Idno::site()->routes()->addRoute('/status/delete/:id/?', '\IdnoPlugins\Status\Pages\Delete');
+    class Main extends \Idno\Common\Plugin
+    {
     }
 
-See [pages](pages.md) for more on routes.
+}
+```
 
-This is also where plugins should [extend templates](../templating/extending.md). For example, this is how the
-`Checkin` plugin adds some mapping JavaScript to the HTML page header:
+That is a complete plugin. If all you want is to replace or add some templates, you need nothing more.
 
-    \Idno\Core\Idno::site()->template()->extendTemplate('shell/head', 'checkin/head');
+## The methods Idno calls
 
-### registerEventHooks()
+When an enabled plugin is loaded, on every request, Idno creates your `Main` object. Its constructor calls five
+methods in this order. Each does nothing unless you override it (except where noted).
 
-If this exists, this function will be called when the plugin is loaded. It's suggested that you define your
-event hooks here.
+### 1. registerLibraries()
 
-For example, to run some code whenever an entity is saved:
+For autoloaders. The version in `\Idno\Common\Plugin` includes `vendor/autoload.php` from your plugin's folder if
+the file exists, so a plugin with its own Composer packages needs no code here.
 
-    function registerEventHooks() {
-        \Idno\Core\Idno::site()->events()->addListener('saved', function (\Idno\Core\Event $event) {
-            $eventdata = $event->data();
-            $object    = $eventdata['object'];
-            // Do something with $object
-        });
-    }
+### 2. init()
 
-### registerTranslations()
+For any other setting up. The version in `\Idno\Common\Plugin` does two things you want to keep: it registers your
+content type, and it adds your plugin's folder to the places templates are looked for. So if you override it,
+call the parent:
 
-If this exists, this function will be called when the plugin is loaded. Use it to register the plugin's
-translations. See [Translating Idno](../languages/index.md).
+```php
+function init()
+{
+    parent::init();
+    // Your own set-up
+}
+```
 
-### init() and registerLibraries()
+### 3. registerEventHooks()
 
-`registerLibraries()` is the place to register any autoloaders. `init()` is for any other set-up your plugin needs; if
-you override it, call `parent::init()` so that your content type is registered and your templates are found.
+For your event listeners. For example, to run some code whenever an entity is saved for the first time:
+
+```php
+function registerEventHooks()
+{
+    \Idno\Core\Idno::site()->events()->addListener('saved', function (\Idno\Core\Event $event) {
+        $eventdata = $event->data();
+        $object    = $eventdata['object'];
+        // Do something with $object
+    });
+}
+```
+
+See [Events](events.md).
+
+### 4. registerPages()
+
+For your routes. This is how the Status plugin registers its pages:
+
+```php
+function registerPages()
+{
+    \Idno\Core\Idno::site()->routes()->addRoute('/status/edit/?', '\IdnoPlugins\Status\Pages\Edit');
+    \Idno\Core\Idno::site()->routes()->addRoute('/status/edit/:id/?', '\IdnoPlugins\Status\Pages\Edit');
+    \Idno\Core\Idno::site()->routes()->addRoute('/status/delete/:id/?', '\IdnoPlugins\Status\Pages\Delete');
+}
+```
+
+(It also registers `/reply/...` routes for replies.) See [Pages and routes](pages.md).
+
+By convention this is also where plugins [extend templates](../templating/extending.md). The Checkin plugin adds
+its map scripts to the page header like this:
+
+```php
+\Idno\Core\Idno::site()->template()->extendTemplate('shell/head', 'checkin/head');
+```
+
+### 5. registerTranslations()
+
+For your translations. The Status plugin's:
+
+```php
+function registerTranslations()
+{
+    \Idno\Core\Idno::site()->language()->register(
+        new \Idno\Core\GetTextTranslation(
+            'status', dirname(__FILE__) . '/languages/'
+        )
+    );
+}
+```
+
+See [Translating Idno](../languages/index.md).
+
+## Other methods you can override
+
+### registerContentTypes()
+
+Called by `init()`. It registers the class `IdnoPlugins\PluginName\ContentType`, if there is one. Override it
+only when your plugin has more than one content type, as the Status plugin does for replies:
+
+```php
+function registerContentTypes()
+{
+    parent::registerContentTypes();
+
+    \Idno\Common\ContentType::register($this->getNamespace() . '\\RepliesContentType');
+}
+```
+
+See [Content types](content-types.md).
+
+### getFileUsage($user = false)
+
+Returns the number of bytes of uploaded files your plugin is responsible for, for the whole site or for one
+member. The Photo and Media plugins implement it. Return `0`, the default, if your plugin stores no files.
+
+## Helpful methods you inherit
+
+| Method | Returns |
+|---|---|
+| `getNamespace()` | The plugin's namespace, such as `IdnoPlugins\Banana` |
+| `getManifest()` | The contents of `plugin.ini`, as an array |
+| `getVersion()` | The `version` from `plugin.ini` |
+
+To reach another plugin's main object, ask for it by name. You get `false` if it is not enabled:
+
+```php
+$status = \Idno\Core\Idno::site()->plugins()->get('Status');
+```
+
+## Keep loading cheap
+
+Everything in these methods runs on every request to the site, including requests for pages your plugin has
+nothing to do with. Register routes, listeners and template extensions here, and leave real work (database
+queries, requests to other servers) to the page or listener that needs it.
+
+## Where next
+
+* [Pages and routes](pages.md)
+* [Events](events.md)
+* [Content types](content-types.md)

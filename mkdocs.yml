@@ -2,14 +2,81 @@ site_name: Idno Documentation
 theme: readthedocs
 markdown_extensions:
  - admonition
+ - def_list
 repo_url: https://github.com/idno/idno/
 # Files in docs/ that are not part of the published site.
 exclude_docs: |
   requirements.txt
 nav:
 - Home: 'index.md'
-- Installing and Upgrading Idno: 'install/index.md'
-- Plugins: 'plugins/index.md'
-- Idno for Developers: 'developers/index.md'
-- Open Source Community: 'community/index.md'
+- Installing and Upgrading Idno:
+  - Overview: 'install/index.md'
+  - System requirements: 'install/requirements.md'
+  - Installation instructions: 'install/instructions.md'
+  - Command line installer: 'install/cliinstaller.md'
+  - Configuration reference: 'install/config.md'
+  - The event queue and periodic execution: 'install/advanced.md'
+  - Upgrading: 'install/upgrade.md'
+  - Logs and diagnostics: 'install/debugging.md'
+  - Moving from a hosted site: 'install/data_migration.md'
+- Administering an Idno Site:
+  - Overview: 'admin/index.md'
+  - Site settings: 'admin/site-settings.md'
+  - Members and invitations: 'admin/users.md'
+  - Email: 'admin/email.md'
+  - Private sites: 'admin/private-sites.md'
+  - Plugins and themes: 'admin/plugins-and-themes.md'
+  - Plugin settings: 'admin/plugin-settings.md'
+  - Federation and the IndieWeb: 'admin/federation.md'
+  - Moderation: 'admin/moderation.md'
+  - Import and export: 'admin/import-export.md'
+- Plugins:
+  - Overview: 'plugins/index.md'
+  - Bundled plugins: 'plugins/project.md'
+  - Community plugins: 'plugins/community.md'
+- Idno for Developers:
+  - Overview: 'developers/index.md'
+  - Start here:
+    - Set up a development site: 'developers/setup.md'
+    - A tour of the codebase: 'developers/tour.md'
+    - The life of a request: 'developers/request-lifecycle.md'
+  - Writing plugins:
+    - Your first plugin: 'developers/plugins/first-plugin.md'
+    - How a plugin is laid out: 'developers/plugins/index.md'
+    - The plugin class: 'developers/plugins/class.md'
+    - Pages and routes: 'developers/plugins/pages.md'
+    - Forms and tokens: 'developers/plugins/forms.md'
+    - Entities: 'developers/plugins/entities.md'
+    - Content types: 'developers/plugins/content-types.md'
+    - Events: 'developers/plugins/events.md'
+    - Event reference: 'developers/plugins/events-reference.md'
+    - Access control: 'developers/plugins/access.md'
+    - Files and uploads: 'developers/plugins/files.md'
+    - Settings and admin pages: 'developers/plugins/settings.md'
+    - Syndication and webmentions: 'developers/plugins/syndication.md'
+    - ActivityPub for plugin authors: 'developers/plugins/activitypub.md'
+    - The queue and cron: 'developers/plugins/queue.md'
+    - Console commands: 'developers/plugins/console.md'
+    - Sending email: 'developers/plugins/email.md'
+    - Security checklist: 'developers/plugins/security.md'
+    - Testing a plugin: 'developers/plugins/testing.md'
+    - The API and Micropub: 'developers/plugins/api.md'
+    - Changes for plugin and theme authors: 'developers/plugins/changes.md'
+  - Templates and themes:
+    - Templates: 'developers/templating/index.md'
+    - Template types and feeds: 'developers/templating/types.md'
+    - Extending templates: 'developers/templating/extending.md'
+    - Themes: 'developers/themes/index.md'
+    - The modern look (Twenty26): 'developers/themes/modern.md'
+    - Translating Idno: 'developers/languages/index.md'
+  - Contributing:
+    - Building JavaScript and CSS: 'developers/build.md'
+    - Running the tests: 'developers/testing.md'
+    - Coding standards: 'developers/standards.md'
+    - Commit messages: 'developers/commit-messages.md'
+    - Submitting a pull request: 'developers/pull-requests.md'
+- Open Source Community:
+  - Overview: 'community/index.md'
+  - Anti-harassment policy: 'community/harassment.md'
+  - Contributors: 'community/contributors.md'
 - What's New in Idno?: 'changelog.md'

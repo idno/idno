@@ -1,136 +1,188 @@
-# Making and accepting API calls
+# The API and Micropub
 
-Every page in Idno doubles as an API endpoint, some endpoints can be used to retrieve useful information, and others to post updates. 
+After this page you will be able to read from and post to an Idno site from another program, and you will know
+what makes your own plugin's pages usable that way.
 
-All pages that are accessible via the web interface are also API endpoints, so for example, if you were to make a 
-POST request to ```/status/edit``` with the same form values as that submitted when submitting the form via your web browser, you will create a new 
-status update.
+Idno has no separate API. **Every page is also an API endpoint.** Ask for a page as JSON and you get its data as
+JSON. Send a page the fields its form would send and it does what the form does. So if you can do something in
+the browser, a program can do it too, at the same address.
 
-As a plugin author, every [page](pages.md) you create extending ```\Idno\Common\Page``` and exposing within your plugin will automatically be turned into an API endpoint. Be sure to read up on [how to accept variables](forms.md#accepting-input-from-html-forms-links-or-api-calls).
+There is also a standard API for publishing, [Micropub](#micropub), provided by the bundled IndiePub plugin.
 
-!!! note "Note"
-    Many pages report some basic information about them by making GET requests, so for example, making a GET request to the same ```/status/edit``` endpoint will return, among other things, available syndication methods and the type of object being created.
+## Asking for JSON
 
-## Basic API structure
+Add `?_t=json` to an address, or send the header `Accept: application/json`:
 
-The basic structure of an API call is as follows:
-
-* A HTTP call of *METHOD* (where *METHOD* is the HTTP method you're calling, usually GET or POST, however other methods can be supported by the page handling class)
-* A message payload containing the variables expected by the handler, if applicable. This may be in the format of URL encoded variable strings, or a JSON encoded string of variables.
-* A ```Content-Type``` header specifying the appropriate content type (```application/x-www-form-urlencoded``` for url encoded variables, ```multipart/form-data``` if you're uploading file data or ```application/json``` for a json payload)
-* An ```Accept``` header specifying the format you want the response in, almost certainly you'll want this to be ```application/json```.
-* Your authentication header (needed for POST requests and any logged in content)
-
-Here's a CURL prototype example:
-
-```
-curl -s \
-     -X GET \
-     -H "Content-Type: application/x-www-form-urlencoded" \
-     -H "Accept: application/json" \
-     -H "X-IDNO-USERNAME: *USERNAME*" \
-     -H "X-IDNO-SIGNATURE: *SIGNATURE*" \
-     --data-urlencode "body=this is some text" -G \
-    http://yoursite.com/path/to/page
+```bash
+curl -H "Accept: application/json" https://example.com/content/all/
 ```
 
-## Authenticated requests
+You get the variables the page would have handed to its template. For the home page and other lists, that
+includes the posts, each with its id, address, title, content, dates, tags, author and attachments.
 
-Almost all requests that you make will require some sort of access credentials, and so must be signed. 
-The default method for doing this is through HTTP header variables. The bundled IndiePub plugin also provides IndieAuth and a Micropub endpoint (```/micropub/endpoint```) for clients that use bearer tokens. Those tokens work at the Micropub endpoint only: on any other page a bearer token is ignored.
+Public pages need no authentication. Anything a signed-in member would see needs a signed request.
 
-The account pages, those under ```/account/``` (settings, password, the API key itself, access tokens), are the exception: they answer an API request with a 403, whatever it is signed with. They can only be used from a logged-in browser. This includes pages that plugins register under ```/account/```.
+## Signing a request
 
-The headers are:
+A request is authenticated with two headers:
 
-* X-IDNO-USERNAME: the user's username (or email address).
-* X-IDNO-SIGNATURE: a HMAC signature, computed with sha256, using the user's API key (available from your user account page under "Tools and Apps" - ```/account/settings/tools/```), and the URI you're requesting.
+| Header | Value |
+|---|---|
+| `X-IDNO-USERNAME` | The member's username, or their email address |
+| `X-IDNO-SIGNATURE` | A signature made with the member's API key |
 
-!!! note "Note"
-    The older ```X-KNOWN-USERNAME``` and ```X-KNOWN-SIGNATURE``` headers are still accepted if the ```X-IDNO-*``` headers are not sent.
+The member finds their API key in their settings, under **Tools and Apps** (`/account/settings/tools/`).
 
-### Computing the HMAC signature
+The signature is an HMAC, computed with SHA-256, of the **path of the request, including its query string if it
+has one**, with the API key as the secret, encoded as base64. In PHP:
 
-A signature is computed using the request URI (the path of the endpoint, plus the query string if there is one, minus the domain and scheme), and using the user's API key, the result is then base64 encoded. Here's an example of how to do this in PHP:
-
-```
+```php
 $signature = base64_encode(
     hash_hmac('sha256', '/status/edit', $api_key, true)
-); 
+);
 ```
 
-## Working examples
+In a shell:
 
-Here are a few examples, using cURL, for calling common API endpoints available on most Idno installations (assuming the appropriate plugins are activated).
-
-### Making a Status post
-
-Making a Status post, you must address the endpoint ```/status/edit```, passing the ```body``` variable, and optional syndication variables.
-
+```bash
+SIGNATURE=$(printf '%s' "/status/edit" | openssl dgst -binary -sha256 -hmac "$KEY" | base64)
 ```
+
+Sign exactly what you request. `/status/edit` and `/status/edit/` have different signatures, and so do
+`/content/all/` and `/content/all/?_t=json`.
+
+!!! note "Earlier header names"
+    `X-KNOWN-USERNAME` and `X-KNOWN-SIGNATURE` are still accepted when the `X-IDNO-` headers are not sent.
+
+Always use HTTPS. The API key itself is never sent, but what you post and what you read are.
+
+### What a signed request can do
+
+A signed request acts as the member, with no form token needed, **except**:
+
+* It is never an administrator. Administration pages refuse it, whoever the member is.
+* It cannot use the pages under `/account/`: settings, password, the API key itself, connections to other
+  services. Those answer 403. This includes pages that plugins register under `/account/`.
+
+An API key is a credential for publishing and reading. It is not enough to take over the account.
+
+A signed request does not start a session. Each request must be signed.
+
+## Posting
+
+Send the fields the page's form sends. To find out what they are, look at the form in a browser, or at the
+plugin's `saveDataFromInput()` method.
+
+### A status update
+
+Send `body` to `/status/edit`:
+
+```bash
 USER=example
-KEY=fsefsefjslkfjs3
-HMAC=$(echo -n "/status/edit" | openssl dgst -binary -sha256 -hmac $KEY |  base64 -w0)
+KEY=your-api-key
+SIGNATURE=$(printf '%s' "/status/edit" | openssl dgst -binary -sha256 -hmac "$KEY" | base64)
 
 curl -s \
      -X POST \
-     -H "Content-Type: application/x-www-form-urlencoded" \
      -H "Accept: application/json" \
      -H "X-IDNO-USERNAME: $USER" \
-     -H "X-IDNO-SIGNATURE: $HMAC" \
-     --data-urlencode "body=this is some text" \
-    http://yoursite.com/status/edit
+     -H "X-IDNO-SIGNATURE: $SIGNATURE" \
+     --data-urlencode "body=This is some text" \
+     https://example.com/status/edit
 ```
 
-On success, you will be given a JSON blob containing the url of the newly created object, otherwise you'll receive a non-200 HTTP error code and some error messages.
+On success the answer is JSON that holds the address of the new post in `location`. On failure you get a status
+code that is not 200 and the error messages.
 
-### Posting a blog entry
+### An article
 
-Making a Blog post, you must address the endpoint ```/entry/edit```, passing ```title``` and ```body``` variables, and optional syndication variables.
+Send `title` and `body` to `/entry/edit`:
 
-```
-USER=example
-KEY=fsefsefjslkfjs3
-HMAC=$(echo -n "/entry/edit" | openssl dgst -binary -sha256 -hmac $KEY |  base64 -w0)
+```bash
+SIGNATURE=$(printf '%s' "/entry/edit" | openssl dgst -binary -sha256 -hmac "$KEY" | base64)
 
 curl -s \
      -X POST \
-     -H "Content-Type: application/x-www-form-urlencoded" \
      -H "Accept: application/json" \
      -H "X-IDNO-USERNAME: $USER" \
-     -H "X-IDNO-SIGNATURE: $HMAC" \
-     --data-urlencode "body=this is some text" \
+     -H "X-IDNO-SIGNATURE: $SIGNATURE" \
      --data-urlencode "title=Entry title" \
-    http://yoursite.com/entry/edit
+     --data-urlencode "body=This is some text" \
+     https://example.com/entry/edit
 ```
 
-On success, you will be given a JSON blob containing the url of the newly created object, otherwise you'll receive a non-200 HTTP error code and some error messages.
+### A photo
 
-### Uploading a photo
+Send the file as `photo`, with `title` and `body`, to `/photo/edit`. Use `-F`, which makes curl send
+`multipart/form-data`:
 
-Making a photo upload post, you must address the endpoint ```/photo/edit```, passing ```title``` and ```body``` variables, and optional syndication variables.
-
-You must also pass a ```photo``` variable containing the uploaded photo data, and use the ```multipart/form-data``` content type.
-
-```
-USER=example
-KEY=fsefsefjslkfjs3
-HMAC=$(echo -n "/photo/edit" | openssl dgst -binary -sha256 -hmac $KEY |  base64 -w0)
+```bash
+SIGNATURE=$(printf '%s' "/photo/edit" | openssl dgst -binary -sha256 -hmac "$KEY" | base64)
 
 curl -s \
      -X POST \
-     -H "Content-Type: multipart/form-data" \
      -H "Accept: application/json" \
      -H "X-IDNO-USERNAME: $USER" \
-     -H "X-IDNO-SIGNATURE: $HMAC" \
-     -F "body=this is some text" \
+     -H "X-IDNO-SIGNATURE: $SIGNATURE" \
      -F "title=Photo title" \
-     -F "photo=@/path/to/photo.jpg;filename=photo.jpg;type=image/jpeg" \
-    http://yoursite.com/photo/edit
+     -F "body=This is some text" \
+     -F "photo=@/path/to/photo.jpg;type=image/jpeg" \
+     https://example.com/photo/edit
 ```
 
-On success, you will be given a JSON blob containing the url of the newly created object, otherwise you'll receive a non-200 HTTP error code and some error messages.
+### Other fields posts understand
 
-### Postman Collection
+| Field | Meaning |
+|---|---|
+| `access` | Who may see the post: `PUBLIC` (the default) or `SITE` for members only |
+| `publish_status` | `published` (the default) or `draft` |
+| `tags` | Tags for the post |
 
-As an API developer, you might find the following [postman collection](https://github.com/mapkyca/known-postman) useful.
+### Sending JSON
+
+A request body can be JSON instead of form fields. Send `Content-Type: application/json` and an object whose
+keys are the field names.
+
+## Micropub
+
+[Micropub](https://www.w3.org/TR/micropub/) is a W3C standard for publishing to a website, supported by many
+writing and photo apps. The bundled IndiePub plugin provides it, together with
+[IndieAuth](https://indieauth.spec.indieweb.org/), the standard those apps use to ask a member for permission.
+
+| Endpoint | Address |
+|---|---|
+| Micropub | `/micropub/endpoint` |
+| IndieAuth authorization | `/indieauth/auth` |
+| IndieAuth token | `/indieauth/token` |
+
+An app sends the member to the authorization endpoint, the member approves, and the app receives an access token
+that it sends with each request as `Authorization: Bearer <token>`. A member can see and revoke their tokens at
+`/account/indiepub/`.
+
+A Micropub post is turned into the kind of post whose [content type](content-types.md) lists that Micropub type
+in `$indieWebContentType`. A `note` becomes a status update, an `article` a text post, and so on.
+
+**An access token works at the Micropub endpoint only.** On every other page, a request that carries a token is
+treated as if it carried none. A plugin that wants to accept these tokens on a page of its own calls
+`\IdnoPlugins\IndiePub\Main::authenticate()` in that page.
+
+## Making your plugin's pages good API endpoints
+
+You get the API for free, but a few habits make it pleasant to use.
+
+* **Use `getInput()` and `getTextInput()`**, never `$_POST`. They read form fields and JSON bodies alike.
+* **Return a result from `postContent()`.** For an API request, what you return becomes `result` in the JSON
+  answer. Returning `false`, or nothing at all, sets status 400 unless you set another.
+* **Set a status code that tells the truth**: `$this->setResponse(404)`, or call `noContent()` and
+  `deniedContent()`, which do it for you.
+* **Say what went wrong** with `session()->addErrorMessage()`. Messages are included in the JSON answer.
+* **Mind what you pass to templates.** Template variables are what the JSON form of a page is made of. Never pass
+  a secret, or anything this viewer may not see. The related `jsonp` form (`?_t=jsonp`) can be loaded by any
+  other website, so treat everything in a page's variables as public unless the page checks who is asking.
+* **Check permission the same way for everyone.** A signed request skips the form token, not your gatekeepers.
+
+## Where next
+
+* [Pages and routes](pages.md)
+* [Template types and feeds](../templating/types.md)
+* [Security checklist](security.md)
