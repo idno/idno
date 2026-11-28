@@ -137,4 +137,16 @@ final class SettingsRedactorTest extends TestCase
         $this->assertSame('sk_ is not it', $redacted['title']);
         $this->assertSame(['publishable' => 'pk_live_abc'], SettingsRedactor::redact(['stripe' => 'sk_live_abc123', 'publishable' => 'pk_live_abc'], null), 'removed, with no marker, for the archive');
     }
+
+    /** A database password holding an @, a colon or an encoded slash must not be partly shown in the diagnostics report or the archive. */
+    public function testAPasswordHoldingAnAtSignIsRemovedWhole(): void
+    {
+        foreach (['p@ss', 'p@ss@word', 'pa:ss', 'p%40ss', 'pa%2Fss'] as $password) {
+            $redacted = SettingsRedactor::redact(['mirror' => 'mysql://u:' . $password . '@db.example/idno?x=a@b']);
+
+            $this->assertSame('mysql://db.example/idno?x=a@b', $redacted['mirror'], $password);
+        }
+        $this->assertSame('https://host.example/@user', SettingsRedactor::withoutUserInfo('https://host.example/@user'));
+        $this->assertSame('https://host.example?to=a@b', SettingsRedactor::withoutUserInfo('https://host.example?to=a@b'));
+    }
 }

@@ -11,6 +11,7 @@ Unreleased
 These changes are on the `dev` branch and will be part of the next release.
 
 * PHP 8.4 or later is now required
+* A database or proxy password that holds an `@` is now removed whole from the diagnostics report and from the export archive's `config.json`; only the part before the first `@` was removed, so the rest of the password was shown
 * Security: a setting turned off in an environment variable is off. `IDNO_DEBUG=false` (or `off`, `no`, `none`) was read as text that is not empty, so the setting counted as on and a site whose operator had turned debugging off that way showed visitors error messages and stack traces. A variable whose whole value is `true`, `on`, `yes`, `false`, `off`, `no` or `none`, in any letter case, now means what that word means in `config.ini`; passwords and settings that are text by nature are never read this way
 * The protocol that tells a hub about new posts is called WebSub throughout, as the W3C names it: in the settings, the documentation and the code, including in older entries of this list. Nothing changes for a site, its hub or its subscriptions; plugins that use the earlier component or event names keep working, and [the upgrade notes](install/upgrade.md) list the new names
 * New built-in look, Idno 2026, built with Tailwind CSS instead of Bootstrap, with a Tiptap editor. It is what a site with no theme draws; the `Twenty26` theme directory is gone

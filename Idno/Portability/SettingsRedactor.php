@@ -83,14 +83,14 @@ final class SettingsRedactor
         return $result;
     }
 
-    /** An address without the user name and password in it; anything else as it is. */
+    /** An address without the user name and password in it (they run to the last @ before the path, so a password holding an @ goes whole); anything else as it is. */
     public static function withoutUserInfo(string $value): string
     {
         if (!str_contains($value, '@') || !str_contains($value, '://')) {
             return $value;
         }
 
-        return (string) preg_replace('~(?<=://)[^/?#@\s]*@~', '', $value);
+        return (string) preg_replace('~(?<=://)[^/?#\s]*@~', '', $value);
     }
 
     /**
