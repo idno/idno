@@ -91,21 +91,17 @@ You can also write the configuration yourself. This is how you set up MongoDB, o
 1. Create the database and user (step 3 above).
 2. Load the schema:
 
-    ```bash
-    mysql -u idno -p idno < warmup/schemas/mysql/mysql.sql
-    ```
+        mysql -u idno -p idno < warmup/schemas/mysql/mysql.sql
 
 3. Create `configuration/config.ini`:
 
-    ```ini
-    database = "MySQL"
-    dbname = "idno"
-    dbuser = "idno"
-    dbpass = "a long password"
-    dbhost = "localhost"
-    filesystem = "local"
-    uploadpath = "/var/www/idno/Uploads/"
-    ```
+        database = "MySQL"
+        dbname = "idno"
+        dbuser = "idno"
+        dbpass = "a long password"
+        dbhost = "localhost"
+        filesystem = "local"
+        uploadpath = "/var/www/idno/Uploads/"
 
     Add `dbport = "3307"` if MySQL isn't on port 3306. The upload folder must exist, and the web server's user must be able to write to it.
 

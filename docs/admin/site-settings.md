@@ -70,6 +70,9 @@ The page has three groups of settings.
 : The address of an image to show in link previews instead of Idno's logo. It is used only while **Avatar as icon**
   is off.
 
+**Include permalinks** ("Include permalinks when syndicating" in Twenty26)
+: The setting is saved, but nothing in Idno uses it at present.
+
 Plugins can add their own settings to this page.
 
 ## Homepage content
@@ -92,7 +95,8 @@ kind. Plugins can add their own figures.
 tells you about anything that looks wrong:
 
 - whether the site is served over HTTPS (it should be);
-- whether your version of PHP is old;
+- whether your version of PHP is old, and whether the PHP extensions Idno needs are there;
+- whether the database holds exactly one stored configuration;
 - whether the upload folder set in `config.ini` exists and the web server can read and write it;
 - whether you are running Idno straight from a copy of its source code rather than a released package (that works,
   but a release may be steadier);

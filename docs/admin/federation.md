@@ -22,7 +22,8 @@ The plugin is on for a new site.
 
 ActivityPub does its work in the background: accepting new followers, and delivering each new, changed or deleted
 post to every follower's server. That needs Idno's **asynchronous queue** and a worker that keeps running on your
-server. Without them, follows are never accepted and posts never arrive.
+server. Without them, this work is done inside the request that caused it, while the member waits, which is slow and
+can time out. Any site that federates should use the queue.
 
 Setting this up is a job for whoever runs the server. In short, add this line to `config.ini`:
 

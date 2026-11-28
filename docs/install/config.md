@@ -46,18 +46,20 @@ Beside `config.ini` you can have a file named after the site's host name: for a 
 
 When a per-domain file exists, the `alwaysplugins`, `antiplugins` and `initial_plugins` lists in `config.ini` are ignored, so that one site's plugin lists are never merged with another's. Put those lists in the per-domain file.
 
-The host name is the one the site is visited at, without `www.`. On the command line it comes from the `IDNO_DOMAIN` environment variable (see [Background work](#background-work)).
+The host name is exactly the one in the site's address: a site at `www.example.com` reads `configuration/www.example.com.ini`. On the command line it comes from the `IDNO_DOMAIN` environment variable (see [Background work](#background-work)).
 
 ### Environment variables
 
-Any setting can also come from an environment variable named `IDNO_` followed by the setting's name in capitals. For example, `IDNO_DBPASS` sets `dbpass`. The older prefix `KNOWN_` still works; when both are set, the `IDNO_` one wins.
+Any setting can also come from an environment variable named `IDNO_` followed by the setting's name in capitals. For example, `IDNO_DBPASS` sets `dbpass`. The older prefix `KNOWN_` still works, but only for a setting that nothing else has set: a `KNOWN_` variable never overrides a file or an `IDNO_` variable.
 
-Environment variables win over every file. They are a good way to keep passwords out of files, for example in a container. How you set them depends on the server:
+`IDNO_` variables win over every file. They are a good way to keep passwords out of files, for example in a container. How you set them depends on the server:
 
 - Apache: `SetEnv IDNO_DBPASS "a long password"` in the site's configuration.
 - PHP-FPM: `env[IDNO_DBPASS] = "a long password"` in the pool's configuration.
 - nginx with PHP-FPM: `fastcgi_param IDNO_DBPASS "a long password";`.
 - The command line and services: set the variable in the shell, or with `Environment=` in a systemd unit.
+
+A value from the environment is text. `IDNO_DEBUG=false` is the word "false", which counts as on. To turn a setting off from the environment, leave it empty (`IDNO_DEBUG=`) or use `0`.
 
 An environment variable holds a single text value, so settings that are lists (`alwaysplugins`, `antiplugins` and so on) must go in a file.
 
@@ -92,7 +94,7 @@ Some settings describe the server rather than the site, and are never read from 
 
 Passwords, keys and the like belong in the configuration file or in environment variables, not in anything you share.
 
-When Idno shows or exports its configuration (the detailed report on the Diagnostics page, and the `config.json` inside a site export, which holds only the settings saved from the administration pages), it replaces the value of every setting whose name contains `pass`, `secret`, `token`, `key`, `salt`, `credential`, `private` or `signature`, and of `dbstring` and `proxy_string`, with `** REDACTED **`. It also hides the user name and password inside any address such as `mysql://user:password@host`. If you add a secret of your own to the file, give it a name that contains one of those words.
+When Idno shows or exports its configuration (the detailed report on the Diagnostics page, and the `config.json` inside a site export, which holds only the settings saved from the administration pages), it replaces the value of every setting whose name contains `pass`, `secret`, `token`, `key`, `salt`, `credential`, `private` or `signature`, and of `dbstring` and `proxy_string`, with `** REDACTED **`. It also hides the user name and password inside any address such as `mysql://user:password@host`. A name that ends in `expiry` or `lifetime` is the exception: it says how long a secret lasts, and is shown. If you add a secret of your own to the file, give it a name that contains one of those words.
 
 The Diagnostics report also includes PHP's server variables, which are not redacted and include every environment variable. If you set a password with an `IDNO_` variable, it appears there. Read a report before you share it.
 
@@ -102,7 +104,7 @@ Each entry gives the setting's name, its default, and what it does. "Admin page"
 
 ### Database
 
-- **`database`** (default `mysql`): The database back end. Use `MySQL` (recommended) or `MongoDB` (`Mongo` also works); case doesn't matter. MongoDB support is deprecated. `beanstalk-mysql` is MySQL with the host, user, password and port taken from the `RDS_HOSTNAME`, `RDS_USERNAME`, `RDS_PASSWORD` and `RDS_PORT` server variables, as Amazon Elastic Beanstalk sets them.
+- **`database`** (default `mysql`): The database back end. Use `MySQL` (recommended) or `MongoDB` (`Mongo` also works); case doesn't matter. MongoDB support is deprecated. `beanstalk-mysql` is MySQL with the host, user, password and port taken from the `RDS_HOSTNAME`, `RDS_USERNAME`, `RDS_PASSWORD` and `RDS_PORT` server variables, as Amazon Elastic Beanstalk sets them, and the database name from `RDS_DB_NAME` when `dbname` is not set.
 
 - **`dbhost`** (no default): The MySQL server's name or address, for example `localhost` or `db.example.com`. Put the port in `dbport`, not here.
 
@@ -245,7 +247,7 @@ These are set on the Site settings page. See [Private sites](../admin/private-si
 
 - **`blocked_emails`** (none): Email addresses that may not register. Set from the Users page.
 
-- **`account_removal_seconds`** (none): How long, in seconds, one run of deleting an account works before it stops and carries on later. It is never more than 60% of PHP's time limit. File only.
+- **`account_removal_seconds`** (60% of PHP's time limit): How long, in seconds, one run of deleting an account works before it stops and carries on later. A larger value is cut to 60% of PHP's time limit, or to an hour when PHP has no limit. File only.
 
 - **`moderation_contact_email`** (`from_email`): Moderation plugin: the address members can write to about a decision. Admin page: `/admin/moderation/settings`.
 
@@ -318,6 +320,8 @@ See [Logs and diagnostics](debugging.md).
 
 - **`multitenant_periods`** (`false`): Keeps the dots in database names: `example.com` instead of `example_com`.
 
+A site can also have plugins and themes of its own, in `hosts/<host name>/IdnoPlugins/` and `hosts/<host name>/Themes/` inside the installation, where the host name is the site's without `www.`. They are offered on that site's Plugins and Themes pages beside the shared ones.
+
 - **`idno_hub`** (none): The address of an Idno hub: a separate server that offers services to a group of Idno sites. Most sites don't use one. The older name `known_hub` still works.
 
 ### Swapping parts of Idno
@@ -328,9 +332,20 @@ These take the name of a class, either in full or as a name inside Idno's own na
 
 - **`statistics_collector`** (none): Somewhere to send counts and timings. Idno comes with none that records anything.
 
+## Settings that do nothing today
+
+The code still reads or stores these, but setting them changes nothing you can see:
+
+- **`indieweb_reference`**: saved by "Include permalinks" on the Site settings page. Nothing uses it.
+- **`wayback_machine`**: saved as off by the Site settings page. Nothing uses it.
+- **`force_ssl`**, **`ignore_ssl_gatekeeper`**: read only by a check that no page calls.
+- **`multi_syndication`**: read by `Config::multipleSyndicationAccounts()`, which nothing calls.
+- **`external_plugin_path`**: meant for plugins kept in another folder; use `directloadplugins[]` instead.
+- **`aws_key`**, **`aws_secret`**, **`aws_bucket`**, **`aws_region`** and the `IDNO_AWS_S3_*` and `CLOUDCUBE_*` environment variables: these point `uploadpath` at an `s3://` address, but Idno has no file system for one. They work only if something else on the server makes PHP understand `s3://` paths.
+
 ## Set by Idno itself
 
-Some values in the stored configuration are kept there by Idno, not set by you: the version a site was last upgraded to (`update_version`), the state of a site export (`export_file_id`, `export_filename`, `export_in_progress`, `export_last_requested`), when the database was last optimised (`dboptimized`), the last hub ping (`last_hub_ping`), the list of plugins switched on (`plugins`), and the settings of individual plugins and themes. Change them through the administration pages.
+Some values in the stored configuration are kept there by Idno, not set by you: the version a site was last upgraded to (`update_version`), the state of a site export (`export_file_id`, `export_filename`, `export_in_progress`, `export_last_requested`), when the database was last optimised (`dboptimized`), the last hub ping (`last_hub_ping`), the list of plugins switched on (`plugins`), and the settings of individual plugins and themes. Change them through the administration pages. The Webhooks plugin keeps the site's webhooks in `webhook_syndication`, set at `/admin/webhooks/`.
 
 ## Where next
 

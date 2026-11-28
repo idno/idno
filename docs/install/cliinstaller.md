@@ -34,7 +34,7 @@ If anything is wrong, the installer says what and how to fix it, doesn't save a 
 The installer stops with an error if Idno is already installed (if there is a `config.ini` in `configuration/` or in the top folder). It never replaces a configuration file.
 
 !!! note "The site's name"
-    The command line installer asks for the site's name, but doesn't save it. The site starts as "New Idno site" until you make the first account, when it takes that member's name ("Ben's Idno", for example). Change it on the Site settings page at `/admin/`.
+    The command line installer asks for the site's name, but doesn't save it. The site starts as "New Idno site" until you make the first account, when it takes that member's name ("Sam's Idno", for example). Change it on the Site settings page at `/admin/`.
 
 ## Installing from a manifest
 

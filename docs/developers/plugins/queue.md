@@ -71,9 +71,7 @@ the two.
   choose: a member's identifier to run as that member, or `false` to run as nobody. The default queue takes no
   notice of that argument: there the listener runs at once, as whoever made the request.
 
-    ```php
-    \Idno\Core\Idno::site()->queue()->enqueue('default', 'banana/cleanup', ['id' => $id], false);
-    ```
+        \Idno\Core\Idno::site()->queue()->enqueue('default', 'banana/cleanup', ['id' => $id], false);
 
     On the asynchronous queue, an event queued for a member whose account has since been closed is dropped.
 

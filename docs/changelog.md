@@ -68,7 +68,6 @@ February 28, 2026
 * Fixed asynchronous queue failures, including an infinite loop
 * Security: fixed a CSRF bypass that allowed unauthenticated requests through the URL unfurl endpoint
 * Security: stricter validation of imported images and templates
-* Added AGENTS.md, a guide to the codebase for AI coding agents
 
 1.6.3
 -----

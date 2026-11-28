@@ -15,7 +15,7 @@ every member, of every kind the site has enabled.
 : Press **Download WXR file** to get `export.xml`, in WordPress eXtended RSS (WXR), the format WordPress imports. It
   carries more than plain RSS, such as post dates, slugs and comments.
 
-Each has a checkbox, **Include private posts?**. Leave it off to export only public posts. Turn it on to include posts
+Each has a switch, **Include private posts?**. Leave it off to export only public posts. Turn it on to include posts
 that only some people can see. Be careful where you take a file with private posts: the site you import it into may
 show everything in it to everyone.
 

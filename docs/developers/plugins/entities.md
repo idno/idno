@@ -100,12 +100,10 @@ class name or an array of them, and `countFromX($classes, $search)` to count.
     `\IdnoPlugins\Banana\Banana::getByID($id)` returns a photo if `$id` is a photo's. When the identifier came
     from a request, check what you got before you use it:
 
-    ```php
-    $banana = \IdnoPlugins\Banana\Banana::getByID($this->arguments[0]);
-    if (!($banana instanceof \IdnoPlugins\Banana\Banana)) {
-        $this->noContent();
-    }
-    ```
+        $banana = \IdnoPlugins\Banana\Banana::getByID($this->arguments[0]);
+        if (!($banana instanceof \IdnoPlugins\Banana\Banana)) {
+            $this->noContent();
+        }
 
 ### What a finder leaves out
 
@@ -193,12 +191,10 @@ Two things to know when you store records of your own:
   holds records that belong to the site and not to whoever happened to create them, say so when your plugin
   loads:
 
-    ```php
-    function registerEventHooks()
-    {
-        \Idno\Core\AccountContent::keep(\IdnoPlugins\Banana\Orchard::class);
-    }
-    ```
+        function registerEventHooks()
+        {
+            \Idno\Core\AccountContent::keep(\IdnoPlugins\Banana\Orchard::class);
+        }
 
 * **Small pieces of data about a member** don't need a class at all. Members are entities, so you can set a
   property on the member and save it, as the [tutorial](first-plugin.md) does. Give the property a name that

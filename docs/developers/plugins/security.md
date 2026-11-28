@@ -51,17 +51,13 @@ itself.
   `maxlength` and `required` in a form are only hints to honest browsers.
 * **An address someone typed** must be `http` or `https` before you store or print it:
 
-    ```php
-    $url = \Idno\Core\UrlValidator::httpUrl($this->getTextInput('url'));   // '' if it is not
-    ```
+        $url = \Idno\Core\UrlValidator::httpUrl($this->getTextInput('url'));   // '' if it is not
 
     PHP's `FILTER_VALIDATE_URL` is not enough: it accepts `javascript://...`.
 
 * **HTML someone typed** (from the rich text editor) goes through the sanitizer before you store it:
 
-    ```php
-    $body = \Idno\Core\Idno::site()->template()->sanitize_html($this->getInput('body'));
-    ```
+        $body = \Idno\Core\Idno::site()->template()->sanitize_html($this->getInput('body'));
 
 * **Uploaded files**: read each file's error code, and check what the file really is. See
   [Files and uploads](files.md).
