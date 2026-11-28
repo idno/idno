@@ -5,6 +5,9 @@ The following individuals have made major contributions to Idno.
 ## Core team
 
 * Ben Werdmuller [https://werd.io](https://werd.io)
+
+## Emeritus Known team
+
 * Erin Jo Richey [https://erinjorichey.com/](https://erinjorichey.com/)
 * Marcus Povey [https://www.marcus-povey.co.uk](https://www.marcus-povey.co.uk)
 
