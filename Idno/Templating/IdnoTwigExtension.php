@@ -993,9 +993,6 @@ final class IdnoTwigExtension extends AbstractExtension
     }
 
     /**
-     * `urlencode()`: a space is `+`, as the tag links of a post have always been written (Twig's own `url_encode` writes `%20`).
-     */
-    /**
      * A post's stored tags as a list of texts, whatever the value holds (`Idno\Core\Tags::texts()`): the tag row draws them escaped.
      *
      * @return list<string>
@@ -1005,6 +1002,9 @@ final class IdnoTwigExtension extends AbstractExtension
         return \Idno\Core\Tags::texts($value);
     }
 
+    /**
+     * `urlencode()`: a space is `+`, as the tag links of a post have always been written (Twig's own `url_encode` writes `%20`).
+     */
     public static function formUrlencode(mixed $value): string
     {
         return urlencode(self::text($value));

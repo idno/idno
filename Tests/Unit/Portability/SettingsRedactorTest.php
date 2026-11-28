@@ -146,6 +146,8 @@ final class SettingsRedactorTest extends TestCase
         foreach (['p@ss', 'p@ss@word', 'pa:ss', 'p%40ss', 'pa%2Fss', 'p?ss', 'p#ss', 'p/ss', 'p/s?s#s@s'] as $password) {
             $rows['password ' . $password] = [sprintf($db, $password), 'mysql://db.example/idno'];
         }
+        $rows['a password with a space'] = ['mysql://u:pa ss@db.example/idno', 'mysql://db.example/idno'];
+        $rows['a password with a tab'] = ["mysql://u:pa\tss@db.example/idno", 'mysql://db.example/idno'];
         $rows['a list of hosts'] = ['mongodb://u:p@ss@h1,h2/db', 'mongodb://h1,h2/db'];
         $rows['no scheme, a proxy'] = ['u:p@ss@host.example:3128', 'host.example:3128'];
         $rows['no scheme, a password with a slash'] = ['u:p/ss@host.example:3128', 'host.example:3128'];
@@ -162,6 +164,36 @@ final class SettingsRedactorTest extends TestCase
     {
         $this->assertSame($expected, SettingsRedactor::withoutUserInfo($value));
         $this->assertSame(['mirror' => $expected], SettingsRedactor::redact(['mirror' => $value]));
+    }
+
+    /** @return array<string, array{string, string}> */
+    public static function connectionStrings(): array
+    {
+        return [
+            'password=' => ['Server=db;Database=x;User Id=u;Password=s3cr3t;Encrypt=true', 'Server=db;Database=x;User Id=u;Password=;Encrypt=true'],
+            'pwd= at the end' => ['host=h;uid=u;pwd=s3cr3t', 'host=h;uid=u;pwd='],
+            'password= holding an @' => ['DSN=mysql:host=h;user=u;password=s3cr@t;', 'DSN=mysql:host=h;user=u;password=;'],
+            'password= holding a space and a slash' => ['host=h;password=a b/c;port=1', 'host=h;password=;port=1'],
+        ];
+    }
+
+    /**
+     * A password in a connection string (`password=`, `pwd=`) is removed whole, up to the next `;` (or the end), whatever the setting is called.
+     *
+     * @dataProvider connectionStrings
+     */
+    public function testAConnectionStringsPasswordIsRemovedWhole(string $value, string $expected): void
+    {
+        $this->assertSame($expected, SettingsRedactor::withoutUserInfo($value));
+        $this->assertSame(['plugin_setting' => $expected], SettingsRedactor::redact(['plugin_setting' => $value]));
+    }
+
+    /** Text that only looks like a connection string's password stays. */
+    public function testWordsThatAreNotPasswordParametersSurvive(): void
+    {
+        foreach (['passport=ok;compass=north', 'password_reset=1;pwdx=2', 'user=u;host=h', 'Reset your password at the link'] as $value) {
+            $this->assertSame($value, SettingsRedactor::withoutUserInfo($value));
+        }
     }
 
     /** An address with no user name and password in it, and an e-mail address, are shown as they are. */

@@ -87,24 +87,27 @@ final class SettingsRedactor
     }
 
     /**
-     * An address without the user name and password in it. It fails closed: the user information is everything after `//` up to the LAST `@`,
-     * wherever the password has an `@`, `:`, `/`, `?` or `#` in it. Two rules:
+     * A value without the passwords it carries: a password parameter of a connection string (`password=`, `pwd=`, `passwd=`, `pass=`, any letter case, up
+     * to the next `;` or the end of the line), then the user name and password of an address. Both fail closed. For an address the user information is
+     * everything after `//` up to the LAST `@`, wherever the password has an `@`, `:`, `/`, `?`, `#` or white space in it. Two rules:
      *  - after `scheme://`, up to the first `/`, any `@` ends user information (so `https://host?to=a@b` loses `host?to=a@`: a value nobody
      *    needs whole in a report);
      *  - after `scheme://`, or at the start of a value with no scheme (a proxy or a DSN, `user:secret@host:3128`), text that has a colon before an
-     *    `@`, before any white space, is `user:secret@`: it is removed through the last `@`, whatever the secret holds. So `https://host/@user`
-     *    (no colon before the `@`) and an e-mail address stay as they are, while `https://host:8080/@user` (a port before a later `@`) is
-     *    over-redacted to `https://user`. That is accepted: a report that hides too much is safe, one that shows part of a password is not.
+     *    `@` on the same line is `user:secret@`: it is removed through the last `@` of the line, whatever the secret holds, so `https://host/@user`
+     *    (no colon before the `@`) and an e-mail address stay as they are, while `https://host:8080/@user` (a port before a later `@`),
+     *    `mailto:x@y.com` and an address whose query holds an `@` are over-redacted. That is accepted: a report that hides too much is safe, one
+     *    that shows part of a password is not.
      */
     public static function withoutUserInfo(string $value): string
     {
+        $value = (string) preg_replace('~(?<![A-Za-z0-9_])((?:password|passwd|pwd|pass)[ \t]*=)[^;\r\n]*~i', '$1', $value);
         if (!str_contains($value, '@')) {
             return $value;
         }
-        $value = (string) preg_replace('~(?<=://)[^/\s:@]*:[^\s]*@~', '', $value);
-        $value = (string) preg_replace('~^[^/\s:@]+:(?!//)[^\s]*@~', '', $value);
+        $value = (string) preg_replace('~(?<=://)[^/\s:@]*:[^\r\n]*@~', '', $value);
+        $value = (string) preg_replace('~^[^/\s:@]+:(?!//)[^\r\n]*@~', '', $value);
 
-        return str_contains($value, '://') ? (string) preg_replace('~(?<=://)[^/\s]*@~', '', $value) : $value;
+        return str_contains($value, '://') ? (string) preg_replace('~(?<=://)[^/\r\n]*@~', '', $value) : $value;
     }
 
     /**

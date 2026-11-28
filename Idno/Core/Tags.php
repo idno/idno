@@ -55,7 +55,7 @@ final class Tags
     {
         $texts = [];
         foreach (is_array($tags) ? $tags : [$tags] as $tag) {
-            if (self::isText($tag) && ($tag = trim((string) $tag)) !== '') {
+            if (self::isText($tag) && ($tag = self::withoutBidirectionalControls(trim((string) $tag))) !== '') {
                 $texts[] = $tag;
             }
         }
@@ -69,6 +69,12 @@ final class Tags
         return $siteAddress . 'tag/' . urlencode($tag);
     }
 
+    /** Without the characters that override or isolate the direction of text (U+202A to U+202E, U+2066 to U+2069); the zero-width joiner stays, so joined emoji survive. */
+    private static function withoutBidirectionalControls(string $text): string
+    {
+        return (string) preg_replace('/[\x{202A}-\x{202E}\x{2066}-\x{2069}]/u', '', $text);
+    }
+
     private static function isText(mixed $value): bool
     {
         return is_string($value) || is_int($value) || is_float($value);
@@ -80,7 +86,7 @@ final class Tags
         if (!mb_check_encoding($text, 'UTF-8')) {
             $text = mb_scrub($text, 'UTF-8');
         }
-        $text = (string) preg_replace(['/[\p{Cc}\s]+/u'], ' ', $text);
+        $text = (string) preg_replace(['/[\p{Cc}\s]+/u'], ' ', self::withoutBidirectionalControls($text));
 
         return trim(mb_substr(trim($text), 0, self::MAX_LENGTH, 'UTF-8'));
     }

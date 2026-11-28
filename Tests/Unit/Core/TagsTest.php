@@ -41,4 +41,15 @@ final class TagsTest extends TestCase
         $this->assertSame(Tags::MAX_LENGTH, mb_strlen((string) Tags::clean(str_repeat('é', 1000))));
         $this->assertCount(Tags::MAX_TAGS, Tags::clean(array_map('strval', range(1, 500))));
     }
+
+    /** A tag cannot carry a bidirectional override or isolate that would flip how the rest of the tag row reads; joined emoji keep their joiner. */
+    public function testBidirectionalControlsAreRemovedWhenStoredAndWhenRead(): void
+    {
+        $tag = "cats\u{202E}gnp.exe\u{2066}x\u{2069}\u{202A}\u{202C}";
+
+        $this->assertSame('catsgnp.exex', Tags::clean($tag));
+        $this->assertSame(['catsgnp.exex'], Tags::texts([$tag]));
+        $this->assertSame("\u{1F469}\u{200D}\u{1F4BB}", Tags::clean("\u{1F469}\u{200D}\u{1F4BB}"));
+        $this->assertSame(["\u{1F469}\u{200D}\u{1F4BB}"], Tags::texts("\u{1F469}\u{200D}\u{1F4BB}"));
+    }
 }
