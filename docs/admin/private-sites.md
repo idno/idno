@@ -14,7 +14,8 @@ A plugin can prevent a site from being made private. When one does, the setting 
 ## What visitors see
 
 Someone who is not signed in can no longer read anything on the site: not the homepage, not posts, not profiles,
-not feeds. They get a page that says the site is private, offers a way to sign in, and tells people who were invited
+not feeds, and not the photos and other files of posts or members' profile pictures, even with the address of the
+file. They get a page that says the site is private, offers a way to sign in, and tells people who were invited
 to use the link in their invitation email.
 
 A few pages stay open, so that people can get in:

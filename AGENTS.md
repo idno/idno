@@ -1383,7 +1383,11 @@ lower case) in `registerTranslations()`.
   files (`attached_entity` in file metadata, via `FileSystem::updateMetadata()`), and
   `Idno\Pages\File\View` enforces the entity's `canRead()`. Entities that own extra
   files (e.g. Photo thumbnails) override `getAttachedFileIDs()`. Custom filesystems
-  must implement `updateMetadata()` for this to apply.
+  must implement `updateMetadata()` for this to apply. `File\View` is a public route (the
+  site's own files must reach the sign-in page), so the gatekeeper of a private site does not
+  ask for it: the page itself refuses a visitor who is not signed in any file that is attached
+  to an entity while the site is private, whatever the entity's access.
+  `Tests/Pages/File/PrivateSiteFileTest.php` checks this over HTTP.
 - Uploads that PHP did not keep: PHP drops a file larger than `upload_max_filesize` and leaves only
   an error code in `$_FILES` (an empty `tmp_name`), and drops the whole body of a request larger
   than `post_max_size`, form token included. Neither is an error to PHP, so a form that takes a
