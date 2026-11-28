@@ -14,7 +14,9 @@ use IdnoPlugins\ActivityPub\Entities\ActivityPubFollower;
  * - Published content is delivered to followers' inboxes
  * - Deletions and updates propagate to followers
  * - Incoming Follow/Undo/Delete activities are handled synchronously
- * - Outgoing deliveries are handled via the async queue
+ * - Outgoing deliveries go through the site's event queue: in the background with the
+ *   asynchronous queue and its worker, inside the request that caused them without
+ *   (see deliversInBackground())
  */
 class Main extends Plugin
 {
@@ -62,15 +64,10 @@ class Main extends Plugin
     function registerEventHooks()
     {
 
-        // -------------------------------------------------------
-        // Require asynchronous queue for ActivityPub federation
-        // -------------------------------------------------------
-        $queue = \Idno\Core\Idno::site()->queue();
-        if (!($queue instanceof \Idno\Core\AsynchronousQueue)) {
-            \Idno\Core\Idno::site()->logging()->warning(
-                'ActivityPub requires the asynchronous event queue. Federation is disabled.'
-            );
-        }
+        // Nothing here depends on which event queue the site has: without the asynchronous
+        // one the site federates all the same, and each delivery is made at once, inside
+        // the request (see deliversInBackground()). Delivery::deliverToFollowers() logs that
+        // where it happens; nothing is logged here, which runs for every request.
 
         // The inboxes take POSTs that have no form token. Pages\Inbox and Pages\SharedInbox
         // see to that themselves, by overriding post(). Nothing here may mark a request as an
@@ -235,7 +232,8 @@ class Main extends Plugin
         }
 
         // -------------------------------------------------------
-        // Handle queued delivery (dispatched by the async queue)
+        // Handle a queued delivery: dispatched by the queue worker, or at once, inside
+        // the request, on a site without the asynchronous queue
         // -------------------------------------------------------
         \Idno\Core\Idno::site()->events()->addListener('activitypub/deliver', function (\Idno\Core\Event $event) {
 
@@ -268,6 +266,22 @@ class Main extends Plugin
     public static function federates(): bool
     {
         return (bool) \Idno\Core\Idno::site()->config()->isPublicSite();
+    }
+
+    /**
+     * Are deliveries made in the background? Only with the asynchronous event queue
+     * (event_queue = 'AsynchronousQueue' and its worker). A site without it federates all
+     * the same, but its queue runs each event at once: every delivery to every follower's
+     * inbox is made inside the request of the member who published, changed or deleted the
+     * post, who waits for all of them. This decides nothing about WHETHER the site
+     * federates (that is federates()); it is what the log and the administration page
+     * tell the administrator.
+     *
+     * @return bool
+     */
+    public static function deliversInBackground(): bool
+    {
+        return \Idno\Core\Idno::site()->queue() instanceof \Idno\Core\AsynchronousQueue;
     }
 
     /**

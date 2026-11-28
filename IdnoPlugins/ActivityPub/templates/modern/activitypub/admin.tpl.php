@@ -12,12 +12,12 @@
 </div>
 <?php } ?>
 
-<?php if (empty($vars['queue_ok'])) { ?>
-<div class="idno-admin-card" style="border-left:4px solid var(--color-warning,#eab308);background:var(--color-warning-bg,#fefce8)">
-    <h2 class="idno-admin-card-title"><?= \Idno\Core\Idno::site()->language()->_('Asynchronous queue required') ?></h2>
+<?php if (empty($vars['delivers_in_background']) && \IdnoPlugins\ActivityPub\Main::federates()) { ?>
+<div class="idno-admin-card" id="activitypub-in-request-delivery" style="border-left:4px solid var(--color-warning,#eab308);background:var(--color-warning-bg,#fefce8)">
+    <h2 class="idno-admin-card-title"><?= \Idno\Core\Idno::site()->language()->_('Posts are delivered while members wait') ?></h2>
     <p>
-        <?= \Idno\Core\Idno::site()->language()->_('ActivityPub needs the asynchronous event queue to deliver posts and accept follows from other platforms.') ?>
-        <?= \Idno\Core\Idno::site()->language()->_('Please see the <a href="https://github.com/idno/idno#setting-up-the-async-pipeline">setup instructions</a> in the README to enable it.') ?>
+        <?= \Idno\Core\Idno::site()->language()->_('This site federates without the asynchronous event queue: follows are accepted, and when a member publishes, changes or deletes a post it is sent to every follower’s server before the member’s page comes back. With many followers, or a slow server among them, publishing is slow and can time out.') ?>
+        <?= \Idno\Core\Idno::site()->language()->_('To deliver in the background, set <code>event_queue = \'AsynchronousQueue\'</code> in <code>config.ini</code> and run the queue worker: see the <a href="https://github.com/idno/idno#setting-up-the-async-pipeline">setup instructions</a> in the README.') ?>
     </p>
 </div>
 <?php } ?>

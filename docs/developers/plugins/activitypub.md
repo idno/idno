@@ -100,11 +100,13 @@ does:
 * **Use the queue** for the requests, so that a slow server elsewhere does not slow down the member who is
   posting. See [Background work](queue.md).
 
-## The queue is required
+## Deliveries and the queue
 
-The ActivityPub plugin is built for the asynchronous queue: every delivery is an event in the queue. A site that
-uses the plugin should enable the queue and keep its worker running. See
-[the event queue](../../install/advanced.md).
+The ActivityPub plugin is built for the asynchronous queue: every delivery is an event in the queue. It federates
+without it too, because the default queue runs each event at once: every delivery is then made inside the request
+that caused it, and `Delivery::deliverToFollowers()` logs a warning that says so. `Main::deliversInBackground()`
+tells you which of the two a site is doing. A site that uses the plugin should enable the queue and keep its worker
+running. See [the event queue](../../install/advanced.md).
 
 ## Reading the plugin
 

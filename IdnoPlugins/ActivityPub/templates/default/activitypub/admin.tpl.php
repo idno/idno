@@ -13,12 +13,12 @@
         </div>
         <?php } ?>
 
-        <?php if (empty($vars['queue_ok'])) { ?>
-        <div class="alert alert-danger">
-            <strong><?php echo \Idno\Core\Idno::site()->language()->_('Asynchronous queue required'); ?></strong>
+        <?php if (empty($vars['delivers_in_background']) && \IdnoPlugins\ActivityPub\Main::federates()) { ?>
+        <div class="alert alert-warning" id="activitypub-in-request-delivery">
+            <strong><?php echo \Idno\Core\Idno::site()->language()->_('Posts are delivered while members wait'); ?></strong>
             <p>
-                <?php echo \Idno\Core\Idno::site()->language()->_('ActivityPub needs the asynchronous event queue to deliver posts and accept follows from other platforms.'); ?>
-                <?php echo \Idno\Core\Idno::site()->language()->_('Please see the <a href="https://github.com/idno/idno#setting-up-the-async-pipeline">setup instructions</a> in the README to enable it.'); ?>
+                <?php echo \Idno\Core\Idno::site()->language()->_('This site federates without the asynchronous event queue: follows are accepted, and when a member publishes, changes or deletes a post it is sent to every follower’s server before the member’s page comes back. With many followers, or a slow server among them, publishing is slow and can time out.'); ?>
+                <?php echo \Idno\Core\Idno::site()->language()->_('To deliver in the background, set <code>event_queue = \'AsynchronousQueue\'</code> in <code>config.ini</code> and run the queue worker: see the <a href="https://github.com/idno/idno#setting-up-the-async-pipeline">setup instructions</a> in the README.'); ?>
             </p>
         </div>
         <?php } ?>

@@ -10,7 +10,7 @@ By default the queue is *synchronous*: the work is done inside the web request t
 
 With the *asynchronous* queue, the request only records each event in the database and returns. A separate *worker* process picks the events up and runs them. If the worker stops, events wait in the database and are run once it starts again.
 
-**Turn on the asynchronous queue for any site that uses ActivityPub.** Idno's ActivityPub support is built to deliver through the worker; without it, it logs a warning and delivers during each request.
+**Turn on the asynchronous queue for any site that uses ActivityPub.** Idno's ActivityPub support is built to deliver through the worker; without it, the site still federates, but every delivery is made during the request of the member who published, and the log has a warning for each post that was delivered that way.
 
 ### 1. Turn on the asynchronous queue
 

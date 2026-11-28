@@ -99,7 +99,9 @@ Tests/                         Core unit tests
 - **Async queue**: Events can be processed asynchronously via
   `AsynchronousQueue`. The queue worker runs as a CLI service
   (`ConsolePlugins/EventQueueService`) polling for pending
-  `AsynchronousQueuedEvent` entities. **Required for ActivityPub.**
+  `AsynchronousQueuedEvent` entities. Without it (the default `SynchronousQueue`) `enqueue()`
+  runs the event at once, inside the request. ActivityPub federates either way (see
+  "With and without the queue worker").
 
 ### Database
 
@@ -237,6 +239,32 @@ service sends for a member who signed up there themselves still arrive as ordina
 5. **Context**: Activities use the GoToSocial namespace (`gts:`) for interaction
    policies. The extended `CONTEXT_WITH_QUOTES` constant in `ActivityBuilder`
    defines all required JSON-LD terms.
+
+### With and without the queue worker
+
+The plugin federates whichever event queue the site has, and the default is the synchronous one.
+`Main::deliversInBackground()` (true with `AsynchronousQueue`) decides nothing about whether the
+site federates, which is `Main::federates()` alone: it is what the site tells its administrator.
+
+- Every delivery goes through `queue()->enqueue()` as an `activitypub/deliver` event. With the
+  asynchronous queue the worker makes it. Without, `SynchronousQueue::enqueue()` triggers the
+  event at once, so a post is sent to every follower's inbox inside the request of the member
+  who published, changed or deleted it (and a takedown inside the administrator's), who waits
+  for all of them. `Delivery::deliverToFollowers()` then logs ONE warning for the activity,
+  with the number of inboxes. Nothing about the queue is logged from `registerEventHooks()`,
+  which runs for every request.
+- A Follow is accepted either way: its `Accept` is sent at once (`Delivery::deliverNow()`), and
+  queued only if that fails. The `Accept` of a `QuoteRequest` is queued, so without the worker
+  it is sent before the inbox answers. The `Delete` of an actor
+  (`Delivery::announceActorDeleted()`) is the one delivery that is put off until after the
+  response on a site without the worker.
+- `/admin/activitypub` says, in both looks, when deliveries are made inside requests (the
+  block with the id `activitypub-in-request-delivery`), and never that federation is off for
+  want of the queue. Don't write "requires the asynchronous queue" anywhere: say what it costs
+  to be without it.
+- The bundled tests run on the synchronous queue and depend on a delivery being dispatched
+  during the save. `IdnoPlugins/ActivityPub/Tests/InRequestDeliveryTest.php` checks the warning
+  and the page.
 
 ### One object per post, wherever it is read
 
@@ -972,7 +1000,8 @@ lower case) in `registerTranslations()`.
 - Environment variables: loaded from `.env` via `vlucas/phpdotenv`
 - Key settings: `database`, `dbname`, `dbhost`, `dbuser`, `dbpass`, `event_queue`,
   `filesystem`, `uploadpath`, `site_secret`
-- `event_queue = 'AsynchronousQueue'` enables the async pipeline (required for ActivityPub)
+- `event_queue = 'AsynchronousQueue'` enables the async pipeline (ActivityPub then delivers in the
+  background; without it, inside members' requests)
 - Where a setting comes from, later ones winning (`Config::loadIniFiles()`): the database, `config.ini`,
   `config.json`, the per-domain file, then every `IDNO_<SETTING>` server variable. A `KNOWN_<SETTING>`
   variable only fills a setting that nothing else set.
