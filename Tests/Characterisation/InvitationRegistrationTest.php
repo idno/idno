@@ -218,4 +218,21 @@ final class InvitationRegistrationTest extends PrivateSiteTestCase
 
         return $statuses;
     }
+
+    /**
+     * Catches an account saved with no password when the password typed is too long to store: the registration is refused with the form again, no
+     * account exists, and the invitation is not used.
+     */
+    public function testAPasswordTooLongToStoreRegistersNobodyAndLeavesTheInvitation(): void
+    {
+        $this->closedSite();
+        $this->invitation('new@example.test', str_repeat('ab', 32));
+        $long = str_repeat('a', 5000);
+
+        $status = $this->register($this->form('newbie', 'new@example.test', str_repeat('ab', 32), ['password' => $long, 'password2' => $long]));
+
+        $this->assertSame(400, $status);
+        $this->assertNull($this->account('newbie'));
+        $this->assertSame(302, $this->register($this->form('newbie', 'new@example.test', str_repeat('ab', 32))), 'the invitation still registers');
+    }
 }

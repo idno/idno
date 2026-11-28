@@ -70,7 +70,14 @@ namespace IdnoPlugins\IndiePub {
 
                     return $user;
                 }
-                $user = \Idno\Entities\User::getOne(array('admin' => true));
+                // The first administrator that is not being deleted (a closed account has no key)
+                $user = null;
+                foreach ((array) \Idno\Entities\User::get(['admin' => true], [], 20) as $candidate) {
+                    if ($candidate instanceof \Idno\Entities\User && !$candidate->isClosed()) {
+                        $user = $candidate;
+                        break;
+                    }
+                }
                 if ($user && hash_equals((string) $user->getAPIkey(), $token)) {
                     \Idno\Core\Idno::site()->session()->authenticateStatelessly($user);
 

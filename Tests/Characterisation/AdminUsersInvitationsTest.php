@@ -19,6 +19,27 @@ final class AdminUsersInvitationsTest extends PrivateSiteTestCase
 
     private string $token = '';
 
+    private string $eventsDirectory = '';
+
+    protected function siteEnvironment(): array
+    {
+        if ($this->eventsDirectory === '') {
+            $this->eventsDirectory = sys_get_temp_dir() . '/idno-users-events-' . bin2hex(random_bytes(6));
+            mkdir($this->eventsDirectory, 0700);
+        }
+
+        return ['IDNO_TEST_REGISTRATION_EVENTS' => $this->eventsDirectory];
+    }
+
+    protected function tearDown(): void
+    {
+        foreach ((array) glob($this->eventsDirectory . '/*') as $file) {
+            @unlink($file);
+        }
+        @rmdir($this->eventsDirectory);
+        parent::tearDown();
+    }
+
     private function prepare(): void
     {
         $this->addUser('ada', self::PASSWORD, null, true);
@@ -164,8 +185,36 @@ final class AdminUsersInvitationsTest extends PrivateSiteTestCase
         $this->assertFalse($admin('bea'), 'one administrator demotes another');
         $this->assertSame(
             [false, false, true],
-            $this->runInSite('$ada = \Idno\Entities\User::getByHandle("ada"); $bea = \Idno\Entities\User::getByHandle("bea"); return [$ada->canBeDemotedOrDeletedBy($ada->getUUID()), $ada->canBeDemotedOrDeletedBy($bea->getUUID()), $bea->canBeDemotedOrDeletedBy($ada->getUUID())];'),
+            $this->runInSite('$ada = \Idno\Entities\User::getByHandle("ada"); $bea = \Idno\Entities\User::getByHandle("bea"); return [$ada->whyNotRemovableBy($ada->getUUID()) === "", $ada->whyNotRemovableBy($bea->getUUID()) === "", $bea->whyNotRemovableBy($ada->getUUID()) === ""];'),
             'the last administrator cannot be demoted or deleted by themself or by anyone else; a member can be'
         );
+    }
+
+    /**
+     * Catches "Send again" renewing and mailing invitations on a site that cannot take more members (the invite form refuses, and the link would then be
+     * refused by the registration page): the invitation keeps its old time.
+     */
+    public function testAnInvitationIsNotSentAgainWhenTheSiteCannotAddUsers(): void
+    {
+        $this->prepare();
+        $this->runInSite('$i = new \Idno\Entities\Invitation(); $i->email = "full@example.test"; $i->code = ' . $this->literal(str_repeat('ef', 32)) . '; $i->expires = (int) strtotime("2026-03-15 12:00:00 UTC"); \Idno\Core\Idno::site()->db()->setIgnoreAccess(true); return (bool) $i->save(true);');
+        file_put_contents($this->eventsDirectory . '/mode', 'deny-add');
+
+        $this->post(['action' => 'resend_invitation', 'invitation_id' => (string) $this->invitationOf('full@example.test')['id']]);
+
+        $this->assertTrue($this->invitationOf('full@example.test')['expired'], 'a full site does not renew it');
+    }
+
+    /**
+     * Catches the Users page saving a member with no password when the password typed is too long to store (the member could never sign in): nobody is added.
+     */
+    public function testAMemberWhosePasswordIsTooLongToStoreIsNotAdded(): void
+    {
+        $this->prepare();
+        $long = str_repeat('a', 5000);
+
+        $this->post(['action' => 'add_user', 'name' => 'Long', 'handle' => 'longpass', 'email' => 'long@example.test', 'password1' => $long, 'password2' => $long]);
+
+        $this->assertFalse((bool) $this->runInSite('return (bool) \Idno\Entities\User::getByHandle("longpass");'));
     }
 }

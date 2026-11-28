@@ -39,7 +39,7 @@ class WellKnownPublication extends Page
             $users = User::get([], [], 100, 0);
             if (!empty($users)) {
                 foreach ($users as $user) {
-                    if (Main::isUserConnected($user)) {
+                    if (!$user->isClosed() && Main::isUserConnected($user)) {
                         $session = Main::getATProtoSessionForUser($user);
                         $did = $session['did'];
                         break;

@@ -34,6 +34,11 @@ interface SignIn
     public function checkPassword(User $user, #[\SensitiveParameter] string $password): bool;
 
     /**
+     * Whether the member could be signed on (not a blocked address, not an account being deleted): `logOn()` refuses the others.
+     */
+    public function mayLogOn(User $user): bool;
+
+    /**
      * Signs the member on: a new session id and a new form token.
      */
     public function logOn(User $user): void;

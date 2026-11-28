@@ -577,21 +577,6 @@ namespace Idno\Entities {
         }
 
         /**
-         * May a given administrator take this member's administration rights away, or delete this member's account? Never
-         * their own, and never those of the last administrator: a site always keeps somebody who can administer it.
-         *
-         * Only the Users page asks (the one place an administrator does either to somebody). It is a check and then an
-         * act, so two administrators who demote each other at the same moment can still leave none.
-         *
-         * @param  string $by_uuid The UUID of the administrator who asks
-         * @return bool
-         */
-        function canBeDemotedOrDeletedBy($by_uuid)
-        {
-            return $this->whyNotRemovableBy($by_uuid) === '';
-        }
-
-        /**
          * How many administrators the site has. The one place the count is made: administrators who cannot sign in
          * (an account that is being deleted, see isClosed()) are not counted.
          *
@@ -761,6 +746,11 @@ namespace Idno\Entities {
             // Default "base" password validation
             if (strlen($password) >= 7) {
                 $default = true;
+            }
+
+            // One the hasher cannot store is no password at all, whatever a listener says: it would be reported as changed and never saved
+            if (strlen((string) $password) > \Idno\Security\Passwords::MAX_BYTES) {
+                return false;
             }
 
             return \Idno\Core\Idno::site()->events()->triggerEvent(
@@ -1762,7 +1752,7 @@ namespace Idno\Entities {
 
         /**
          * Why an administrator may not delete this account or take its rights away: 'self' (their own), 'last' (the last administrator), or ''
-         * when they may. canBeDemotedOrDeletedBy() is this as a yes or no.
+         * when they may.
          *
          * @param  string $by_uuid The UUID of the administrator who asks
          * @return string

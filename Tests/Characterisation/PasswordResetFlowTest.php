@@ -118,7 +118,7 @@ final class PasswordResetFlowTest extends PrivateSiteTestCase
         }
     }
 
-    /** A code issued before an account was closed, or its address blocked, must not still reset the password. */
+    /** A code issued before an account was closed must not still reset the password (a blocked address's code is in `LegacyPasswordResetsTest`). */
     public function testACodeOfAnAccountThatIsBeingDeletedResetsNothing(): void
     {
         [$email, $code] = $this->linkFor('member1@example.com');
@@ -175,5 +175,23 @@ final class PasswordResetFlowTest extends PrivateSiteTestCase
             $this->assertSame(400, $answer->status, $how);
             $this->assertNull($answer->header('Location'), $how . ': no redirect, so nothing sends the visitor away from the form');
         }
+    }
+
+    /**
+     * Catches a new password too long to store being reported as changed: the form is drawn again with the reason, the old password still works and the
+     * code is not used up (the member can try again with the same link).
+     */
+    public function testAPasswordTooLongToStoreIsRefusedAndTheCodeIsNotUsedUp(): void
+    {
+        [$email, $code] = $this->linkFor('member1@example.com');
+        $long = str_repeat('a', 5000);
+
+        $answer = $this->reset(['email' => $email, 'code' => $code, 'password' => $long, 'password2' => $long]);
+
+        $this->assertSame(400, $answer->status);
+        $this->assertNotSame('', $this->storedCodeOf('member1'), 'the code is still there');
+        $this->assertNotEmpty($this->loginCookie('member1', 'correct-horse-battery-9'), 'the old password still signs in');
+        $again = $this->reset(['email' => $email, 'code' => $code, 'password' => self::NEW_PASSWORD, 'password2' => self::NEW_PASSWORD]);
+        $this->assertSame(302, $again->status, 'the same link still works');
     }
 }

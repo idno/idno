@@ -169,13 +169,15 @@ class RemoteActor
             return \Idno\Core\Idno::site()->session()->currentUser();
         }
 
-        // Fall back to the first user with keys
-        $users = User::get([], [], 1);
+        // Fall back to the newest account that is not being deleted and has keys: the actor of a closed account answers 410, so a server could not get the
+        // key a fetch signed with it names. (Closed accounts are few; a page of the newest is enough to find an open one.)
+        $users = User::get([], [], 50);
         if (!empty($users) && is_array($users)) {
-            $user = $users[0];
-            // Ensure the user has a keypair (generates one if needed)
-            if ($user instanceof User && $user->getPrivateKey()) {
-                return $user;
+            foreach ($users as $user) {
+                // Ensure the user has a keypair (generates one if needed)
+                if ($user instanceof User && !$user->isClosed() && $user->getPrivateKey()) {
+                    return $user;
+                }
             }
         }
 

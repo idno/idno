@@ -450,4 +450,22 @@ final class LoginFlowTest extends PrivateSiteTestCase
     {
         return array_values(array_map(static fn (array $e): array => [$e['event'], $e['user']], array_filter($events, static fn (array $e): bool => in_array($e['event'], $only, true))));
     }
+
+    /**
+     * Catches an audit plugin recording `login/success` for a member whose address is blocked: the sign-in is refused, so no success is announced.
+     */
+    public function testABlockedMemberWithTheRightPasswordFiresNoLoginSuccess(): void
+    {
+        $this->registerUser('ada');
+        $this->addUser('grace');
+        $this->runInSite('$c = \Idno\Core\Idno::site()->config(); $c->config["blocked_emails"] = ["grace@example.com"]; $c->blocked_emails = ["grace@example.com"]; $c->save(); return true;');
+        $form = $this->site()->request('GET', 'session/login');
+        $cookie = self::sessionCookie($form);
+        $this->events();
+
+        $this->site()->request('POST', 'session/login', ['Cookie' => $cookie], self::formToken($form->body, 'session/login') + ['email' => 'grace', 'password' => self::PASSWORD]);
+
+        $names = array_column($this->events(), 'event');
+        $this->assertNotContains('login/success', $names);
+    }
 }

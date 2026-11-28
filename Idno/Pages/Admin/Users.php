@@ -122,7 +122,7 @@ namespace Idno\Pages\Admin {
 
                     $user = new \Idno\Entities\User();
 
-                    if (empty($password) || $password != $password2) {
+                    if (empty($password) || $password != $password2 || strlen($password) > \Idno\Security\Passwords::MAX_BYTES) {
                         \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->_("Please make sure your passwords match and aren't empty."));
                     } else if (empty($handle) && empty($email)) {
                         \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->_("Please enter a username and email address."));
@@ -262,6 +262,12 @@ namespace Idno\Pages\Admin {
             }
             if (User::getByEmail($email)) {
                 $site->session()->addErrorMessage($lang->esc_("%s is already a member, so the invitation was not sent.", [$email]));
+
+                return;
+            }
+            // As the invite form: a link to a site that cannot take another member would only be refused
+            if (!$site->config()->canAddUsers()) {
+                $site->session()->addErrorMessage($lang->_("You can't add any more users to your site."));
 
                 return;
             }

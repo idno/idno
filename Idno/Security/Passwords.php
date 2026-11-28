@@ -26,6 +26,9 @@ final class Passwords
      */
     public const COST = 12;
 
+    /** The longest password hash() accepts, in bytes; a longer one is refused by it, and by every form that sets a password. */
+    public const MAX_BYTES = 4096;
+
     /** How many bytes of a password a bcrypt hash made by password_hash() covers. */
     private const BCRYPT_BYTES = 72;
 

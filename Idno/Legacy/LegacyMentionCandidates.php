@@ -21,6 +21,9 @@ final class LegacyMentionCandidates implements MentionCandidates
         if (!$users) {
             return $results;
         }
+        // An account that is being deleted is missing to everyone but an administrator, as its profile is
+        $administrator = Idno::site()->session()->isAdmin();
+        $users = array_values(array_filter($users, static fn ($user): bool => $administrator || !($user instanceof User && $user->isClosed())));
         Idno::site()->events()->triggerEvent('search/mentions', ['username' => $username], $users);
         foreach ($users as $user) {
             /* @var User $user */

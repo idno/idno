@@ -460,7 +460,7 @@ class ActivityHandler
         // This handles custom actor URLs
         if ($results = User::get([], [], PHP_INT_MAX)) {
             foreach ($results as $user) {
-                if ($user->getActivityPubActorID() === $actorId) {
+                if (!$user->isClosed() && $user->getActivityPubActorID() === $actorId) {
                     return $user;
                 }
             }

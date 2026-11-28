@@ -39,6 +39,11 @@ final class LegacySignIn implements SignIn
         return (bool) $user->checkPassword($password);
     }
 
+    public function mayLogOn(User $user): bool
+    {
+        return !Idno::site()->config()->emailIsBlocked($user->email) && !$user->isClosed();
+    }
+
     public function logOn(User $user): void
     {
         Idno::site()->session()->logUserOn($user);

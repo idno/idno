@@ -17,7 +17,7 @@ class NodeInfo extends \Idno\Common\Page
     {
         // Count users
         $users = User::get([], [], PHP_INT_MAX);
-        $totalUsers = is_array($users) ? count($users) : 0;
+        $totalUsers = is_array($users) ? count(array_filter($users, static fn ($user): bool => !$user->isClosed())) : 0;
 
         // Count posts (approximate)
         $totalPosts = Entity::countFromAll([

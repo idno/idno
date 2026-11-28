@@ -104,4 +104,18 @@ final class AccountSettingsCurrentPasswordTest extends PrivateSiteTestCase
     {
         return (string) $this->runInSite('$u = \Idno\Entities\User::getByHandle(' . $this->literal($handle) . '); return $u ? $u->' . $field . ' : null;');
     }
+
+    /**
+     * Catches "Your password has been updated" for a new password too long to store (the old password still signs in): it is refused as unusable.
+     */
+    public function testANewPasswordTooLongToStoreIsRefused(): void
+    {
+        $cookie = $this->registerUser('ada');
+        $long = str_repeat('a', 5000);
+
+        $answer = $this->post($cookie, ['email' => 'ada@example.com', 'name' => 'Ada', 'password' => $long, 'current_password' => self::PASSWORD]);
+
+        $this->assertStringNotContainsString('Your password has been updated', Browser::text($this->settings($cookie, $answer)->body));
+        $this->assertNotNull((new Browser($this->site()))->tryLogin('ada', self::PASSWORD), 'the old password still signs in');
+    }
 }

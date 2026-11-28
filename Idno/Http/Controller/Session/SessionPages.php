@@ -49,13 +49,13 @@ final class SessionPages
 
         // Somehow here but signed in: on to the page asked for (the field is the page's address as base64)
         if ($user !== null && $this->signIn->templateType() === 'default') {
-            $raw = self::text($page, 'fwd');
+            $raw = $page->text('fwd');
             $fwd = empty($raw) ? $site : $this->signIn->decodeForward($raw);
 
             return $this->renderer->redirect($page, RedirectTarget::sanitize($fwd, $site, $this->signIn->configuredUrl()));
         }
 
-        $fwd = $this->signIn->decodeForward(self::text($page, 'fwd'));
+        $fwd = $this->signIn->decodeForward($page->text('fwd'));
         if ($fwd === $site . 'session/login') {
             $fwd = $site;
         }
@@ -82,12 +82,12 @@ final class SessionPages
      */
     public function signIn(PageContext $page): Response
     {
-        $fwd = self::text($page, 'fwd');
+        $fwd = $page->text('fwd');
         $site = $this->signIn->displayUrl();
         $fwd = RedirectTarget::sanitize(empty($fwd) ? $site : $fwd, $site, $this->signIn->configuredUrl());
 
-        $login = self::text($page, 'email');
-        $password = trim(self::text($page, 'password'));
+        $login = $page->text('email');
+        $password = trim($page->text('password'));
 
         // Who is it for? The throttle counts for the ACCOUNT the name resolves to (the database compares names by its own collation, so spellings that differ
         // in case, accents or the like are one account), else for the name folded.
@@ -117,7 +117,10 @@ final class SessionPages
 
         if ($this->signIn->checkPassword($user, $password)) {
             $this->attempts->reset($key);
-            $this->signIn->trigger('login/success', ['user' => $user]); // for auditing
+            // for auditing: a member who is refused (a blocked address, an account being deleted) did not sign in
+            if ($this->signIn->mayLogOn($user)) {
+                $this->signIn->trigger('login/success', ['user' => $user]);
+            }
             $this->signIn->logOn($user);
         } else {
             $this->signIn->message($oops, 'alert-danger');
@@ -151,18 +154,4 @@ final class SessionPages
         return $this->renderer->redirect($page, $this->signIn->loginAddress($fwd));
     }
 
-    /**
-     * A field of the request as text. A field that is not text (`email[]=bob`, a list in a JSON body) is an empty value: it is a failed login like any other,
-     * never an error.
-     */
-    private static function text(PageContext $page, string $name): string
-    {
-        $value = $page->input($name);
-
-        return match (true) {
-            is_string($value) => $value,
-            is_int($value), is_float($value) => (string) $value,
-            default => '',
-        };
-    }
 }

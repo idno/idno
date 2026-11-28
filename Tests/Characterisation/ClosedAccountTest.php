@@ -418,4 +418,60 @@ final class ClosedAccountTest extends PrivateSiteTestCase
         $add();
         $this->assertTrue($this->exists('mia'), 'after the release it can be');
     }
+
+    /**
+     * Catches the @-mention search offering the handle, name and picture of an account that is being deleted to every visitor, while its profile answers
+     * as missing: a visitor and a member do not get it, an administrator does (to see what remains).
+     */
+    public function testAClosedAccountIsNotOfferedByTheMentionSearchExceptToAnAdministrator(): void
+    {
+        $this->prepare();
+        $this->addUser('mia');
+        $names = fn (array $headers) => array_column((array) $this->site()->request('GET', '/search/mentions.json?q=m', $headers + ['X-Requested-With' => 'XMLHttpRequest'])->json(), 'username');
+        $this->assertContains('mia', $names([]), 'a control: before, a visitor is offered Mia');
+
+        $this->close('mia');
+
+        $this->assertNotContains('mia', $names([]));
+        $this->assertContains('mia', $names(['Cookie' => $this->admin]));
+    }
+
+    /**
+     * Catches the site signing its outbound ActivityPub fetches with an account that is being deleted (whose actor now answers 410, so a server that checks
+     * the signature refuses the fetch and every incoming activity is dropped): the signing user is the newest OPEN account.
+     */
+    public function testTheActivityPubSigningUserIsNeverAClosedAccount(): void
+    {
+        $this->prepare();
+        $this->addUser('newest');
+        $signer = fn () => $this->runInSite(<<<'PHP'
+        $method = new \ReflectionMethod(\IdnoPlugins\ActivityPub\RemoteActor::class, 'getSigningUser');
+        $user = $method->invoke(null);
+        return $user ? $user->getHandle() : null;
+        PHP);
+        $this->assertSame('newest', $signer(), 'a control: the newest account signs');
+
+        $this->close('newest');
+
+        $this->assertSame('ada', $signer());
+    }
+
+    /**
+     * Catches Micropub refusing every administrator's API key as an access token because the administrator the plugin always asks about is being
+     * deleted: the key of the first administrator who is not closed still works.
+     */
+    public function testTheFirstOpenAdministratorsApiKeyIsStillAnAccessTokenWhenTheFirstIsClosed(): void
+    {
+        $this->prepare();
+        $this->addUser('bea', self::PASSWORD, null, true);
+        $first = (string) $this->runInSite('return \Idno\Entities\User::getOne(["admin" => true])->getHandle();');
+        $other = $first === 'ada' ? 'bea' : 'ada';
+        $key = (string) $this->runInSite('return \Idno\Entities\User::getByHandle(' . $this->literal($other) . ')->getAPIkey();');
+        $status = fn () => $this->site()->request('GET', 'micropub/endpoint?q=config', ['Authorization' => 'Bearer ' . $key])->status;
+        $this->assertSame(401, $status(), 'a control: the other administrator\'s key is no token while the first is open');
+
+        $this->close($first);
+
+        $this->assertSame(200, $status());
+    }
 }

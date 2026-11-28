@@ -135,6 +135,11 @@ final class SignInDouble implements SignIn
         return false;
     }
 
+    public function mayLogOn(User $user): bool
+    {
+        return true;
+    }
+
     public function logOn(User $user): void
     {
     }
