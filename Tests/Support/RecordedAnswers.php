@@ -34,6 +34,10 @@ use Tests\Templating\PageNormaliser;
  * holds a 64-digit hex run (a form token or other secret in markup the normaliser does not know) or the value of a cookie the response set (a session
  * id), as set, percent-encoded, form-encoded or JSON-escaped, in the body or in a header value. Header names are folded to lower case and values are trimmed: a difference only in letter case of a name or in surrounding white space is
  * not a difference.
+ *
+ * A class whose recordings should not follow the shell opts into the graduated form with `protected const RECORD_MAIN_ONLY = true;`: the status and every
+ * header are recorded as above, and an HTML body is recorded as its `<title>` element and the page's `<main>` (a body with no `<main>`, and every body
+ * that is not HTML, whole).
  */
 trait RecordedAnswers
 {
@@ -190,8 +194,29 @@ trait RecordedAnswers
             }
         }
         $html = str_contains(strtolower(implode(' ', $values['content-type'] ?? [])), 'text/html');
+        $body = PageNormaliser::normalise($response->body, $baseUrl, $html);
+        if ($html && (new \ReflectionClass(static::class))->hasConstant('RECORD_MAIN_ONLY') && (new \ReflectionClass(static::class))->getConstant('RECORD_MAIN_ONLY') === true) {
+            $body = self::titleAndMain($body);
+        }
 
-        return $out . "\n" . PageNormaliser::normalise($response->body, $baseUrl, $html);
+        return $out . "\n" . $body;
+    }
+
+    /**
+     * The graduated form of an HTML body (`protected const RECORD_MAIN_ONLY = true;` in the using class): its `<title>` element, then everything from the
+     * first `<main` to its `</main>`, so that a change to the shell, the menu or a script outside the page's own content touches no recording. A body with
+     * no `<main>` is returned whole.
+     */
+    public static function titleAndMain(string $body): string
+    {
+        $start = stripos($body, '<main');
+        $end = $start === false ? false : stripos($body, '</main>', $start);
+        if ($start === false || $end === false) {
+            return $body;
+        }
+        $title = preg_match('/<title\b[^>]*>.*?<\/title>/is', $body, $found) === 1 ? $found[0] . "\n" : '';
+
+        return $title . substr($body, $start, $end + strlen('</main>') - $start);
     }
 
     /** `compare` (the default), `1` (capture) or `verify`. */
