@@ -45,7 +45,28 @@ class PostTagsTest extends \Tests\BrowserTestCase
 
         foreach ((array) $post->tags as $tag) {
             $this->assertIsString($tag);
-            $this->assertDoesNotMatchRegularExpression('/[<>]/', $tag, 'A tag is stored as plain text.');
         }
+    }
+
+    /**
+     * A tag is text: one with an angle bracket in it ("<3"), or an emoji made of several
+     * joined ones, was cut short or taken apart when the post was saved.
+     */
+    public function testATagWithAnAngleBracketOrAJoinedEmojiIsKeptAndShown()
+    {
+        $member = static::member('hearttagger');
+        $marker = static::marker();
+        $emoji  = "\u{1F469}\u{200D}\u{1F4BB}";
+
+        $this->submit('/status/edit', ['body' => 'Hearts ' . $marker, 'tags' => ['<3', $emoji], 'access' => 'PUBLIC'], $member, '/status/edit');
+
+        $posts = Status::get(['owner' => $member->getUUID()]);
+        $this->assertCount(1, $posts, 'The post should have been saved.');
+        $this->assertSame(['<3', $emoji], $posts[0]->tags);
+
+        $page = $this->get($posts[0]->getURL());
+        $this->assertSame(200, $page['status']);
+        $this->assertStringContainsString('rel="tag">&lt;3</a>', $page['body']);
+        $this->assertStringContainsString('rel="tag">' . $emoji . '</a>', $page['body']);
     }
 }

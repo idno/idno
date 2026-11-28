@@ -17,9 +17,10 @@ namespace Idno\Core {
      * the post, in a form field, an API request or a Micropub request, and it is shown to
      * every visitor of the post.
      *
-     * clean() is for the way in: it makes plain text of what was sent. texts() is for the way
-     * out: it reads a stored value, which may be older than clean(), as a list of texts.
-     * Neither escapes anything: a template prints each text with htmlspecialchars().
+     * clean() is for the way in: it makes one line of text of what was sent. texts() is for
+     * the way out: it reads a stored value, which may be older than clean(), as a list of
+     * texts. Neither escapes anything, and a tag may hold any character ("<3" is a tag): a
+     * template prints each text with htmlspecialchars().
      */
     class Tags
     {
@@ -31,7 +32,7 @@ namespace Idno\Core {
         const MAX_TAGS = 100;
 
         /**
-         * Make of what a request sent as tags what an entity stores: one line of plain text
+         * Make of what a request sent as tags what an entity stores: one line of text
          * for a text or a number, a list of such lines for an array (anything in it that is
          * no text or number is left out), and null for anything else.
          *
@@ -95,16 +96,20 @@ namespace Idno\Core {
         }
 
         /**
-         * One line of plain text: no elements, no angle brackets, no control characters,
-         * single spaces, MAX_LENGTH characters at most.
+         * One line of text: no control characters, no line breaks, single spaces, MAX_LENGTH
+         * characters at most. Nothing else is taken out: a tag is text, not markup, so "<3" is
+         * a tag, and so is an emoji joined from several (the joiner is a format character, not
+         * a control). What makes a tag safe to show is that it is escaped where it is printed.
+         * The characters that turn the direction of the text around are removed, because
+         * they would reach past the tag into the page.
          */
         private static function cleanText($text)
         {
             if (!mb_check_encoding($text, 'UTF-8')) {
                 $text = mb_scrub($text, 'UTF-8');
             }
-            $text = str_replace(['<', '>'], ' ', strip_tags($text));
-            $text = (string) preg_replace('/[\p{C}\s]+/u', ' ', $text);
+            $text = (string) preg_replace('/[\x{202A}-\x{202E}\x{2066}-\x{2069}]+/u', '', $text);
+            $text = (string) preg_replace('/[\p{Cc}\p{Zl}\p{Zp}\s]+/u', ' ', $text);
 
             return trim(mb_substr(trim($text), 0, static::MAX_LENGTH, 'UTF-8'));
         }
