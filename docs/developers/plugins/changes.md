@@ -58,8 +58,9 @@ It is now handled by `\Idno\Core\Tags`.
   earlier template lets a member put markup into the page of every visitor. The same goes for any template of
   yours that prints `$object->tags` itself.
 - **A content type that stores tags from the request** should store
-  `\Idno\Core\Tags::clean($page->getInput('tags'))`: one line of plain text, or a list of them, or `null`.
-  Posts stored earlier are not rewritten, so escape when printing whether or not you clean when storing.
+  `\Idno\Core\Tags::clean($page->getInput('tags'))`: one line of text, or a list of them, or `null`.
+  `clean()` removes control characters and line breaks and nothing else: a tag may hold `<`, `&` or a quote
+  (`<3` is a tag), so always escape when printing.
 
 ## Deleting an account
 

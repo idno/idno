@@ -1313,11 +1313,14 @@ lower case) in `registerTranslations()`.
   a field for it, but a form POST, a signed API request and the categories of a Micropub request
   all can), and it is drawn for every visitor. `\Idno\Core\Tags` holds the rules. A stored value
   is one text or a list of texts; `Tags::clean()` makes that of what a request sent (one line of
-  plain text each: no elements, no angle brackets, no control characters, 255 characters, 100
-  tags; anything in a list that is no text or number is left out), and every content type's
-  `saveDataFromInput()` stores `Tags::clean($page->getInput('tags'))`, never the input itself.
-  Posts stored before November 2026 hold whatever was sent, so nothing that prints tags relies
-  on that: `forms/output/tags` (one in `templates/default`, one in Twenty26) reads the value
+  text each: no control characters, line breaks or direction overrides, single spaces, 255
+  characters, 100 tags; anything in a list that is no text or number is left out), and every
+  content type's `saveDataFromInput()` stores `Tags::clean($page->getInput('tags'))`, never the
+  input itself. `clean()` takes no markup out and must not: a tag is text, `<3` is a tag
+  (`strip_tags()` ends it at the bracket), and an emoji joined from several holds a format
+  character (`\p{Cf}`: don't remove `\p{C}`). So a stored tag may hold `<`, `>`, `&` and quotes,
+  as posts stored before November 2026 hold whatever was sent, and everything that prints tags
+  escapes them: `forms/output/tags` (one in `templates/default`, one in Twenty26) reads the value
   with `Tags::texts()`, which gives only its texts, and prints each with `htmlspecialchars()`,
   with `Tags::url()` for the link. Anything else that reads `->tags` (`Entity::getTags()`, the
   MySQL search text) goes through `Tags::texts()` too, because the value may be a list or hold
