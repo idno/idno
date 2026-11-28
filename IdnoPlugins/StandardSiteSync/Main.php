@@ -398,6 +398,11 @@ class Main extends Plugin
         bool $skipExisting = false
     ): void
     {
+        // Nothing is written to a PDS from a private site, whoever asks
+        if (!\Idno\Core\Idno::site()->config()->isPublicSite()) {
+            return;
+        }
+
         $entityId = $entity->getID();
 
         try {
