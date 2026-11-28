@@ -8,13 +8,13 @@ if (!empty($tags)) {
         <p class="tag-row">
             <i class="fa fa-tag"></i>
             <?php foreach ($tags as $tag) { ?>
-            <a href="<?php echo htmlspecialchars(\Idno\Core\Tags::url($tag)); ?>" class="p-category" rel="tag"><?php echo htmlspecialchars($tag) ?></a>
+            <a href="<?php echo htmlspecialchars(\Idno\Core\Tags::url($tag, \Idno\Core\Idno::site()->config()->getDisplayURL())); ?>" class="p-category" rel="tag"><?php echo htmlspecialchars($tag) ?></a>
             <?php } ?>
         </p> 
         <?php
     } else {
         ?>
-        <i class="fa fa-tag"></i><a href="<?php echo htmlspecialchars(\Idno\Core\Tags::url($tags[0])); ?>" class="p-category" rel="tag"><?php echo htmlspecialchars($tags[0]) ?></a>
+        <i class="fa fa-tag"></i><a href="<?php echo htmlspecialchars(\Idno\Core\Tags::url($tags[0], \Idno\Core\Idno::site()->config()->getDisplayURL())); ?>" class="p-category" rel="tag"><?php echo htmlspecialchars($tags[0]) ?></a>
         <?php
     }
 }

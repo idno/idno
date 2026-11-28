@@ -1,11 +1,11 @@
-{% if tags %}{% if tags is iterable %}
+{% set texts = tags|tag_texts %}{% if tags and texts %}{% if tags is iterable %}
         <p class="tag-row">
             <i class="fa fa-tag"></i>
-            {% for tag in tags %}
+            {% for tag in texts %}
             <a href="{{ site_url('tag/' ~ (tag|form_urlencode)) }}" class="p-category" rel="tag">{{ tag }}</a>
             {% endfor %}
         </p> 
         {% else %}
-        <i class="fa fa-tag"></i><a href="{{ site_url('tag/' ~ (tags|form_urlencode)) }}" class="p-category" rel="tag">{{ tags }}</a>
+        <i class="fa fa-tag"></i><a href="{{ site_url('tag/' ~ (texts|first|form_urlencode)) }}" class="p-category" rel="tag">{{ texts|first }}</a>
         {% endif %}{% endif %}
 {% do forget_variables(['tags']) %}

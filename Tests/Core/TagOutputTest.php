@@ -47,14 +47,20 @@ class TagOutputTest extends \Tests\IdnoTestCase
             $doc = \Dom\HTMLDocument::createFromString('<div id="r">' . $html . '</div>', LIBXML_NOERROR);
             $this->assertSame(0, $doc->getElementsByTagName('x-canary')->length, $html);
             foreach ($doc->getElementById('r')->getElementsByTagName('a') as $a) {
-                $this->assertSame(['href', 'class', 'rel'], array_values(array_map(static fn ($attr) => $attr->name, iterator_to_array($a->attributes))), $html);
+                $this->assertSame(['class', 'href', 'rel'], (static function () use ($a): array { $names = array_map(static fn ($attr) => $attr->name, iterator_to_array($a->attributes)); sort($names); return array_values($names); })(), $html);
             }
         }
     }
 
-    /** A feed of a post whose stored tags hold a list does not stop at a PHP error. */
-    public function testATagListThatHoldsAListDoesNotBreakAFeed(): void
+    /** A post stored earlier whose tags hold a nested list or an h-card draws as text and never raises, in the page and in a feed. */
+    public function testATagListThatHoldsAListDoesNotBreakAPageOrAFeed(): void
     {
-        $this->assertStringContainsString('>ok<', $this->draw(['ok', ['nested']], 'rss'));
+        foreach (['default', 'rss'] as $type) {
+            $html = $this->draw(['ok', ['nested'], ['properties' => ['name' => ['x']]], '<b>bold</b>'], $type);
+
+            $this->assertStringContainsString('>ok<', $html, $type);
+            $this->assertStringContainsString('&lt;b&gt;bold&lt;/b&gt;', $html, $type);
+            $this->assertStringNotContainsString('Array', $html, $type);
+        }
     }
 }

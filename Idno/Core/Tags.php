@@ -11,8 +11,9 @@ namespace Idno\Core;
  * request's categories become). The value is whatever the request that made the post sent, and it is shown to every
  * visitor of the post and handed to other servers in feeds.
  *
- * clean() is for the way in: it makes plain text of what was sent. texts() is for the way out: it reads a stored value,
- * which may be older than clean(), as a list of texts. Neither escapes anything: a template prints each text escaped.
+ * clean() is for the way in: it makes plain text of what was sent (a string, trimmed, control characters removed; it keeps `<`
+ * and emoji joiners, since a tag is text, never markup). texts() is for the way out: it reads a stored value, which may be older than clean(), as a list of
+ * texts. Neither escapes anything: every place a tag is printed escapes it. Pure: nothing here asks the site.
  */
 final class Tags
 {
@@ -62,10 +63,10 @@ final class Tags
         return $texts;
     }
 
-    /** The address of the page that lists the posts with a tag; escape it for an attribute. */
-    public static function url(string $tag): string
+    /** The address of the page that lists the posts with a tag, on the site whose address is given (with its trailing slash); escape it for an attribute. */
+    public static function url(string $tag, string $siteAddress): string
     {
-        return Idno::site()->config()->getDisplayURL() . 'tag/' . urlencode($tag);
+        return $siteAddress . 'tag/' . urlencode($tag);
     }
 
     private static function isText(mixed $value): bool
@@ -73,14 +74,13 @@ final class Tags
         return is_string($value) || is_int($value) || is_float($value);
     }
 
-    /** One line of plain text: no elements, no angle brackets, no control characters, single spaces, at most MAX_LENGTH characters. */
+    /** One line of plain text: control characters removed, white space made single spaces, at most MAX_LENGTH characters. Nothing else is changed. */
     private static function cleanText(string $text): string
     {
         if (!mb_check_encoding($text, 'UTF-8')) {
             $text = mb_scrub($text, 'UTF-8');
         }
-        $text = str_replace(['<', '>'], ' ', strip_tags($text));
-        $text = (string) preg_replace('/[\p{C}\s]+/u', ' ', $text);
+        $text = (string) preg_replace(['/[\p{Cc}\s]+/u'], ' ', $text);
 
         return trim(mb_substr(trim($text), 0, self::MAX_LENGTH, 'UTF-8'));
     }

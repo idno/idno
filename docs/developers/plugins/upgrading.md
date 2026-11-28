@@ -315,7 +315,7 @@ The password recovery code is stored as its SHA-256. `\Idno\Entities\User::getPa
 
 ## Tags are text
 
-The `tags` field of a post is whatever the request that made it sent, and is shown to every visitor and put in feeds. A content type that stores it calls `\Idno\Core\Tags::clean($input)`, which makes one line of plain text, or a list of them, and null for anything else. Code that reads a stored value calls `\Idno\Core\Tags::texts($post->tags)`, which gives a list of texts whatever the value holds, and escapes each one when it prints it; `\Idno\Core\Tags::url($tag)` is the address of a tag's page. A `.tpl.php` template of yours that prints `$vars['tags']` as it is should do the same.
+The `tags` field of a post is whatever the request that made it sent, and is shown to every visitor and put in feeds. A content type that stores it calls `\Idno\Core\Tags::clean($input)`, which makes plain text of it (a trimmed string without control characters, or a list of them, and null for anything else; it does not remove `<` or `>`, because a tag is text and is escaped where it is printed). Code that reads a stored value calls `\Idno\Core\Tags::texts($post->tags)`, which gives a list of texts whatever the value holds, and escapes each one when it prints it; `\Idno\Core\Tags::url($tag, $siteAddress)` is the address of a tag's page. A `.tpl.php` template of yours that prints `$vars['tags']` as it is should do the same, and a Twig template reads it with the `tag_texts` filter.
 
 ## What the tests pin
 

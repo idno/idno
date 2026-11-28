@@ -170,6 +170,7 @@ final class IdnoTwigExtension extends AbstractExtension
             new TwigFilter('link_url', self::linkUrl(...)),
             new TwigFilter('email_address', self::emailAddress(...)),
             new TwigFilter('form_urlencode', self::formUrlencode(...)),
+            new TwigFilter('tag_texts', self::tagTexts(...)),
             new TwigFilter('identity_url', self::identityUrl(...)),
             new TwigFilter('to_int', self::toInt(...)),
             new TwigFilter('to_timestamp', self::toTimestamp(...)),
@@ -994,6 +995,16 @@ final class IdnoTwigExtension extends AbstractExtension
     /**
      * `urlencode()`: a space is `+`, as the tag links of a post have always been written (Twig's own `url_encode` writes `%20`).
      */
+    /**
+     * A post's stored tags as a list of texts, whatever the value holds (`Idno\Core\Tags::texts()`): the tag row draws them escaped.
+     *
+     * @return list<string>
+     */
+    public static function tagTexts(mixed $value): array
+    {
+        return \Idno\Core\Tags::texts($value);
+    }
+
     public static function formUrlencode(mixed $value): string
     {
         return urlencode(self::text($value));

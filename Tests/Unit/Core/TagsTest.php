@@ -9,14 +9,22 @@ use PHPUnit\Framework\TestCase;
 
 final class TagsTest extends TestCase
 {
-    /** A tag sent with markup is stored as text, so no feed reader or other server is handed an element. */
-    public function testMarkupInATagIsTextWhenStored(): void
+    /** A tag is stored as the plain text that was sent: markup is kept as text (and escaped where it is printed), `<3` and joined emoji survive, control characters go. */
+    public function testATagIsStoredAsPlainText(): void
     {
-        $this->assertSame('x', Tags::clean('<script>x</script>'));
-        $this->assertSame('a b', Tags::clean("a\n\t b"));
-        $this->assertSame(['one', 'two'], Tags::clean(['<b>one</b>', 'two', 'two', '  ', ['nested']]));
-        $this->assertStringNotContainsString('<', (string) Tags::clean('"><x-canary a=\'1'));
+        $this->assertSame('<script>x</script>', Tags::clean('<script>x</script>'));
+        $this->assertSame('I <3 cats', Tags::clean('I <3 cats'));
+        $this->assertSame("\u{1F469}\u{200D}\u{1F4BB}", Tags::clean("\u{1F469}\u{200D}\u{1F4BB}"));
+        $this->assertSame('a b', Tags::clean("a\n\t b\x00"));
+        $this->assertSame(['one', 'two'], Tags::clean(['one', ' two ', 'two', '  ', ['nested'], null]));
+        $this->assertSame('C++ & #tag', Tags::clean('C++ & #tag'));
         $this->assertNull(Tags::clean(new \stdClass()));
+    }
+
+    /** A tag's page address is the tag, encoded, after the site's address. */
+    public function testATagsAddressIsEncoded(): void
+    {
+        $this->assertSame('https://site.example/tag/%22%3E%3Cb%3E', Tags::url('"><b>', 'https://site.example/'));
     }
 
     /** A tag sent as a list of lists must not break the post's page ("Array to string conversion"). */
