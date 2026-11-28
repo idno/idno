@@ -1,122 +1,157 @@
-# Installation Instructions
+# Installing Idno
+
+This page takes you from an empty server to a working Idno site with you as its administrator.
+
+If you want to work on Idno's code rather than run a site, see [Setting up for development](../developers/setup.md) instead.
 
 ## Before you begin
 
-If you're running Idno in production, we highly recommend that you download the installation package from [idno.co](https://idno.co).
+You need:
 
-To begin with, make sure your server satisfies the [System requirements](requirements.md).
+- A server that meets the [system requirements](requirements.md): a web server, PHP 8.3 or later with a few extensions, and MySQL.
+- [Composer](https://getcomposer.org/), PHP's package manager, to fetch the libraries Idno uses.
+- An empty MySQL database, and a database user that can create and change tables in it. The installer does not create the database for you.
+- A domain or subdomain for the site. Idno can also live in a subfolder of a site, such as `example.com/blog/`.
 
-Some of the technologies involved are a little bit new, so you may have to ask for your web host to install them specially. We want to help you pick a great host that works well with Idno, so we'll be creating a list of the ones that will just work, out of the box.
+## 1. Get the code
 
-## Upload Idno files
+Idno's code lives in its [GitHub repository](https://github.com/idno/idno). Clone it into the folder your web server will serve, then fetch its libraries:
 
-Idno releases stable installation packages from [idno.co](https://idno.co) in both .zip and .tar.gz formats. If you are using Idno for any purpose other than development, this is the recommended source for Idno installations.
+```bash
+git clone https://github.com/idno/idno.git /var/www/idno
+cd /var/www/idno
+composer install
+```
 
-You can place the platform on your web host by:
+`composer install` creates the `vendor/` folder. Without it, every page says the installation is incomplete.
 
-+ Downloading the latest package from [the Idno homepage](https://idno.co/). This is by far the easiest option. If you've uploaded the files inside the archive to your web host, you can skip to the configuration section of these documents, below.
-* If you have more control over your server, you can also use Git to clone the code from [our repository](https://github.com/idno/idno). Git is a technical source code management system that is out of scope for this guide, so if in doubt, use point one.
+The web server's user (often `www-data`) needs to be able to read every file. It also needs to write to the `configuration/` folder while you install, so that the installer can save the configuration file there. If it can't, the installer shows you what to save by hand.
 
-!!! note "Note"
-    Idno's dependencies are now retrieved by ```composer``` when downloading the project directly from GitHub. If you've installed Idno from the git repo, you will need to run ```composer install``` from your Idno directory.
+## 2. Set up the web server
 
-### Alternative Packages
+Point your web server's document root at the folder you cloned into. Idno sends every address to `index.php`, so the web server must pass on addresses it has no file for:
 
-If you want to run the (almost) latest and greatest code, but aren't able to track github, you may opt to use one of the [unofficial Idno installation packages](https://www.marcus-povey.co.uk/known/). These packages are built from github, and often contain newer features than in the official release.
+- **Apache**: turn on `mod_rewrite` and allow `.htaccess` files (`AllowOverride All`). The installer copies the sample `.htaccess` into place if there is none. On Apache 2.4, see the note in [System requirements](requirements.md#apache).
+- **nginx**: start from the sample configuration in `warmup/webserver-configs/nginx.conf`. It sends addresses to `index.php` and closes `configuration/`, `Uploads/` and other files visitors should never see.
 
-## Configure Idno
+Serve the site over HTTPS. Idno works over plain HTTP, but its diagnostics page warns about it, and other sites on the IndieWeb and the Fediverse expect HTTPS.
 
-### Use the automatic installer
+## 3. Create the database
 
-If you're using a MySQL back-end, you can get started by pointing your browser at your Idno site address. If no configuration file exists, Idno sends you to the web installer at `/warmup/`. It asks for your site name, the database host, name, user and password, and the upload directory. It then loads the database schema, writes `configuration/config.ini` and takes you to the page where you register the first user. The web installer only sets up MySQL. If you want to use MongoDB, you'll need to create the configuration file manually, as described below, or use the CLI installer.
+Create a database and a user for Idno. In the MySQL shell, for example:
 
-### Use environment variables
+```sql
+CREATE DATABASE idno CHARACTER SET utf8mb4;
+CREATE USER 'idno'@'localhost' IDENTIFIED BY 'a long password';
+GRANT ALL PRIVILEGES ON idno.* TO 'idno'@'localhost';
+```
 
-If you’re using Docker or other virtualized server environments, you will need to create a config.ini file in the `configuration` directory of your installation. However, configuration items can also be stored in environment variables starting with IDNO_ (the older KNOWN_ prefix still works, and IDNO_ variables take precedence). The name of the variable is the name of the config.ini item in upper case. For example, the following environment variables will allow you to set the database:
+Leave the database empty. The installer creates the tables.
 
-    IDNO_DATABASE = "MySQL"
-    IDNO_DBNAME = "IdnoDBName"
-    IDNO_DBUSER = "IdnoDBUser"
-    IDNO_DBPASS = "IdnoDBPassword"
-    IDNO_DBHOST = "your.database.server"
+## 4. Run the web installer
 
-You can also set `IDNO_DATABASE_URL` (for example `mysql://user:password@host:3306/dbname`) to supply the database type, name, user, password, host and port in one variable, and `IDNO_UPLOAD_PATH` to set the upload directory.
+Open your site's address in a browser. While there is no configuration file, every address sends you to the installer at `/warmup/`.
 
-### If you’re using MySQL
+1. **Requirements.** The installer checks your PHP version, address rewriting and the PHP extensions Idno needs, and tells you if anything is missing.
+2. **Settings.** Fill in:
+    - **The site's name.** You can change it later.
+    - **The database**: its name, the user, the password and the server. Type the server as a name or address (`localhost`, `db.example.com`). If MySQL listens on another port, add it after a colon (`db.example.com:3307`) or type it in the port field. Leave the port empty for 3306. A socket path is not accepted: `localhost` uses the server's default socket.
+    - **The upload folder**: where photos and other files are kept. The installer suggests the `Uploads` folder inside the installation, which the sample web server configurations close to visitors. Any other folder must be outside the installation, so that visitors can't download files directly. The installer creates the folder if it can, and checks that it can save a file in it.
+3. **Install.** The installer connects to the database, creates the tables, and saves the configuration file as `configuration/config.ini`. If anything is wrong, it says what beside the field and doesn't save a configuration file. It never replaces a configuration file that is already there.
 
-MySQL users need to create a file called ```config.ini``` in your ```/configuration/``` directory. This should contain the following information:
+If the web server can't write to `configuration/`, the installer shows you the contents of the file and where to save it. Save it, make sure the web server's user can read it, and continue.
 
+If the database already holds a whole Idno site (one you are moving, for example), the installer keeps its tables as they are. Empty tables left by an earlier attempt are replaced. A table with one of Idno's names that has data in it, but isn't part of a whole site, stops the installation: the installer never deletes data.
+
+## 5. Make your account
+
+Once the configuration file is saved, the installer sends you to make the first account. **The first account on a site is its administrator.** When you make it, Idno also:
+
+- gives the site the name you typed in the installer,
+- turns off open registration, so that nobody else can make an account until you allow it,
+- uses your email address as the address the site sends mail from.
+
+Until that first account exists, anybody who reaches the site can make it. Finish the installation and make your account straight away.
+
+## 6. After installing
+
+Your site works now. A few things are worth doing next:
+
+- **Set up email**, so that password resets and invitations reach people. See [Email](../admin/email.md).
+- **Start the background worker**, especially if you'll use ActivityPub to connect with the Fediverse. See [Running background services](advanced.md).
+- **Look through the administration pages** at `/admin/`: the site's name and description, who may register, plugins and themes. See [Administering a site](../admin/index.md).
+- **Back up** the database and the upload folder regularly.
+
+## Installing without the web installer
+
+You can also write the configuration yourself. This is how you set up MongoDB, or a server where you'd rather not run the installer in a browser. The [command line installer](cliinstaller.md) does the same checks as the web installer and is often easier.
+
+### MySQL
+
+1. Create the database and user (step 3 above).
+2. Load the schema:
+
+    ```bash
+    mysql -u idno -p idno < warmup/schemas/mysql/mysql.sql
+    ```
+
+3. Create `configuration/config.ini`:
+
+    ```ini
     database = "MySQL"
-    dbname = "Your MySQL database name"
-    dbhost = "Your MySQL database host (eg 'localhost')"
-    dbuser = "Your database username"
-    dbpass = "Your database password"
-
-If you need to use a non-standard database port, you can also select this:
-
-    dbport = "Your database port"
-
-Additionally, you will need to create the database referred to in this configuration file, and ensure that it can be connected to using the user credentials you supply. You will also need to load the SQL schema stored in `/warmup/schemas/mysql/mysql.sql` into that database. Later schema upgrades are applied automatically the first time Idno connects after an update.
-
-### Set the filesystem
-
-If you’re using MongoDB and don't set a filesystem, all uploaded files will be stored in MongoDB itself. However, you can also store files on your server’s local hard drive. Additionally, plugins can provide alternative filesystems like Amazon S3.
-
-#### Store files on your server’s hard drive
-
-Create a directory where file uploads will be stored. This must be outside of your document root. Set permissions such that the web server can read and write to it. chmod 777 will work, but is insecure and not recommended.
-
-Make a note of that full path. For example, `/Users/ben/Sites/idno.co/data/`.
-
-Then, add the following to your config.ini file:
-
+    dbname = "idno"
+    dbuser = "idno"
+    dbpass = "a long password"
+    dbhost = "localhost"
     filesystem = "local"
-    uploadpath = "/Users/ben/Sites/idno.co/data/"
+    uploadpath = "/var/www/idno/Uploads/"
+    ```
 
-Of course, replace the path with the path to your data folder.
+    Add `dbport = "3307"` if MySQL isn't on port 3306. The upload folder must exist, and the web server's user must be able to write to it.
 
-If you're using MySQL, you must specify an upload directory if you want to store files, images or profile pictures.
+4. Open the site and make your account (step 5 above).
 
-### If you’re using MongoDB
+Later changes to the database tables are applied automatically the first time Idno connects after an upgrade.
 
-** MongoDB support is deprecated, we recommend using one of the other DB Backends (MySQL is recommended) **
+### MongoDB
 
-MongoDB needs the PHP `mongodb` extension and the `mongodb/mongodb` Composer package (`composer require mongodb/mongodb`). If your MongoDB installation accepts connections from localhost (the default connection string is `mongodb://localhost:27017`), and you're happy for your Idno MongoDB database to be called idno, you can simply create a file called ```config.ini``` in your ```/configuration/``` directory containing:
+MongoDB support is deprecated: use MySQL for a new site if you can. MongoDB needs the PHP `mongodb` extension and the `mongodb/mongodb` library, which isn't installed by default:
 
-    database = "MongoDB"
+```bash
+composer require mongodb/mongodb
+```
 
-If you’d like to use an alternative [MongoDB connection string](http://docs.mongodb.org/manual/reference/connection-string/), you can add that to ```config.ini``` like this:
+If MongoDB accepts connections from this machine without a password, this is all `configuration/config.ini` needs:
 
-    dbstring  = "Your MongoDB connection string"
-    dbname    = "Your preferred Idno database name (default=idno)"
+```ini
+database = "MongoDB"
+```
 
-You can also include a subset of these items, for example to just change the database name.
+The database is called `idno` unless you set `dbname`, and Idno connects to `mongodb://localhost:27017` unless you set a [connection string](https://www.mongodb.com/docs/manual/reference/connection-string/) in `dbstring`. If MongoDB requires you to sign in, add the user, the password and the database the user is defined in:
 
-By default, MongoDB will accept unauthenticated connections from localhost. If you've locked down your MongoDB to require authentication, you can set a username, password, and [authentication source](https://docs.mongodb.org/manual/core/security-users/#user-authentication-database):
+```ini
+dbuser = "idnouser"
+dbpass = "a long password"
+dbauthsrc = "admin"
+```
 
-    dbuser    = "Your MongoDB user"
-    dbpass    = "Your MongoDB user's password"
-    dbauthsrc = "The database where this user is defined"
+The user needs the `readWrite` role on Idno's database. In the MongoDB shell:
 
-When using authentication, your MongoDB user will need to be granted the ["readWrite"](https://docs.mongodb.org/manual/reference/built-in-roles/#readWrite) role on the Idno database. For example to create a user called "idnouser" in the "admin" database, you might run these commands on the Mongo command line:
+```
+use admin
+db.createUser({user: "idnouser", pwd: "a long password", roles: [{role: "readWrite", db: "idno"}]})
+```
 
-    use admin
-    db.createUser({user:"idnouser", pwd:"p@ssword", roles: [
-      {role: "readWrite", db: "idno"}
-    ]})
+With no `filesystem` setting, uploaded files are kept in MongoDB itself. To keep them on disk instead, add `filesystem = "local"` and an `uploadpath`.
 
-### Load Idno
+### Settings from the environment
 
-Launch Idno in a web browser.
+Every setting can also come from an environment variable, such as `IDNO_DBPASS` for `dbpass`. This is handy in containers, and keeps passwords out of files. See [Configuration reference](config.md#environment-variables).
 
-The first user to register will be the site administrator.
+## Where next
 
-Register and log in.
-
-### Administer Idno
-
-Once you've registered and logged in, click "Site Configuration" in the toolbar menu. This will allow you to set some site configuration items, including the site name. You will also be able to enable some plugins from this screen. If you're using Idno as a blog or a closed community, you will probably also want to turn open registration off from here.
-
-## Command Line Installation
-
-A command line installer is available, which is useful for installing Idno over slow connections or in a scripted environment. Details can be found [here](cliinstaller.md).
+- [Configuration reference](config.md)
+- [Running background services](advanced.md)
+- [Logs and diagnostics](debugging.md)
+- [Upgrading Idno](upgrade.md)
+- [Administering a site](../admin/index.md)

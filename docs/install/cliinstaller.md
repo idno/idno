@@ -1,59 +1,104 @@
-# Command Line Installer
+# Command line installer
 
-Idno allows you to install Idno via the command line, this can be handy for scripted installs, using non-MySQL database backends, or when installing over a terminal connection to a remote server.
+This page shows you how to install Idno from a terminal, by answering questions or from a file of answers, which suits scripted installs and servers you reach over SSH.
 
-# The Basics
+The command line installer makes the same checks and does the same steps as the [web installer](instructions.md): it checks the upload folder, connects to the database, creates the tables, and writes the configuration file. It can also set up a MongoDB site, which the web installer can't.
 
-Go in to ```/warmup/CLI```, and you'll see ```CLIInstaller.php```.
+Before you start, get the code and run `composer install`, and create the database (steps 1 to 3 of [Installing Idno](instructions.md)).
 
-To install a brand new Idno using an interactive install simply run 
+## Installing, with questions
 
-```
-./CLIInstaller.php install
-```
+From Idno's folder, run:
 
-The installer asks for the site name, database type (default `MySQL`), database name, user, password, host and port, and the upload path. It makes the same checks as the web installer: the upload folder is created if it can be and tested by saving a file in it, the database is connected to, the MySQL schema is loaded into a database that has none (this is skipped for MongoDB), `.htaccess` is created if there is none, and `configuration/config.ini` is written. If anything is wrong it says what, changes nothing, and exits with status 1. It never replaces a configuration file, and stops with an error if Idno is already installed.
-
-The host can carry the port (`db.example.com:3307`), or the port can be given on its own; leave it empty for 3306. A socket path is not accepted: use `localhost` for the server's default socket.
-
-# The Manifest
-
-A manifest is used to pass configuration options to the CLI installer so that you won't be prompted for them. This is useful for scripting installs.
-
-First, generate a manifest template:
-
-```
-./CLIInstaller.php generate-manifest /path/to/manifest
+```bash
+php warmup/CLI/CLIInstaller.php install
 ```
 
-Next, edit that file and fill in the appropriate options. The manifest is an INI file with the keys `site_title`, `database`, `mysql_name`, `mysql_user`, `mysql_pass`, `mysql_host`, `mysql_port` and `upload_path`. Put a value that has anything but letters and digits in it in quotes.
+Run it as the web server's user (for example with `sudo -u www-data`), so that the files it makes belong to that user.
 
-Now, you are able to pass these options to the installer:
+It first checks your PHP version and extensions. Then it asks for:
 
+- the site's name,
+- the database type (`MySQL` unless you type something else),
+- the database name (`known` unless you type something else), user and password,
+- the database server (`localhost` unless you type something else) and port (empty for 3306),
+- the upload folder (the `Uploads` folder inside the installation unless you type something else).
+
+The server can carry its port after a colon (`db.example.com:3307`), or you can give the port on its own. A socket path is not accepted: `localhost` uses the server's default socket.
+
+If anything is wrong, the installer says what and how to fix it, doesn't save a configuration file, and exits with status 1. On success it saves `configuration/config.ini`, tells you where, and exits with status 0. Then open the site in a browser and make the first account, which becomes the administrator (see [Make your account](instructions.md#5-make-your-account)).
+
+!!! note "MongoDB"
+    For MongoDB, the installer doesn't connect to the database or create anything in it. It still needs a database user, and writes the user and password into the file, so MongoDB must be set up to require them. The server and port are written too, but MongoDB doesn't use them: Idno connects with the `dbstring` setting, which is `mongodb://localhost:27017` unless you add it to the file. See [MongoDB](instructions.md#mongodb).
+
+The installer stops with an error if Idno is already installed (if there is a `config.ini` in `configuration/` or in the top folder). It never replaces a configuration file.
+
+!!! note "The site's name"
+    The command line installer asks for the site's name, but doesn't save it. The site starts as "New Idno site" until you make the first account, when it takes that member's name ("Ben's Idno", for example). Change it on the Site settings page at `/admin/`.
+
+## Installing from a manifest
+
+A manifest is a file of answers, so the installer doesn't need to ask. It is an INI file with these keys:
+
+| Key | What it is |
+|---|---|
+| `site_title` | The site's name |
+| `database` | `MySQL` or `MongoDB` |
+| `mysql_name` | The database name |
+| `mysql_user` | The database user |
+| `mysql_pass` | The database password |
+| `mysql_host` | The database server |
+| `mysql_port` | The port, or empty for 3306 |
+| `upload_path` | The full path of the upload folder |
+
+The `mysql_` keys are used for MongoDB too. Put quotes around any value that has anything but letters and digits in it.
+
+To start one, have the installer write a template:
+
+```bash
+php warmup/CLI/CLIInstaller.php generate-manifest /path/to/manifest.ini
 ```
-./CLIInstaller.php install config.ini /path/to/manifest
+
+Fill in the values, then install with it:
+
+```bash
+php warmup/CLI/CLIInstaller.php install config.ini /path/to/manifest.ini
 ```
 
-You'll also notice I'm specifying the ```config.ini``` ini file to write to. It is written in the ```configuration``` directory, and you can write this config to other files as necessary, which is handy if you're using per-domain configuration.
+The first argument is the name of the configuration file to write, inside `configuration/`; `config.ini` is the usual one. Any key the manifest leaves empty is asked for, except `mysql_pass` and `mysql_port`, which are only asked for when they are missing from the file altogether.
 
-# Other options
+The manifest holds the database password, so delete it, or keep it somewhere safe, when you are done.
 
-The CLI installer has a few other options that might be useful:
+## Other commands
 
-## Checking requirements
+### Checking the requirements
 
-If you just want to check that your server has the necessary requirements to run Idno, you can execute:
+To check that the server has what Idno needs, without installing anything:
 
-```
-./CLIInstaller.php check-requirements
-```
-
-## Generate config from manifest
-
-If you want to generate a config file, but without going through the full install (useful if you want to generate a new domain config in a script), you can use the following command to do so
-
-```
-./CLIInstaller.php makeconfig /path/to/manifest 
+```bash
+php warmup/CLI/CLIInstaller.php check-requirements
 ```
 
-This will output the new config to stdOut. You can save it to an ini file as appropriate!
+### Writing a configuration file from a manifest
+
+To build a configuration file without installing anything (for example, a [per-domain file](config.md#per-domain-configuration) for another site), run:
+
+```bash
+php warmup/CLI/CLIInstaller.php makeconfig /path/to/manifest.ini > example.com.ini
+```
+
+It checks the manifest the way `install` does, but touches neither the database nor the upload folder, and prints the file instead of saving it. Move the file into `configuration/` yourself.
+
+### Installing somewhere else
+
+Set `IDNO_INSTALL_PATH` to install into a different copy of Idno than the one the installer is in:
+
+```bash
+IDNO_INSTALL_PATH=/var/www/other-site php warmup/CLI/CLIInstaller.php install
+```
+
+## Where next
+
+- [Installing Idno](instructions.md)
+- [Configuration reference](config.md)
+- [Running background services](advanced.md)
