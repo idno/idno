@@ -107,15 +107,17 @@ namespace Idno\Core {
 
         /**
          * Is a server variable one whose value must not be shown? True for
-         *  - every variable that sets a setting of the site (IDNO_<SETTING>, and KNOWN_<SETTING>
-         *    as it was called before), whatever the setting: see loadIniFiles();
+         *  - a variable that sets a setting of the site (IDNO_<SETTING>, and KNOWN_<SETTING> as
+         *    it was called before: see loadIniFiles()) when that setting is a secret by
+         *    isSecretSetting(): IDNO_DBPASS and IDNO_SITE_SECRET, not IDNO_TITLE;
          *  - what a request carries to say who sent it: the Cookie, Authorization and
          *    Proxy-Authorization headers, the password and digest of HTTP authentication, and
          *    the signature of an API request (X-IDNO-SIGNATURE, X-KNOWN-SIGNATURE);
          *  - a name that ends in a word for a password.
          * Apache puts REDIRECT_ before the name of a variable after an internal redirect, once
-         * for each redirect, so the name is read without it. (A name that isSecretSetting()
-         * knows, and an address with a password in it, are left to redactSecrets().)
+         * for each redirect, so the name is read without it. (Any other name that
+         * isSecretSetting() knows, and an address with a password in it, such as
+         * IDNO_DATABASE_URL, are left to redactSecrets().)
          *
          * @param  string $name
          * @return bool
@@ -124,7 +126,11 @@ namespace Idno\Core {
         {
             $name = preg_replace('/^(REDIRECT_)+/i', '', (string) $name);
 
-            return (bool) preg_match('/^(IDNO|KNOWN)_|(^|_)(COOKIE|AUTHORIZATION|SIGNATURE|PW|PWD|PASSWD)$|^PHP_AUTH_DIGEST$/i', $name);
+            if (preg_match('/^(?:IDNO|KNOWN)_(.+)$/i', $name, $setting)) {
+                return static::isSecretSetting(strtolower($setting[1]));
+            }
+
+            return (bool) preg_match('/(^|_)(COOKIE|AUTHORIZATION|SIGNATURE|PW|PWD|PASSWD)$|^PHP_AUTH_DIGEST$/i', $name);
         }
 
         /**

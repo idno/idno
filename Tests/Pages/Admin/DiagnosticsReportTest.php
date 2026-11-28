@@ -9,7 +9,8 @@ namespace Tests\Pages\Admin {
      * The detailed report of the Diagnostics page is made to be passed on to whoever helps
      * with a problem, so it must not hold the site's secrets. A site can be configured with
      * environment variables (IDNO_DBPASS, IDNO_SITE_SECRET ...), which PHP lists among the
-     * server variables the report prints: the report names them, and never shows their values.
+     * server variables the report prints: the report names them, and never shows the value of
+     * one that is a secret. A setting that is none (the site's name) is shown.
      *
      * The last test makes its requests over HTTP, so it needs the site to be running (see
      * IDNO_DOMAIN / IDNO_PORT).
@@ -27,9 +28,13 @@ namespace Tests\Pages\Admin {
                 'IDNO_SMTP_PASSWORD' => 'hidden-02',
                 'IDNO_SITE_SECRET' => 'hidden-03',
                 'IDNO_DATABASE_URL' => 'mysql://someone:hidden-04@db.example.com:3306/idno',
-                'IDNO_TITLE' => 'hidden-05 (a setting whose name says nothing)',
+                'IDNO_DBSTRING' => 'hidden-05',
                 'KNOWN_DBPASS' => 'hidden-06',
-                'KNOWN_URL' => 'https://hidden-07.example.com/',
+                'KNOWN_PROXY_STRING' => 'someone:hidden-07@proxy.example.com:3128',
+                // Settings that are no secrets
+                'IDNO_TITLE' => 'A site',
+                'KNOWN_URL' => 'https://example.com/',
+                'IDNO_FORM_TOKEN_EXPIRY' => '3600',
                 // Apache gives a variable this name after an internal redirect
                 'REDIRECT_IDNO_DBPASS' => 'hidden-08',
                 'REDIRECT_REDIRECT_KNOWN_DBPASS' => 'hidden-09',
@@ -57,8 +62,8 @@ namespace Tests\Pages\Admin {
         }
 
         // Catches: a report shared for help giving away the database password, the site secret
-        // or any other setting that the site takes from its environment
-        public function testTheReportNamesEnvironmentSettingsWithoutTheirValues()
+        // or any other secret that the site takes from its environment
+        public function testTheReportNamesSecretEnvironmentSettingsWithoutTheirValues()
         {
             $server = $this->serverVariables();
             $report = Diagnostics::report(['status' => 'Ok', 'report' => []], [], $server);
@@ -80,7 +85,10 @@ namespace Tests\Pages\Admin {
             $this->assertSame('example.com', $redacted['HTTP_HOST']);
             $this->assertSame('someone', $redacted['PHP_AUTH_USER']);
             $this->assertSame('', $redacted['IDNO_EMPTY'], 'A variable that is set to nothing is shown as empty.');
-            $this->assertSame(Config::REDACTED, $redacted['IDNO_TITLE']);
+            $this->assertSame('A site', $redacted['IDNO_TITLE']);
+            $this->assertSame('https://example.com/', $redacted['KNOWN_URL']);
+            $this->assertSame('3600', $redacted['IDNO_FORM_TOKEN_EXPIRY'], 'How long a token lasts is not a secret.');
+            $this->assertSame('mysql://' . Config::REDACTED . '@db.example.com:3306/idno', $redacted['IDNO_DATABASE_URL']);
             $this->assertSame('postgres://' . Config::REDACTED . '@db.example.com/app', $redacted['DATABASE_URL']);
             $this->assertSame('index.php', $redacted['argv'][0]);
         }
