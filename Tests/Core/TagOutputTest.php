@@ -47,7 +47,8 @@ class TagOutputTest extends \Tests\IdnoTestCase
             $doc = \Dom\HTMLDocument::createFromString('<div id="r">' . $html . '</div>', LIBXML_NOERROR);
             $this->assertSame(0, $doc->getElementsByTagName('x-canary')->length, $html);
             foreach ($doc->getElementById('r')->getElementsByTagName('a') as $a) {
-                $this->assertSame(['class', 'href', 'rel'], (static function () use ($a): array { $names = array_map(static fn ($attr) => $attr->name, iterator_to_array($a->attributes)); sort($names); return array_values($names); })(), $html);
+                $this->assertSame(['class', 'href', 'rel'], (static function () use ($a): array { $names = array_map(static fn ($attr) => $attr->name, iterator_to_array($a->attributes)); sort($names); return array_values($names);
+                })(), $html);
             }
         }
     }
