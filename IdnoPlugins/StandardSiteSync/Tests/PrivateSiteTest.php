@@ -8,8 +8,8 @@ use Tests\Support\PrivateSiteTestCase;
 
 /**
  * A private site (`walled_garden`) tells no AT Protocol server who its members are: `/.well-known/site.standard.publication` names no member's DID
- * (it answers as a site with no publication does), and a post is never put forward for a PDS. The same site made public names the DID, so the
- * first test cannot pass because nobody was connected. A site of the test's own.
+ * (it answers as a site with no publication does). The same site made public names the DID, so the first test cannot pass because nobody was
+ * connected. That a post is not put forward for a PDS is `PrivateSitePostTest`. A site of the test's own.
  */
 final class PrivateSiteTest extends PrivateSiteTestCase
 {

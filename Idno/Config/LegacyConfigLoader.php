@@ -94,7 +94,7 @@ final class LegacyConfigLoader
      */
     private const WORDS = [
         'true' => '1', 'on' => '1', 'yes' => '1',
-        'false' => '', 'off' => '', 'no' => '', 'none' => '',
+        'false' => '', 'off' => '', 'no' => '', 'none' => '', 'null' => '',
     ];
 
     /**

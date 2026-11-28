@@ -104,7 +104,7 @@ final class LegacyConfigLoaderTest extends TestCase
     /** The environment and config.ini agree: the same word is the same value, for each setting the code tests as a boolean. */
     public function testAnEnvironmentWordIsWhatTheFileMakesOfIt(): void
     {
-        foreach (['true', 'on', 'yes', 'false', 'off', 'no', 'none'] as $word) {
+        foreach (['true', 'on', 'yes', 'false', 'off', 'no', 'none', 'null', 'NULL'] as $word) {
             $dir = $this->project(['configuration/config.ini' => "debug = $word\n"]);
             $this->assertSame($this->load($dir)->get('debug'), $this->load($this->project(), ['IDNO_DEBUG' => $word])->get('debug'), $word);
         }
