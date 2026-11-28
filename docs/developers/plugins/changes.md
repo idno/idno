@@ -66,6 +66,19 @@ Following a person, the `follow` and `unfollow` events and WebSub subscriptions 
 
 ## Names that changed
 
+### The gettext domain of core's translations
+
+Core's own strings are in the gettext domain `idno`, the name of their template (`languages/source/idno.pot`): the
+catalogue of a language is `languages/<locale>/LC_MESSAGES/idno.mo`. The domain was `known` before.
+
+* A catalogue compiled under the earlier name, `known.mo`, is still read, so a site that is already translated
+  stays translated. Where a language has both files, `idno.mo` is asked first and `known.mo` only for a string it
+  does not translate. Name new catalogues `idno.po` and `idno.mo`.
+* The default domain of `new \Idno\Core\GetTextTranslation()` is now `idno`. A plugin or theme that created one
+  with no arguments to reach core's strings gets the new domain; pass `'known'` to read the earlier one, or use
+  `\Idno\Core\GetTextTranslation::forCore()`, which gives both in the order core registers them. No bundled plugin
+  or theme did this: each registers a domain of its own, and those have not changed.
+
 ### WebSub (formerly PubSubHubbub)
 
 The protocol that tells a hub when a site has published something was renamed WebSub when the W3C made it a
