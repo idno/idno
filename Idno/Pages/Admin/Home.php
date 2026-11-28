@@ -41,7 +41,6 @@ namespace Idno\Pages\Admin {
             $indieweb_reference = $this->getInput('indieweb_reference') === 'true';
             $user_avatar_favicons = $this->getInput('user_avatar_favicons') === 'true';
             $share_backup_url = $this->getInput('share_backup_url');
-            $wayback_machine = $this->getInput('wayback_machine') === 'true';
             $items_per_page = (int)$this->getInput('items_per_page');
             $single_user = $this->getInput('single_user') === 'true';
             $permalink_structure = $this->getInput('permalink_structure');
@@ -73,7 +72,6 @@ namespace Idno\Pages\Admin {
             \Idno\Core\Idno::site()->config()->indieweb_reference = $indieweb_reference;
             \Idno\Core\Idno::site()->config()->user_avatar_favicons = $user_avatar_favicons;
             \Idno\Core\Idno::site()->config()->share_backup_url = $share_backup_url;
-            \Idno\Core\Idno::site()->config()->wayback_machine = $wayback_machine;
             \Idno\Core\Idno::site()->config()->single_user = $single_user;
             \Idno\Core\Idno::site()->config()->permalink_structure = $permalink_structure;
 
