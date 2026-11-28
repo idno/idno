@@ -42,7 +42,7 @@ New entities are `PUBLIC`. Set the value with `$entity->setAccess($access)`. A p
 field, drawn by the `content/access` template, so a content type's `saveDataFromInput()` usually has:
 
 ```php
-$this->setAccess($page->getInput('access'));
+$this->setAccess($page->getTextInput('access'));
 ```
 
 On top of the access value, three more rules hide an entity:
@@ -179,6 +179,16 @@ class Report extends \Idno\Common\Entity
     function save($overrideAccess = true)
     {
         $this->access = 'BANANA_REPORTS';   // No member is in a group of this name
+
+        // Belongs to the site, not to whoever saved it: deleting that member's account
+        // must not delete the record
+        $this->owner = \Idno\Core\Idno::site()->config()->getURL() . 'banana-reports';
+
+        $this->setPublishStatus('published');
+        if (empty($this->slug)) {
+            // An address made from nothing a person wrote
+            $this->slug = 'banana-report-' . bin2hex(random_bytes(12));
+        }
 
         return parent::save(true);
     }

@@ -97,7 +97,7 @@ function saveDataFromInput()
 
     // 3. Now the ordinary fields
     $this->title = $page->getTextInput('title');
-    $this->setAccess($page->getInput('access'));
+    $this->setAccess($page->getTextInput('access'));
 
     // 4. Store the file and attach it
     if ($sent) {

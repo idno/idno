@@ -53,7 +53,7 @@ See [Access control](access.md).
 | `unsyndicate` | Straight after `delete/<kind>` | `object`, `object_type` | Not used |
 | `syndication/services/get` | The list of services is asked for | `services` | The list |
 | `syndication/accounts/get` | The list of accounts by service is asked for | `accounts` | The list |
-| `syndication/selected/<service>` | The form's syndication buttons are drawn | `service`, `reply-to` and, for an account, `username` | Whether the button starts switched on |
+| `syndication/selected/<service>` | The form's syndication buttons are drawn | `service`, `reply-to`, `syndicated-to` and, for an account, `username` | Whether the button starts switched on |
 
 See [Syndication and webmentions](syndication.md).
 
@@ -69,9 +69,10 @@ See [Syndication and webmentions](syndication.md).
 | Event | When | Data | Answer |
 |---|---|---|---|
 | `page/ready` | A page object has been created and is the current page | None | Not used |
-| `page/head` | A request is about to be handled; a good moment to send HTTP headers | `page` | Not used |
+| `page/head` | A request is about to be handled; a good moment to send HTTP headers | `page`; for a HEAD request, `page_class` and `arguments` instead | Not used |
 | `page/get`, `page/post`, `page/put`, `page/delete` | Just before `getContent()`, `postContent()`, `putContent()` or `deleteContent()` | `page_class`, `arguments` | Not used |
 | `drafts/url` | A draft was deleted and the member needs somewhere to go | `object` | The address of the list of drafts |
+| `url/shorten` | The share form is given an address to share | None | The address to use. It starts as the address that was shared; answer with a shorter one. |
 | `share/types` | The tabs of the share form are drawn | `types` | The list of types |
 | `site/icons` | The site's icons are listed | `object` | The list of icons |
 | `webservice:headers` | Before `Webservice` sends an HTTP request | `headers`, `verb` | An array of extra headers |
@@ -152,7 +153,7 @@ These are triggered later by the [queue](queue.md). Core listens for them itself
 | `indiepub/post/start` | IndiePub | A Micropub request begins | `page` |
 | `indiepub/post/success` | IndiePub | A Micropub request created, changed or deleted a post | `page`, `object` |
 | `indiepub/post/failure` | IndiePub | A Micropub request failed | `page`, sometimes `object` |
-| `photo/thumbnail/getsizes` | Photo | Thumbnails of a photo are about to be made | `sizes` (name => longest side in pixels); answer with the sizes to make |
+| `photo/thumbnail/getsizes` | Photo | Thumbnails of a photo are about to be made | `sizes` (name => longest side in pixels). The plugin reads the data back, not the answer, so change the data: `$data = &$event->data(); $data['sizes']['tiny'] = 100;` |
 
 The ActivityPub and Atmosphere plugins also use events named `activitypub/...` and `atmosphere/...` to pass
 their own work through the queue. Those are internal to the plugins.

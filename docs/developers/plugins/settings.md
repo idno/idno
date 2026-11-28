@@ -49,7 +49,8 @@ Set the property and call `save()`:
 \Idno\Core\Idno::site()->config()->save();
 ```
 
-`save()` writes the whole configuration to the database.
+`save()` writes the site's settings to the database. It leaves out the ones that describe the server, such as
+the database, the site's address and the upload folder, which belong in `config.ini`.
 
 Three rules for naming and storing:
 
@@ -59,7 +60,8 @@ Three rules for naming and storing:
   `styles['css']`.
 * **Name secrets so Idno knows they are secrets.** When the configuration is shown on the diagnostics page or
   written into a site export, a setting is hidden if its name contains `pass`, `secret`, `token`, `key`, `salt`,
-  `credential`, `private` or `signature`. Call your setting `banana_api_key`, not `banana_code`.
+  `credential`, `private` or `signature`. Call your setting `banana_api_key`, not `banana_code`. (A name that
+  ends in `expiry` or `lifetime` is not treated as a secret, so `banana_token_lifetime` is shown.)
 
 Settings are for the site as a whole. Something that belongs to one member belongs on the member; see
 [A member's settings](#a-members-settings) below.

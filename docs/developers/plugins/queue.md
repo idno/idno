@@ -51,7 +51,7 @@ both.
 |---|---|---|
 | When the event is triggered | Immediately, inside `enqueue()` | Later, by the queue worker |
 | In which process | The member's request | A request the worker makes to the site |
-| If the listener throws | The exception is logged and `enqueue()` carries on | The event is marked as finished with the error recorded |
+| If the listener throws an exception | The exception is logged and `enqueue()` carries on | The event is marked as finished with the error recorded |
 
 With the default queue nothing is actually deferred, but your code is ready for sites that turn the
 asynchronous queue on. Site owners do that by setting `event_queue = 'AsynchronousQueue'` and running the worker,
@@ -66,15 +66,16 @@ the two.
   the world may have changed: the post may have been edited or deleted. Look things up again and check.
 * **Put identifiers in the data, not everything you have.** The data is stored with the event until it runs.
   An id is small and never out of date.
-* **Know who you run as.** By default a queued event runs as the member who was signed in when it was queued,
-  so `canEdit()` and the finders behave as they would for that member. Pass a fourth argument to choose:
-  a member's identifier to run as that member, or `false` to run as nobody.
+* **Know who you run as.** On the asynchronous queue, a queued event runs as the member who was signed in when
+  it was queued, so `canEdit()` and the finders behave as they would for that member. Pass a fourth argument to
+  choose: a member's identifier to run as that member, or `false` to run as nobody. The default queue takes no
+  notice of that argument: there the listener runs at once, as whoever made the request.
 
     ```php
     \Idno\Core\Idno::site()->queue()->enqueue('default', 'banana/cleanup', ['id' => $id], false);
     ```
 
-    An event queued for a member whose account has since been closed is dropped.
+    On the asynchronous queue, an event queued for a member whose account has since been closed is dropped.
 
 * **An event is tried once.** If your listener throws an exception, the event is not run again. If the work
   must not be lost, catch the failure and queue a new event yourself, with a limit on how many times.

@@ -41,8 +41,9 @@ if ($banana->save()) {
   `getOwner()` returns that member, and `getOwnerID()` their identifier.
 * **`save()` checks permission.** It returns `false` if the member who is signed in may not edit the entity
   (see [Access control](access.md)). It returns the entity's id on success.
-* **`save()` keeps some fields itself:** `created` and `updated` (timestamps), `owner`, `access`, `slug`,
-  `publish_status` and `uuid`. Don't use those names for your own data.
+* **`save()` keeps some fields itself:** `created` and `updated` (Unix times), `owner`, `slug`, `publish_status`,
+  `uuid`, `hashtags` and `moderation_status`. `access` holds who may read the entity. Don't use those names for
+  your own data.
 
 ### Saving with nobody signed in
 
@@ -165,7 +166,8 @@ $banana->save();
 $banana->delete();
 ```
 
-`delete()` removes the entity and any files attached to it. **It does not check who is asking**, because system
+`delete()` removes the entity and any files attached to it. **It does not check who is asking** (except that it refuses a post the moderators took down, unless an
+administrator asks), because system
 code needs to delete things too. A page that deletes must check first; the simplest way is
 `$this->deleteGatekeeper($banana)`. See [Access control](access.md).
 
@@ -216,7 +218,8 @@ member.
 |---|---|
 | `getID()`, `getUUID()`, `getURL()` | Identifiers and address (see above) |
 | `getOwner()`, `getOwnerID()` | The member the entity belongs to |
-| `getCreatedTime()`, `getUpdatedTime()` | Timestamps |
+| `getCreatedTime()` | When it was created, as a Unix time (the same as `$entity->created`) |
+| `getPublishedTime()`, `getUpdatedTime()` | The created and updated times as RFC 3339 text. `getUpdatedTime()` is `null` if the entity was never changed. |
 | `getTitle()`, `getDescription()` | Text for titles and summaries. Override them. |
 | `canRead()`, `canEdit()` | Whether the member who is signed in may see or change it |
 | `getAccess()`, `setAccess($access)` | Who may see it |

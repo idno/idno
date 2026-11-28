@@ -111,7 +111,7 @@ namespace IdnoPlugins\Quotes {
 
             $this->body   = $body;
             $this->source = mb_substr($source, 0, 200);
-            $this->setAccess($page->getInput('access'));
+            $this->setAccess($page->getTextInput('access'));
 
             if ($page->getTextInput('publish_status', 'published') === 'draft') {
                 return (bool) $this->saveAsDraft();

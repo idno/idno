@@ -98,7 +98,7 @@ must never change anything. `createLink()` draws a link that sends a signed POST
 | `title` | A title attribute |
 | `confirm` | If true, asks the visitor to confirm first |
 | `confirm-text` | The question to ask (default "Are you sure?") |
-| `method` | `POST` (the default), `GET`, `PUT` or `DELETE` |
+| `method` | `POST`, the default. Leave it as it is: the link sends an HTML form, and browsers send forms only as GET or POST. To send a PUT or DELETE, make the request from a script. |
 
 For example, a delete link that asks first:
 

@@ -88,7 +88,7 @@ matched by `/status/edit/:id/?`, `$this->arguments[0]` is `abc123`.
 
 ## 5. Your code builds the answer
 
-The Status plugin's `getContent()` shows the usual shape:
+A shortened version of the Status plugin's `getContent()` shows the usual shape:
 
 ```php
 function getContent()

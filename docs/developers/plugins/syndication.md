@@ -51,7 +51,8 @@ function registerEventHooks()
             return;    // A private site tells no other server what its members post
         }
 
-        // $data['syndication_account'] is the username the member chose
+        // $data['syndication_account'] is the username the member chose,
+        // or false when the service was chosen without an account
         $address_of_copy = $this->postToBananagram($object, $data['syndication_account']);
 
         if ($address_of_copy) {
@@ -71,7 +72,8 @@ function registerEventHooks()
   function that returns whether the service is usable for the member who is signed in, and the kinds of post it
   takes.
 * **`registerServiceAccount($service, $username, $display_name)`**: one account on the service. A member with two
-  accounts gets two buttons. The `$username` comes back to you as `syndication_account` in the event.
+  accounts gets two buttons. The `$username` comes back to you as `syndication_account` in the event
+  (which is `false` for a service that has no accounts registered).
 * **`setPosseLink($service, $url, $identifier)`**: records where the copy is. Themes show these links on the post,
   marked up as `u-syndication`, and feeds include them.
 

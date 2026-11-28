@@ -149,8 +149,9 @@ with `Email::drawBodies()`, queue it, and send it in a listener.
 ## Testing
 
 Tests never send real mail. Core's test suite has a small mail server, `Tests\SmtpSink`, that keeps what it is
-sent, and `Tests\MailAssertions::assertWellMadeMail()` checks a mail against the rules above. See
-`Tests/Core/MailTemplatesTest.php` for how they are used.
+sent. To check a mail against the rules above, add `use \Tests\MailAssertions;` to your test class (it is a
+trait) and call `$this->assertWellMadeMail($mail, $siteUrl, $name)`, where `$mail` is what
+`Email::drawBodies()` returns. See `Tests/Core/MailTemplatesTest.php` for how both are used.
 
 ## Where next
 
