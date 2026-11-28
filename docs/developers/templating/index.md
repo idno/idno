@@ -36,8 +36,10 @@ So a plugin can provide a new template simply by having the file, and a theme or
 template by having a file of the same name. To add to a template without replacing it, see
 [Extending templates](extending.md).
 
-If the file is not found for the current template type, Idno looks again in `default`. That is why a plugin's
-`default` templates also work in a theme that uses a type of its own.
+If the file is not found in any of them for the current template type, Idno goes through them again for
+`default`. That is why a plugin's `default` templates also work in a theme that uses a type of its own. It also
+means the type comes before the folder: under the `modern` type, a plugin's `modern` template is used before a
+theme's `default` template of the same name.
 
 ## Drawing a template
 

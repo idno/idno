@@ -213,7 +213,7 @@ Create `IdnoPlugins/Hello/templates/default/hello/footer.tpl.php`:
 </p>
 ```
 
-and tell Idno to draw it after `shell/footer`, in `registerPages()`:
+and tell Idno to draw it whenever `shell/footer` is drawn, in `registerPages()`:
 
 ```php
         function registerPages()
@@ -223,7 +223,8 @@ and tell Idno to draw it after `shell/footer`, in `registerPages()`:
         }
 ```
 
-Reload any page. The link is at the bottom.
+Reload any page. The link is at the foot of the page, just above the footer's own content: an extension is drawn
+ahead of the template it extends.
 
 [Extending templates](../templating/extending.md) lists the places that are made for plugins to add to, such as
 the administration menu and the "More" menu of a post.

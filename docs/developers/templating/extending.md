@@ -21,7 +21,18 @@ Call `extendTemplate()` in the `registerPages()` method of [your plugin class](.
 ```
 
 This is the Checkin plugin adding its map scripts to the header of every page. From now on, wherever
-`shell/head` is drawn, `checkin/head` is drawn straight after it, **with the same variables**.
+`shell/head` is drawn, `checkin/head` is drawn with it, **with the same variables**.
+
+Mind the order. When a template is drawn, Idno draws, one after another:
+
+1. the templates **prepended** to it
+2. its **extensions**, in the order they were added
+3. the template **itself** (or nothing, if a replacement was drawn)
+4. any ready-made content added with `extendTemplateWithContent()`
+
+So an extension's output comes **before** the output of the template it extends. For the extension points
+below that makes no difference, because they have no output of their own. It matters when you extend a template
+that does: an extension of `shell/footer` appears above the footer's own content.
 
 Your template is an ordinary template in your plugin:
 `IdnoPlugins/Checkin/templates/default/checkin/head.tpl.php`.
@@ -30,9 +41,9 @@ The methods:
 
 | Method | Effect |
 |---|---|
-| `extendTemplate($template, $extension, $to_front = false, $templateType = '*')` | Draws `$extension` after `$template`. With `$to_front` true, before other extensions. With a `$templateType`, only in that [template type](types.md). |
-| `prependTemplate($template, $prepend)` | Draws `$prepend` before `$template` |
-| `replaceTemplate($template, $replacement, $templateType = '*')` | Draws `$replacement` instead of `$template` |
+| `extendTemplate($template, $extension, $to_front = false, $templateType = '*')` | Draws `$extension` whenever `$template` is drawn, ahead of the template's own output. With `$to_front` true, before other extensions. With a `$templateType`, only in that [template type](types.md). |
+| `prependTemplate($template, $prepend)` | Draws `$prepend` before `$template` and before its extensions |
+| `replaceTemplate($template, $replacement, $templateType = '*')` | Draws `$replacement` instead of `$template`. Extensions are still drawn. |
 | `extendTemplateWithContent($template, $content)` | Adds a ready-made string after `$template` |
 
 The template you extend does not need to have a file. Core draws a number of templates that are empty on

@@ -114,7 +114,7 @@ function getContent()
 Three steps: check who is asking, find or create the data, draw.
 
 * `draw('entity/Status/edit')` finds the template file of that name and returns what it prints. Idno looks in the
-  theme first, then in each plugin, then in core. See [Templates](templating/index.md).
+  theme first, then in each plugin, then in core, for the current template type and then for `default`. See [Templates](templating/index.md).
 * `drawPage()` draws the template called `shell`, which is the whole page around your `body`, sends it, and
   ends the request.
 

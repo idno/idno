@@ -10,7 +10,8 @@ templates, but:
 
 * a site can enable many plugins and only **one** theme
 * a theme's templates are found **before** any plugin's and before core's, so a theme has the last word on how
-  anything is drawn
+  anything is drawn (within one [template type](../templating/types.md): a template of the current type, wherever
+  it is, is used before a `default` one)
 
 A site's administrator chooses the theme at **Site configuration > Themes** (`/admin/themes/`).
 
@@ -51,8 +52,8 @@ Most themes use the first. Use the others only as far as you need to.
 
 ### 1. Add a stylesheet
 
-The lightest theme leaves every template alone and adds a stylesheet on top of the default look. Every bundled
-theme that builds on the default look starts this way.
+The lightest theme leaves every template alone and adds a stylesheet on top of the default look. Most bundled
+themes start this way.
 
 Tell Idno to draw a template of yours inside every page's `<head>`, in `theme.ini`:
 
@@ -116,10 +117,12 @@ leaving the `default` templates untouched as a fallback. The bundled Twenty26 th
 "admin/menu/items" = "mytheme/admin/menu"
 ```
 
-* Under `[Extensions]`, whenever the template on the left is drawn, the one on the right is drawn **after** it,
-  with the same variables.
-* Under `[Prepend Extensions]`, the one on the right is drawn **before** it. The Cherwell theme uses this to put
-  its own item at the top of the administration menu.
+* Under `[Extensions]`, whenever the template on the left is drawn, the one on the right is drawn too, with the
+  same variables. Its output comes just before the output of the template it extends.
+* Under `[Prepend Extensions]`, the one on the right is drawn first of all, ahead of every extension. The Cherwell
+  theme uses this to put its own item at the top of the administration menu.
+
+See [Extending templates](../templating/extending.md#how-to-extend) for the exact order.
 
 ## A controller
 

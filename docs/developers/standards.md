@@ -37,7 +37,7 @@ is bad.
 * Namespaces should be UpperCamelCase, with a matching /UpperCamelCase/ file path. Code in a plugin or theme uses the braced form, `namespace IdnoPlugins\Foo { ... }`.
 * Classes should use UpperCamelCase, with a matching UpperCamelCase.php file.
 * All method names should use lower camelCase 
-* All variable names should use snake_case.
+* Prefer snake_case for variable names in new code.
 
 ## Indentation
 
@@ -69,7 +69,7 @@ switch ($var) {
 ## Variables
 
 * You should try and make use of [type hinting](https://www.php.net/manual/en/functions.arguments.php#functions.arguments.type-declaration) in your function arguments.
-* Since Idno requires PHP 8.3 or later, you should also try and make use of return type hinting where appropriate (advanced warning, in future we will turn on strict type checking for this!)
+* Use return types too, where you can.
 
 ## Error handling
 

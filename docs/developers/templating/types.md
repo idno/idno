@@ -49,6 +49,11 @@ For each request, in this order:
    `application/ld+json` with the ActivityStreams profile, selects `activitypub`.
 3. Otherwise the site's normal type: `default`, or the type the active theme set.
 
+Before any of that, when the template object is created, Idno looks at the browser's `User-Agent`. If it names
+one of a few devices and a template type of the matching name exists, that type is used: `android`, `ipad`,
+`iphone`, `blackberry`, `blackberry-webkit`, `windows-phone`, `windows-mobile`, `opera-mini`, `opera` or `msie`.
+No such type ships with Idno, so this does nothing unless a plugin or theme adds one.
+
 A request signed as an [API request](../plugins/api.md) gets `json` unless it asks for something else.
 
 Because the answer depends on the `Accept` header, Idno sends `Vary: Accept` with it, so that caches keep the
@@ -159,6 +164,9 @@ posts as CSV:
 
 With the plugin enabled, `/content/all/?_t=csv` answers with CSV. Pages that list posts pass them to the shell as
 `items`, and that is what the RSS and JSON Feed shells read too.
+
+Don't call a type of your own by one of the device names listed under
+[How the type is chosen](#how-the-type-is-chosen), or it will be switched on for every visitor with that device.
 
 A shell is responsible for everything about its output: the `Content-Type` header, and escaping in the way its
 format requires. Use `getPublicTitle()` and the other "public" methods, since a feed is read by people who are

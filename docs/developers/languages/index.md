@@ -32,9 +32,14 @@ Three habits make translators' work possible:
 
 ## How Idno picks a language
 
-For each request Idno uses the language the visitor's browser asks for (its `Accept-Language` header), and
-`en_US` if the browser does not say. Each translation you register says which language it is for, and only
-those for the current language are used.
+For each request Idno takes the language from the browser's `Accept-Language` header: the first language in the
+list, and nothing else in it. The header must list more than one language for this to work; with a single
+language, or no header, Idno uses `en_US`. The language is not compared with the translations that are
+installed. On the command line, the `LANGUAGE` or `LANG` environment variable is used instead.
+
+Idno sets PHP's locale to that language. A gettext translation is then chosen by gettext itself, from the
+locale. A translation given as a PHP array says which language it is for and is used only when that is exactly
+the current one.
 
 ## Add translations with gettext
 
@@ -149,6 +154,9 @@ missing. See [Events](../plugins/events.md).
 Core's text is collected into `languages/source/idno.pot` in the same way. If you add or change text in core's
 code or templates, run `php idno.php build-lang core` and include the updated file in your pull request.
 (`npm run grunt -- build-lang` runs `build-lang all`.)
+
+Core's gettext domain is `known`, which is not the name of the template file. A translation of core therefore
+goes in `languages/<locale>/LC_MESSAGES/known.po` and `known.mo`.
 
 ## Where next
 

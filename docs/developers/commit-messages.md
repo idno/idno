@@ -24,12 +24,8 @@ Use your best judgement, but think about how to find relevant commits when scann
 
 ## Explain why
 
-Unless immediately obvious, because the "why" part was included in the subject e.g. 
-```
-Updating array format to match style guidelines
-``` 
-
-After a blank line after the subject, you should normally include a "why" part, so for example:
+After a blank line, say why you made the change. You can leave this out when the subject already says it, as in
+`Updating array format to match style guidelines`. For example:
 
 ```
 Adds reset button to post form 
@@ -84,7 +80,7 @@ the user object stored in the current session.
 Fixes #2345
 ```
 
-And if a problem was introduced by a specific change request, mention that in your message as well.
+If an earlier commit or pull request caused the problem, link to it.
 
 ## Misc guidelines 
 

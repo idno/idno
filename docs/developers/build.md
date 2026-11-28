@@ -4,7 +4,7 @@ After this page you will be able to rebuild Idno's own scripts and stylesheets a
 
 Once you have run `composer install`, Idno runs as it is: the built scripts and stylesheets are part of the repository. You only need the steps on this page when you change core's JavaScript or CSS. A plugin's own scripts and styles need none of this.
 
-There are two sets of sources. The default look's are in `js/src` and `css/scss` and are built with Grunt, as described below. The Twenty26 theme's are in `Themes/Twenty26/src` and are built with Vite; see [The modern look](themes/modern.md#working-on-the-theme-itself).
+There are two sets of sources. The default look's are in `js/src` and `css/scss` and are built with Grunt, as described below. The Twenty26 theme's are in `Themes/Twenty26/src` and are built with Vite; see [The modern look](themes/modern.md#working-on-the-theme-itself). One file is shared: `css/moremenu.css` is used by the default look as it is and is also built into the Twenty26 stylesheet, so after changing it, rebuild Twenty26 (`npm run build` in `Themes/Twenty26`) and commit `dist/`.
 
 ## Building javascript
 
