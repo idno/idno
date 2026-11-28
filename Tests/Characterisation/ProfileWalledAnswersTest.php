@@ -103,10 +103,12 @@ final class ProfileWalledAnswersTest extends ProfileSiteCase
     public function testTheActorAddressOfAPrivateSiteIsA404ToEveryone(): void
     {
         foreach (['visitor', 'member'] as $viewer) {
-            $answer = $this->site()->request('GET', '/actor/ada', $this->asViewer($viewer, ['Accept' => 'application/activity+json']));
+            foreach (['as ActivityPub' => ['Accept' => 'application/activity+json'], 'as HTML' => ['Accept' => 'text/html']] as $form => $headers) {
+                $answer = $this->site()->request('GET', '/actor/ada', $this->asViewer($viewer, $headers));
 
-            $this->assertSame(404, $answer->status, $viewer);
-            $this->assertStringNotContainsString('"inbox"', $answer->body, $viewer);
+                $this->assertSame(404, $answer->status, $viewer . ' ' . $form);
+                $this->assertStringNotContainsString('"inbox"', $answer->body, $viewer . ' ' . $form);
+            }
         }
     }
 

@@ -124,6 +124,11 @@ namespace Idno\Core {
          */
         static function sendWebmentionPayload($sourceURL, $targetURL)
         {
+            // A private site tells nobody that something was posted on it, the page a reply answers included
+            if (!Idno::site()->config()->isPublicSite()) {
+                return false;
+            }
+
             return self::mentionClient()->sendFirstSupportedMention($sourceURL, $targetURL);
         }
 
