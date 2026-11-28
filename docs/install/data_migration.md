@@ -8,7 +8,7 @@ This guide might also prove useful if you ever want to move your site to a new d
 
 ## Introduction
 
-I recommend you probably read this whole guide before you start, because it's not really as easy as a step-by-step instruction guide - once you understand the whole process, you can repeat it until you get it right, but it's useful to have an idea of what you're going to be doing so you know how much downtime your site is likely to have.
+Read this whole guide before you start, because it's not really as easy as a step-by-step instruction guide - once you understand the whole process, you can repeat it until you get it right, but it's useful to have an idea of what you're going to be doing so you know how much downtime your site is likely to have.
 
 Idno offers two kinds of user-friendly data exports: RSS and a "Monthly Backup". The "Monthly Backup" is something that is only available on sites hosted by Idno.
 
@@ -16,7 +16,7 @@ The RSS data export is in a very portable format, but the images are of much low
 
 The "Monthly Backup" contains only a handful of images, because the bulk of the images aren't stored on the Idno server which hosts your site - they're in another cloud provider's "bucket" and if you use developer tools to check the source of the assets when you access your Idno site, you'll see that the images are being pulled in from a different domain.
 
-Getting hold of all the files you've uploaded is a case of raising a support ticket. I feel bad mentioning this, because I've used Idno without paying a cent since they stoped their subscription model some time ago, so I feel bad that somebody's got to manually zip up those files and email them to you.
+Getting hold of all the files you've uploaded is a case of raising a support ticket. I feel bad mentioning this, because I've used Idno without paying a cent since they stopped their subscription model some time ago, so I feel bad that somebody's got to manually zip up those files and email them to you.
 
 As it turns out, the "Monthly Backup" contained the database backup I needed, and the file zip contained all my images - at the original quality they were uploaded - so I needed both things to complete the migration.
 

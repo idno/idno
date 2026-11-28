@@ -12,6 +12,7 @@ These changes are on the `dev` branch and will be part of the next release.
 
 * PHP 8.3 or later is now required
 * ActivityPub: a site without the asynchronous event queue no longer logs, on every request, that federation is disabled. It was not: such a site accepts follows and delivers posts, with each delivery made inside the request of the member who published. The log now says so once for each post that is delivered that way, with the number of follower servers, and the ActivityPub administration page explains what that costs and how to deliver in the background instead
+* Documentation: a new guide to administering a site, a complete configuration reference, and a rebuilt developer guide with a plugin tutorial, a tour of the codebase and reference pages for entities, events, templates and themes
 * Deleting an account (Administration, Users) is safe to interrupt: the account is closed first, so nobody can sign in to it by any way and its profile and posts are hidden from everybody but administrators; its content is then removed piece by piece, by the queue worker where there is one, and the Users page shows an account that is being deleted and offers "Continue deleting". Pages, access groups and invitations the account made for the site are kept. With ActivityPub, followers' servers are sent one `Delete` of the actor instead of one for each post. The username of a deleted account is kept back until an administrator releases it on the Users page
 * Removed the feed reader (`/following/`, `/stream/`, `Idno\Core\Reader` and the `Idno\Entities\Reader` classes), which could not follow a feed on PHP 8. Following a person, its settings page and bookmarklet, and WebSub subscriptions are unchanged, and no data is deleted; see "The feed reader was removed" in the upgrade notes
 * Fixed following a person with the bookmarklet ending with the error page after the follow had been saved
@@ -68,7 +69,6 @@ February 28, 2026
 * Fixed asynchronous queue failures, including an infinite loop
 * Security: fixed a CSRF bypass that allowed unauthenticated requests through the URL unfurl endpoint
 * Security: stricter validation of imported images and templates
-* Added AGENTS.md, a guide to the codebase for AI coding agents
 
 1.6.3
 -----

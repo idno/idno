@@ -1,135 +1,165 @@
-# Form input
+# Forms and tokens
 
-Form submissions and API calls in Idno are both handled by pages. In effect, every page is also an API handler.
+After this page you will be able to build a form that Idno accepts, send a signed request from a link, and read
+what was sent.
 
-* Prerequisites: [you should read about page handling in Idno.](pages.md)
+Read [Pages and routes](pages.md) first: a form is sent to a page.
 
-## Browser-based form submission
+## Why forms need a token
 
-All forms must uniquely sign their data before they will be accepted. This is to prevent a number of attacks that could
-compromise a user's security.
+Imagine a member of your site visits another website, and that website quietly sends a form to your site from
+the member's browser. The browser would attach the member's session cookie, and your site would think the member
+sent it. This attack is called cross-site request forgery (CSRF).
 
-Each form signing method uses a method of `\Idno\Core\Idno::site()->actions()`. The following methods should be used within
-your templates that take user input.
+Idno prevents it with **tokens**. Every form carries a token that is made from a secret only the site knows,
+the visitor's session, the time, and the address the form is for. Another website cannot make one.
 
-### From within an HTML form
+`Page::post()` checks the token before it calls your `postContent()`. A form without a valid token is refused
+with the message "Invalid token.", and your code does not run. The same goes for PUT and DELETE.
 
-All HTML form submissions must take place over POST requests. Additionally, the HTML form must sign their requests with
-hidden action token fields.
+A token is valid for an hour by default (the `form_token_expiry` setting, in seconds).
 
-To do this, simply include form signing code with a unique, relative URL for your action somewhere within the form body.
+## A form
 
-    <?= \Idno\Core\Idno::site()->actions()->signForm('your/form/url') ?>
+All forms that change something must use `method="post"` and include the token fields. Print them with
+`signForm()`, anywhere inside the `<form>`:
 
-The `postContent()` method in [the page handler class](pages.md) will seamlessly validate this token. Tokens expire after the number of seconds set by `form_token_expiry` in the site configuration (3600 by default).
+```php
+<form action="<?php echo \Idno\Core\Idno::site()->config()->getDisplayURL() ?>banana/edit/" method="post">
+    <p>
+        <label>
+            A URL:
+            <input type="url" name="my_url" placeholder="https://..." value="">
+        </label>
+    </p>
+    <p>
+        <?php echo \Idno\Core\Idno::site()->actions()->signForm('/banana/edit/') ?>
+        <input type="submit" value="Save">
+    </p>
+</form>
+```
 
-An example of a complete form might be:
+Pass `signForm()` the path the form is sent to.
 
-    <form action="<?=\Idno\Core\Idno::site()->config()->getDisplayURL()?>myplugin/custompage/" method="post">
-        <p>
-            <label>
-                A URL:
-                <input type="url" name="my_url" placeholder="Type your URL here" value="">
-            </label>
-        </p>
-        <p>
-            <?= \Idno\Core\Idno::site()->actions()->signForm('myplugin/custompage') ?>
-            <input type="submit" value="Post the form">
-        </p>
-    </form>
+That is all. The page that receives the form needs no extra code for the token.
 
-### From within a link
+## Reading the form
 
-You can create a link to submit a properly-signed POST request using
-`\Idno\Core\Idno::site()->actions()->createLink($url, $label, $data_to_include, $extra_configuration)`.
+In the page class registered for `/banana/edit/`:
 
-For example, the code for the logout button is as follows:
+```php
+function postContent()
+{
+    $this->gatekeeper();
 
-    <?= \Idno\Core\Idno::site()->actions()->createLink(\Idno\Core\Idno::site()->config()->getDisplayURL() . 'session/logout',
-                                                 \Idno\Core\Idno::site()->language()->_('Sign out'), null, ['class' => '']); ?>
-
-`$data_to_include` is an optional array of key => value pairs that will be sent with the POST request.
-`$extra_configuration` is an optional array of options that help Idno decide how to build the link. These include:
-
-* `class`: a CSS class to apply
-* `title`: a title attribute for the link
-* `confirm`: if true, will prompt the user to confirm their action before submitting the request
-* `confirm-text`: a custom text label for use with `confirm`
-* `method`: the HTTP method to use (`GET`, `POST`, `PUT` or `DELETE`; `POST` by default)
-
-## API form submission
-
-* See [making and accepting API calls](api.md)
-
-## Accepting input from HTML forms, links or API calls
-
-See [accepting POST requests](pages.md#handling-page-loads) to understand how to add a POST request handler in your
-page handler class using `$page->postContent()`.
-
-First, let's reproduce our form from above, which sends the contents of a URL field with name `my_url` to a page at
-`/myplugin/custompage/`:
-
-    <form action="<?=\Idno\Core\Idno::site()->config()->getDisplayURL()?>myplugin/custompage/" method="post">
-        <p>
-            <label>
-                A URL:
-                <input type="url" name="my_url" placeholder="Type your URL here" value="">
-            </label>
-        </p>
-        <p>
-            <?= \Idno\Core\Idno::site()->actions()->signForm('myplugin/custompage') ?>
-            <input type="submit" value="Post the form">
-        </p>
-    </form>
-
-Next, let's make sure that our [plugin class](class.md) in `/IdnoPlugins/MyPlugin/Main.php` handles that page
-appropriately:
-
-    namespace IdnoPlugins\MyPlugin {
-        class Main extends \Idno\Common\Plugin {
-            function registerPages() {
-                \Idno\Core\Idno::site()->routes()->addRoute('/myplugin/custompage/?', '\IdnoPlugins\MyPlugin\Pages\CustomPage');
-            }
-        }
+    $url = \Idno\Core\UrlValidator::httpUrl($this->getTextInput('my_url'));
+    if ($url === '') {
+        \Idno\Core\Idno::site()->session()->addErrorMessage('That does not look like a web address.');
+        $this->forwardBack();
     }
 
-Now, we need to make sure our page handler, which sits in `/IdnoPlugins/MyPlugin/Pages/CustomPage.php`, handles the form
-input appropriately.
+    // ... store $url ...
 
-First, we set up [the page class](pages.md):
+    $this->forward(\Idno\Core\Idno::site()->config()->getDisplayURL() . 'banana/');
+}
+```
 
-    namespace IdnoPlugins\MyPlugin\Pages {
-        class CustomPage extends \Idno\Common\Page {
-            function getContent() { /* We won't use this for now */ }
-            function postContent() {
+* `getTextInput()` reads one field as text. Use `getInput()` only for a field that is meant to be a list. See
+  [Reading input](pages.md#reading-input).
+* The token says the form came from your site. It does not say the member is allowed to do what the form asks.
+  Check that yourself, with a [gatekeeper](pages.md#gatekeepers) and, for an existing entity,
+  [`canEdit()`](access.md).
+* Check each value. Here `UrlValidator::httpUrl()` returns the address only if it is an `http` or `https` one,
+  and an empty string otherwise.
 
-            }
-        }
-    }
+## A link that sends a request
 
-In our form example above, we had a single input field, with name `my_url`. To accept this within `postContent()`, we
-simply need to call `$this->getInput('my_url');`.
+Sometimes you want a link, not a form: "Sign out", "Delete". A plain link is a GET request, and a GET request
+must never change anything. `createLink()` draws a link that sends a signed POST instead:
 
-For example, to output the contents of the field to the screen:
+```php
+<?php echo \Idno\Core\Idno::site()->actions()->createLink(
+    \Idno\Core\Idno::site()->config()->getDisplayURL() . 'session/logout',
+    \Idno\Core\Idno::site()->language()->_('Sign out')
+); ?>
+```
 
-    namespace IdnoPlugins\MyPlugin\Pages {
-        class CustomPage extends \Idno\Common\Page {
-            function getContent() { /* We won't use this for now */ }
-            function postContent()
-            {
-                $url = $this->getInput('my_url');
-                echo $url;
-                exit;
-            }
-        }
-    }
+`createLink($url, $label, $data = [], $options = [])`:
 
-We could also send the `my_url` variable to the page handler in a link:
+* `$url` is where the request goes.
+* `$label` is the content of the link. It is printed as HTML, so that you can put an icon in it. **Escape any
+  text in it that came from a person.**
+* `$data` is an optional array of names and values to send along. They reach the page through `getInput()`.
+* `$options` can hold:
 
-    <?= \Idno\Core\Idno::site()->actions()->createLink(\Idno\Core\Idno::site()->config()->getDisplayURL() . 'myplugin/custompage',
-                                                     'This link sends a pre-defined value to the page',
-                                                     array('my_url' => 'http://some/predefined/url')); ?>
+| Option | Meaning |
+|---|---|
+| `class` | A CSS class for the link |
+| `title` | A title attribute |
+| `confirm` | If true, asks the visitor to confirm first |
+| `confirm-text` | The question to ask (default "Are you sure?") |
+| `method` | `POST`, the default. Leave it as it is: the link sends an HTML form, and browsers send forms only as GET or POST. To send a PUT or DELETE, make the request from a script. |
 
-The page handler doesn't need to be modified in any way.
+For example, a delete link that asks first:
 
-This page handler _also_ works for [handling API calls](api.md).
+```php
+<?php echo \Idno\Core\Idno::site()->actions()->createLink(
+    $object->getDeleteURL(),
+    \Idno\Core\Idno::site()->language()->esc_('Delete'),
+    [],
+    ['confirm' => true, 'confirm-text' => \Idno\Core\Idno::site()->language()->_('Delete this banana?')]
+); ?>
+```
+
+## Ready-made form fields
+
+Core has templates for form fields, so that your forms look like the rest of the site and work in every theme.
+Draw one by passing its attributes as variables:
+
+```php
+<?php echo $this->__([
+    'name'        => 'title',
+    'id'          => 'title',
+    'value'       => $vars['object']->title,
+    'placeholder' => \Idno\Core\Idno::site()->language()->_('Give it a title'),
+    'required'    => true,
+])->draw('forms/input/text'); ?>
+```
+
+The value is escaped for you.
+
+| Template | Draws |
+|---|---|
+| `forms/input/text`, `email`, `url`, `password`, `hidden`, `file`, `datetime-local` | An `<input>` of that type |
+| `forms/input/input` | An `<input>` whose type you give in `type` |
+| `forms/input/longtext` | A plain `<textarea>` |
+| `forms/input/richtext` | The rich text editor |
+| `forms/input/select` | A `<select>` |
+| `forms/input/submit`, `forms/input/button` | Buttons |
+| `forms/input/image-file` | A file field for a picture, with a preview |
+| `forms/upload/limits` | A note of the accepted kinds and sizes of file, with a check in the browser. See [Files and uploads](files.md). |
+
+The files are in `templates/default/forms/input/`. Each is short, and reading one tells you which variables it
+takes.
+
+The bundled plugins' edit templates show these in use. `IdnoPlugins/Like/templates/default/entity/Like/edit.tpl.php`
+is a good one to copy from.
+
+## Forms for posts
+
+A form that creates or edits a post has a few extra parts (who may see it, where to copy it to, tags). Those are
+described in [Content types](content-types.md).
+
+## Requests from scripts and other programs
+
+* A request signed with a member's API key needs no token. See [The API](api.md).
+* JavaScript in the page can send the same fields a form would. The token fields are named `__bTs` (the time),
+  `__bTk` (the token) and `__bTa` (the action), and you can read them from a form that `signForm()` printed.
+* If a request is larger than PHP's `post_max_size`, PHP throws the whole body away, token included. Idno
+  notices this and answers with status 413 and a message about the size, instead of "Invalid token."
+
+## Where next
+
+* [Entities](entities.md): store what the form sent.
+* [Access control](access.md)
+* [Security checklist](security.md)

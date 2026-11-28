@@ -1,195 +1,248 @@
-# Pages in Idno
+# Pages and routes
 
-Plugins will often have to define new pages, or override pages provided by the core platform. Here's how it's done.
+After this page you will be able to make Idno answer any address you choose, read what the visitor sent, decide
+whether they may be there, and send an answer.
 
-## Defining page routes
+A **page** is a class that answers requests. A **route** connects an address to a page.
 
-Your [plugin class](class.md) should define the registerPages() method. This is called as part of the initialization
-process when the plugin is loaded.
+## Routes
 
-    function registerPages()
+Register routes in the `registerPages()` method of [your plugin class](class.md):
+
+```php
+function registerPages()
+{
+    \Idno\Core\Idno::site()->routes()->addRoute('/banana/?', '\IdnoPlugins\Banana\Pages\Home');
+    \Idno\Core\Idno::site()->routes()->addRoute('/banana/edit/:id/?', '\IdnoPlugins\Banana\Pages\Edit');
+}
+```
+
+`addRoute($pattern, $class)` takes a pattern for the path and the name of a page class.
+
+* Start the pattern with a slash, and end it with `/?` so that it matches with or without a slash at the end.
+* A pattern is a regular expression. Anything you put in parentheses is captured and handed to the page.
+* The class must exist when the route is registered. If it does not, the route is skipped and an error is
+  written to the log.
+* Routes are tried in the order they were registered, and the first match wins.
+
+### Tokens
+
+These shortcuts can be used in a pattern. Each captures one part of the path:
+
+| Token | Matches |
+|---|---|
+| `:id` | Letters, digits and hyphens |
+| `:alpha` | Letters, digits, hyphens and underscores |
+| `:string` | Letters only |
+| `:number` | Digits only |
+
+What a pattern captures arrives in `$this->arguments`, in order. For `/banana/edit/:id/?` and the address
+`/banana/edit/5f2a`, `$this->arguments[0]` is `5f2a`.
+
+### Taking over an existing route
+
+`addRoute()` with a pattern that is already registered replaces the page class but keeps the pattern's place in
+the order. To be sure your page is tried first, before a broader pattern that would also match, use
+`hijackRoute()`, which puts your route at the front:
+
+```php
+\Idno\Core\Idno::site()->routes()->hijackRoute('/profile/([^\/]+)/portfolios/?', '\IdnoPlugins\Portfolios\Pages\Index');
+```
+
+The Portfolios plugin does this because core has a route that reads everything after `/profile/<name>/` as a kind
+of post.
+
+### Pages on a private site
+
+On a private site, a visitor who is not signed in is refused every page except the ones registered as public.
+Pass `true` as the third argument to make yours public:
+
+```php
+\Idno\Core\Idno::site()->routes()->addRoute('/about/?', '\IdnoPlugins\Banana\Pages\About', true);
+```
+
+Do this only for pages that are meant for people who are not members, such as an "about" page.
+
+### Pages under /account/
+
+A page registered under `/account/` is closed to API requests: a request signed with an API key gets a 403 there.
+Put pages that manage a member's credentials or account under `/account/`, and nothing else.
+
+## The page class
+
+A page class extends `\Idno\Common\Page`. By convention it lives in your plugin's `Pages` folder:
+
+```php
+<?php
+
+namespace IdnoPlugins\Banana\Pages {
+
+    class Home extends \Idno\Common\Page
     {
-        // Page handling code goes here
-    }
+        function getContent()
+        {
+            // Answer a GET request
+        }
 
-There are two main methods to define new page routes. In each case, a pattern is used to define the URL route
-itself, and the name of a class that inherits `\Idno\Common\Page` that will handle the route is supplied. The class must
-exist when the route is registered; otherwise the route is skipped and an error is logged.
-
-!!! note "Note"
-    * Page route patterns start with a preceding slash ("/"), and should be agnostic about whether they end with a slash (i.e. end your pattern with "/?").
-    * Patterns are regular expressions, and may also contain these tokens, which match part of the URL and pass it to your page in `$this->arguments`: `:id` (letters, numbers and hyphens), `:alpha` (letters, numbers, hyphens and underscores), `:string` (letters only) and `:number` (digits only).
-    * All page classes must extend `\Idno\Common\Page`. By convention they are stored in the `/Pages/` subfolder of your plugin.
-
-### Defining a new page route
-
-You can define a new page route by calling `\Idno\Core\Idno::site()->routes()->addRoute($route, $class)`. For example, to create
-a new page route that handles `http://yoursite.com/testpage/`, your `registerPages()` method might look something like:
-
-    function registerPages()
-    {
-        \Idno\Core\Idno::site()->routes()->addRoute('/about/?', '\IdnoPlugins\MyPluginName\Pages\MyPage');
-    }
-
-Here, your page class should be stored in the `/Pages/` subfolder of your plugin, with the filename `MyPage.php`.
-
-### Overriding an existing page route
-
-Sometimes you want to override a page route that is provided by the core framework or another plugin. While you can use
-`addRoute()` here too, it's not guaranteed to take control of the route. Instead, you should use
-`\Idno\Core\Idno::site()->routes()->hijackRoute($route, $class)`.
-
-The syntax is the same:
-
-    function registerPages()
-    {
-        \Idno\Core\Idno::site()->routes()->hijackRoute('/existing/?', '\IdnoPlugins\MyPluginName\Pages\MyExistingPage');
-    }
-
-### Making page URLs available publicly on non-public sites
-
-By default, pages are hidden behind an authentication wall if the site has been configured to be a walled garden.
-However, you may wish to show it anyway, for example to host an "about" page or create a way to apply to join.
-
-In these cases, simply add a third parameter to `addRoute()` and `hijackRoute()`, set to `true`. For the
-examples used above, this would look like:
-
-    function registerPages()
-    {
-        \Idno\Core\Idno::site()->routes()->addRoute('/about/?', '\IdnoPlugins\MyPluginName\Pages\MyPage', true);
-        \Idno\Core\Idno::site()->routes()->hijackRoute('/existing/?', '\IdnoPlugins\MyPluginName\Pages\MyExistingPage', true);
-    }
-
-## Handling page loads
-
-Once a page route has been defined, an object with the class specified in `addRoute()` or `hijackRoute()` is
-instantiated. This _must_ extend `\Idno\Common\Page`. For example:
-
-    namespace IdnoPlugins\MyPluginName\Pages {
-        class MyPage extends \Idno\Common\Page {
-            // Page handling content
+        function postContent()
+        {
+            // Answer a POST request
         }
     }
 
-This file is autoloaded, so its path must match its namespace: by convention, `Pages/MyPage.php` relative to your plugin's root
-folder.
+}
+```
 
-GET and POST requests are handled using methods, as described below.
+Write one method for each kind of request you answer:
 
-### GET requests
+| Request | Method |
+|---|---|
+| GET (and HEAD) | `getContent()` |
+| POST | `postContent()` |
+| PUT | `putContent()` |
+| DELETE | `deleteContent()` |
 
-To handle a GET request, simply override the `getContent()` method. For example, to handle a GET request and display
-a simple [template](../templating/index.md), you could use:
+Don't override `get()`, `post()`, `put()` or `delete()`. Those do the checks every page needs (the private-site
+check, and the form token for anything that changes data) before calling your method. A page that overrides
+`post()` has no protection against forged forms.
 
-    function getContent()
-    {
-        $t = \Idno\Core\Idno::site()->template();
-        $t->body  = $t->draw('template/name');
-        $t->title = 'Title of your page';
-        $t->drawPage();
-    }
+### Answering a GET request
 
-### POST requests
+Draw a [template](../templating/index.md) and put it in the page:
 
-Handling a POST request is very similar to handling GET requests. You just call `postContent()`:
+```php
+function getContent()
+{
+    $t = \Idno\Core\Idno::site()->template();
 
-    function postContent()
-    {
-        $t = \Idno\Core\Idno::site()->template();
-        $t->body  = $t->draw('template/name');
-        $t->title = 'Title of your page';
-        $t->drawPage();
-    }
+    $body = $t->__(['fruit' => 'banana'])->draw('banana/home');
 
-!!! warning "Warning"
-    You can't simply call a POST request in Idno. You need to [sign your requests](forms.md) or authenticate them as [API calls](api.md), otherwise Idno will reject your content.
+    $t->__(['title' => 'Bananas', 'body' => $body])->drawPage();
+}
+```
 
-Because POST requests [can accept JSON or POST data](forms.md) via an API call or a standard form submission, every
-page in Idno that accepts POST requests is also an API endpoint.
+`drawPage()` sends the page and ends the request.
 
-If your request asks for JSON (with an `Accept: application/json` header, or `_t=json`) or is authenticated as an API call, the response template will automatically be set to JSON, and any
-response data will come back to the user as structured JSON. A JSON request body is parsed for you, and its values are available through `getInput()`.
+### Answering a POST request
 
-!!! note "Note" 
-    Browser-based POST requests will automatically forward the user to the homepage after execution unless the user is forwarded elsewhere first.
+```php
+function postContent()
+{
+    $this->gatekeeper();
 
-### Useful methods
+    $name = $this->getTextInput('name');
+    // ... do something with it ...
 
-So far we've seen how you can display content in response to a GET or POST request. What if you need to accept input,
-control access, or otherwise add logical nuance to your pages?
+    \Idno\Core\Idno::site()->session()->addMessage('Saved.');
+    $this->forward(\Idno\Core\Idno::site()->config()->getDisplayURL() . 'banana/');
+}
+```
 
-#### Accept input
+Idno calls `postContent()` only for a request with a valid form token, or one signed as an API request. See
+[Forms and tokens](forms.md).
 
-To take input from the user, use the `$this->getInput($name)` method. This will retrieve GET data in a GET request
-and POST or JSON data in a POST request. You can pass a default value as a second argument: `$this->getInput($name, $default)`.
+If `postContent()` returns without redirecting, a browser is redirected to the home page.
 
-For example, to retrieve an ID in a GET request:
+## Reading input
 
-    function getContent()
-    {
-        $id = $this->getInput('id');
-    }
+| Method | Use it for |
+|---|---|
+| `$this->getTextInput($name, $default = '')` | One piece of text: a name, an address, a search. Gives the default if the field is missing or was sent as an array. |
+| `$this->getInput($name, $default = null)` | A field that is meant to be a list (`tags[]`), or anything else. Check each element yourself. |
+| `$this->arguments` | The parts of the address captured by the route pattern. |
+| `\Idno\Core\Input::getFiles($name)` | Uploaded files. See [Files and uploads](files.md). |
 
-#### Route arguments
+Both input methods read the query string, form fields and, for a request with a JSON body, the values in the
+JSON.
 
-Any parts of the URL matched by your route pattern are available, in order, in `$this->arguments`. For example, for
-a route registered as `/status/edit/:id/?`, the ID is in `$this->arguments[0]`.
+!!! warning "Use getTextInput() for text"
+    A request can send any field as an array (`name[]=x`). If your code expects text and passes the value to a
+    database lookup, an array can change what the lookup means. `getTextInput()` never returns an array.
 
-#### Forward the page
+Everything you read is whatever the visitor chose to send. Check it before you use it, and escape it when you
+print it.
 
-You can forward the user to a new page using the `$this->forward($url)` method. Execution will be halted and the
-browser will be forwarded to a new page.
+## Who is asking
 
-For example, to forward the user to `/some/arbitrary/page`:
+```php
+$session = \Idno\Core\Idno::site()->session();
 
-    function getContent()
-    {
-        $this->forward(\Idno\Core\Idno::site()->config()->getDisplayURL() . 'some/arbitrary/page/');
-    }
+$session->isLoggedIn();     // Is anyone signed in?
+$session->currentUser();    // The member (an \Idno\Entities\User), or false
+$session->isAdmin();        // Is the member an administrator?
+```
 
-#### Require authentication
+### Gatekeepers
 
-Use `$this->gatekeeper()` to require authentication. If the user isn't logged in, they will see the "access denied"
-page and the response code will be 403. For example:
+A gatekeeper is a one-line check at the top of a method. If the visitor fails it, the "access denied" page is
+drawn with status 403 and the request ends, so the code below it never runs.
 
-    function getContent()
-    {
-        $this->gatekeeper();
-    }
+| Gatekeeper | Lets through |
+|---|---|
+| `$this->gatekeeper()` | Anyone who is signed in |
+| `$this->createGatekeeper()` | A signed-in member who may create content |
+| `$this->adminGatekeeper()` | An administrator in a browser session. An API request never passes. |
+| `$this->reverseGatekeeper()` | Only visitors who are **not** signed in |
+| `$this->editGatekeeper($object)` | For a page that edits an entity: refuses someone who may not edit an entity that is already saved |
+| `$this->deleteGatekeeper($object)` | For a page that deletes an entity: refuses someone who may not |
+| `$this->xhrGatekeeper()` | Only requests made by a script (`XMLHttpRequest`) |
+| `$this->tokenGatekeeper()` | Only requests that carry a valid form token |
+| `$this->sslGatekeeper()` | Redirects to HTTPS when the site has it and the request did not use it |
 
-There are a number of variants on this function:
+Call a gatekeeper **before** anything else in the method, and again in `postContent()`: each method is a separate
+request. See [Access control](access.md) for checking what a member may do with a particular entity.
 
-* `$this->createGatekeeper()` checks to ensure the user is logged in and can create content
-* `$this->adminGatekeeper()` checks to ensure the user is logged in and is a site administrator
-* `$this->reverseGatekeeper()` checks to ensure the user is logged _out_ and otherwise shows the "access denied" page
-* `$this->sslGatekeeper()` redirects the request to HTTPS if the page is being accessed without SSL/TLS and the site is configured for SSL
-* `$this->xhrGatekeeper()` denies access unless the request was made by XMLHttpRequest
-* `$this->tokenGatekeeper()` denies access unless the request carries a valid [form token](forms.md)
+## Sending an answer
 
-#### Set the HTTP response code
+| Method | What it does |
+|---|---|
+| `$this->forward($url)` | Redirects the browser and ends the request. With no argument, goes to the home page. |
+| `$this->forwardBack()` | Goes back to the page the request came from, if that is on this site; otherwise home. |
+| `$this->forwardToTarget($default)` | Returns the address a form asked to go to in its `forward-to` field, if that is on this site; otherwise `$default`. Pass the result to `forward()`. |
+| `$this->noContent()` | Draws the "not found" page with status 404 and ends the request. |
+| `$this->deniedContent()` | Draws the "access denied" page with status 403 and ends the request. |
+| `$this->goneContent()` | Draws the "this was removed" page with status 410 and ends the request. |
+| `$this->setResponse($code)` | Sets the HTTP status code of the answer. |
+| `$this->setNoCache()` | Sends headers that tell browsers not to cache the answer. |
 
-Use `$this->setResponse($code)` to set the HTTP response code. For example, to set a 404:
+Never redirect to an address taken from the request without checking it. `forwardBack()` and `forwardToTarget()`
+do the checking for you.
 
-    function getContent()
-    {
-        $this->setResponse(404);
-    }
+A request made by a script (with the header `X-Requested-With: XMLHttpRequest`) is never redirected. `forward()`
+ends such a request without a `Location` header. Because of this, don't rely on a redirect to refuse someone:
+use a gatekeeper, `deniedContent()` or `noContent()`, which always end the request.
 
-#### Get the page URL
+### Messages
 
-Use `$this->currentUrl()` to retrieve the full current page URL.
+To tell the member what happened, add a message. It is shown on the next page they see:
 
-    function getContent()
-    {
-        $url = $this->currentUrl();
-    }
+```php
+\Idno\Core\Idno::site()->session()->addMessage('Your banana was saved.');
+\Idno\Core\Idno::site()->session()->addErrorMessage('That is not a banana.');
+```
 
-#### Deny access or declare content missing
+## Every page is also an API endpoint
 
-A number of functions exist for particular access control use cases:
+A page does not need separate code to be used by programs. When a request asks for JSON (with the header
+`Accept: application/json`, or `?_t=json`), the same page answers with JSON instead of HTML, because the
+[template type](../templating/types.md) changes. A JSON request body is parsed for you, and its values come
+through `getInput()`.
 
-* `$this->deniedContent()` displays a standard "access denied" error page and sets HTTP code 403.
-* `$this->noContent()` displays a "content not found" error page and sets HTTP code 404.
-* `$this->goneContent()` displays a "this content was removed" error page and sets HTTP code 410.
+For a POST made as an API request, what `postContent()` returns becomes the `result` of the JSON answer, and
+returning `false` or nothing sets status 400. See [The API](api.md).
 
-In each case, execution is halted.
+## Useful to know
+
+* `$this->currentUrl()` returns the full address of the request.
+* `$this->xhr` is `true` when the request was made by a script.
+* `$this->setPermalink()` and `$this->setEntity($entity)` tell templates that this page is the home of one
+  entity. Core's permalink page does this; you need it only if you write a page of your own that shows one
+  entity as its main content.
+* `$this->setOwner($user)` says whose page this is, which themes use for the page's icon.
+* `\Idno\Core\Idno::site()->currentPage()` returns the page object from anywhere, including templates.
+
+## Where next
+
+* [Forms and tokens](forms.md)
+* [Access control](access.md)
+* [Templates](../templating/index.md)

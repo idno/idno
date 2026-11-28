@@ -1,100 +1,165 @@
 # Translating Idno
 
-Idno has a mechanism for translating strings used into other languages. When Idno boots,
-it creates a new Language() object on the Idno object for the current language, which is addressable
-by ```\Idno\Core\Idno::site()->language();```.
+After this page you will be able to make the text of your plugin or theme translatable, add a translation for a
+language, and know how Idno chooses which language to show.
 
-Your code/plugin can add strings to this object for later use, usually by registering them on the ```registerTranslations()``` 
-method hook.
+## Write translatable text
 
-## Adding a translation for a language
+Every piece of text that a person will read goes through the language object:
 
-Idno supports [gettext](https://en.wikipedia.org/wiki/Gettext), which is a widely supported localisation platform. This is the recommended method for adding
-translations to your code.
+```php
+echo \Idno\Core\Idno::site()->language()->_('Your draft has been saved.');
+```
 
-### Creating .POT file
+The text you write, in English, is both the default and the key that translations are looked up by. If there is
+no translation, the English text is shown.
 
-The first step, after you've used ```\Idno\Core\Idno::site()->language()->_()``` to write your strings, is to generate a POT template
-translation file.
+| Method | Use it for |
+|---|---|
+| `_('Text')` | Text. The result is not escaped. |
+| `_('Hello %s', [$name])` | Text with values in it. They are put in with `vsprintf()`. |
+| `esc_('Hello %s', [$name])` | The same, with the whole result escaped for HTML. Use it when a value came from a person. |
+| `get('Text')` | The translated text with nothing substituted |
 
-From the Idno project root, run:
+Three habits make translators' work possible:
+
+* **Whole sentences.** Write `_('%s was deleted.', [$title])`, never `$title . _(' was deleted.')`. Word order
+  differs between languages.
+* **Text only.** Keep HTML out of the string where you can, and never put a variable inside the string itself:
+  `_("Hello $name")` can never be looked up.
+* **Plain strings as the argument.** The tool that collects text reads your code; it finds `_('...')` with a
+  string written out, not `_($message)`.
+
+## How Idno picks a language
+
+For each request Idno takes the language from the browser's `Accept-Language` header: the first language in the
+list, and nothing else in it. The header must list more than one language for this to work; with a single
+language, or no header, Idno uses `en_US`. The language is not compared with the translations that are
+installed. On the command line, the `LANGUAGE` or `LANG` environment variable is used instead.
+
+Idno sets PHP's locale to that language. A gettext translation is then chosen by gettext itself, from the
+locale. A translation given as a PHP array says which language it is for and is used only when that is exactly
+the current one.
+
+## Add translations with gettext
+
+[gettext](https://en.wikipedia.org/wiki/Gettext) is the usual way to translate software, and the way Idno
+recommends. It works with three kinds of file:
+
+* a `.pot` file: the template, listing every piece of text in your plugin
+* a `.po` file for each language: the template filled in by a translator
+* a `.mo` file for each language: the `.po` file compiled, which is what the site reads
+
+### 1. Collect the text
+
+Idno has a command that reads your PHP files and writes the `.pot` file. From the root of the installation:
 
 ```bash
-# Extract strings for core Idno
-php idno.php build-lang core
+# One plugin
+php idno.php build-lang plugin:Banana
 
-# Extract strings for a specific plugin
-php idno.php build-lang plugin:Status
-
-# Extract strings for a specific theme
+# One theme
 php idno.php build-lang theme:Cherwell
 
-# Extract strings for everything (core + all plugins + all themes)
+# Core
+php idno.php build-lang core
+
+# Everything
 php idno.php build-lang all
 ```
 
-This will parse all PHP files in the target and extract translatable strings into the appropriate ```.pot``` file: ```languages/source/idno.pot``` for core, and ```languages/DOMAIN.pot``` inside the plugin or theme, where the domain is the lower-case plugin or theme name.
+It finds every call to `->_()` and `->esc_()`. For a plugin or theme it writes `languages/<domain>.pot` inside
+the plugin's or theme's folder, where the **domain** is the name in lower case (`banana`). For core it writes
+`languages/source/idno.pot`.
 
-The ```build-lang``` command uses PHP's built-in tokenizer to reliably find all ```->_()``` and ```->esc_()``` method calls.
+Run it again whenever you add or change text.
 
-!!! note "Note"
-    You can also run ```npm run grunt -- build-lang``` from the project root, which runs ```php idno.php build-lang all```. A plugin can include its own Gruntfile with a `build-lang` task, as `IdnoPlugins/Status/Gruntfile.js` does.
+### 2. Translate
 
-!!! note "Note"
-    If you have added a new translation string to Idno's core code or templates, run ```php idno.php build-lang core``` to update the ```idno.pot``` file.
-
-
-### Creating your translation
-
-Open up your .POT file with a suitable tool, e.g. [poedit](https://poedit.net/), and save your .mo and .po files as 
-```/path/to/your/plugin/languages/*LOCALE*/LC_MESSAGES/*DOMAIN*.mo|po```, where:
-
-* LOCALE is the locale you're writing for, e.g. pt_BR
-* DOMAIN is the domain, e.g. your plugin name 'myplugin'
-
-### Registering your translation
-
-In your plugin, register your language by registering a new ```GetTextTranslation``` class, passing the path of your languages directory, and the domain you used.
-
-So, for the above example this might look like:
+Open the `.pot` file in a translation editor such as [Poedit](https://poedit.net/), translate, and save the
+`.po` and `.mo` files as:
 
 ```
-function registerTranslations() 
+IdnoPlugins/Banana/languages/<locale>/LC_MESSAGES/banana.po
+IdnoPlugins/Banana/languages/<locale>/LC_MESSAGES/banana.mo
+```
+
+`<locale>` is the language and country, such as `pt_BR` or `fr_FR`.
+
+### 3. Register the translation
+
+In [your plugin class](../plugins/class.md), or a theme's [controller](../themes/index.md#a-controller):
+
+```php
+function registerTranslations()
 {
     \Idno\Core\Idno::site()->language()->register(
         new \Idno\Core\GetTextTranslation(
-            'myplugin',
+            'banana',
             dirname(__FILE__) . '/languages/'
         )
-    );   
+    );
 }
 ```
 
+The first argument is the domain, the second the folder that holds the locale folders. That is all: gettext
+finds the right language itself.
 
-## Using a translation
+gettext needs the PHP `gettext` extension, which Idno requires, and the locale must be installed on the server's
+operating system for a language to be used.
 
-Once a string has been registered, it is possible to echo the string, and have it translated:
+## Add translations without gettext
 
-E.g.
+For a few strings, or where gettext is not practical, you can provide translations as a PHP array. Extend
+`\Idno\Core\ArrayKeyTranslation` and return the strings:
 
+```php
+<?php
+
+namespace IdnoPlugins\Banana\Languages {
+
+    class French extends \Idno\Core\ArrayKeyTranslation
+    {
+        public function getStrings()
+        {
+            return [
+                'Your banana was saved.' => 'Votre banane a été enregistrée.',
+                'Bananas'                => 'Bananes',
+            ];
+        }
+    }
+
+}
 ```
-echo \Idno\Core\Idno::site()->language()->_('This is the string to translate');
+
+and register one object for each language, saying which it is for:
+
+```php
+function registerTranslations()
+{
+    \Idno\Core\Idno::site()->language()->register(new \IdnoPlugins\Banana\Languages\French('fr_FR'));
+}
 ```
 
-To substitute values into the string, pass them as an array; they are applied with `vsprintf`, e.g. `_('Hello %s', [$name])`. Use `esc_()` instead of `_()` to get the result HTML-escaped.
+A translation registered this way is used only when the current language is exactly the one you named.
 
+## Finding text that is not translated
 
-## Adding a translation for a language (alternative)
+Set `lang_debug = true` in `config.ini` and Idno triggers the event `language/translation/missing-string` for
+every piece of text it could not translate, with the `string` and the `language`. Listen for it to log what is
+missing. See [Events](../plugins/events.md).
 
-If you don't want to go the Gettext route for whatever reason, you can quickly add a translation for a language in code.
+## Translating core
 
-In order to add a translation, you need to register a ```Translation``` object for a given language short code. To do this you need to extend ```Idno/Core/ArrayKeyTranslation``` for each language you want to translate, and then implement its ```getStrings()``` method.
+Core's text is collected into `languages/source/idno.pot` in the same way. If you add or change text in core's
+code or templates, run `php idno.php build-lang core` and include the updated file in your pull request.
+(`npm run grunt -- build-lang` runs `build-lang all`.)
 
-It is then possible to add them all at once for each language (this way, Idno will automatically select the appropriate translation for the loaded language).
+Core's gettext domain is `known`, which is not the name of the template file. A translation of core therefore
+goes in `languages/<locale>/LC_MESSAGES/known.po` and `known.mo`.
 
-E.g.
+## Where next
 
-```
-\Idno\Core\Idno::site()->language()->register(new \IdnoPlugins\Example\Languages\English('en_GB'));
-\Idno\Core\Idno::site()->language()->register(new \IdnoPlugins\Example\Languages\French('fr_FR'));
-```
+* [The plugin class](../plugins/class.md)
+* [Console commands](../plugins/console.md)
+* [Submitting a pull request](../pull-requests.md)

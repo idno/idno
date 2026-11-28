@@ -1,14 +1,20 @@
-# Unit Testing
+# Running the tests
 
-Idno has a number of PHP unit tests that can be run in order to check that things are working correctly, and to protect against any code regression.
+After this page you will be able to run Idno's test suite and its code style check on your own machine, the way they are run for every pull request.
 
-## Running from Github
+Idno's tests are written with [PHPUnit](https://phpunit.de/). They check that things work and protect against old bugs coming back. To write tests for a plugin of your own, see [Testing a plugin](plugins/testing.md).
+
+## Unit testing
+
+### On GitHub
 
 Unit tests will automatically be run when you submit a pull request on GitHub. You should rectify any errors which are reported, as pull requests with errors will not be merged.
 
-## Running unit tests on your local machine
+### On your own machine
 
-PHPUnit is installed by `composer install`. The tests need a configured database and a web server serving your checkout; `.github/workflows/tests.yml` shows how GitHub sets these up (it copies `Tests/build/config_mysql.ini` or `Tests/build/config_default.ini` to `configuration/config.ini`, and serves the checkout on port 80 with `Tests/build/router.php`).
+PHPUnit is installed by `composer install`. The tests need a configured database and a web server serving your checkout ([Set up a development site](setup.md) gets you both). They create and delete accounts and posts, so use a database kept for development.
+
+For reference, `.github/workflows/tests.yml` shows how GitHub sets these up (it copies `Tests/build/config_mysql.ini` or `Tests/build/config_default.ini` to `configuration/config.ini`, and serves the checkout on port 80 with `Tests/build/router.php`).
 
 To run all the tests (the core tests in `Tests/` and each plugin's tests in `IdnoPlugins/*/Tests/`), from the Idno root directory run ```vendor/bin/phpunit```. To run one plugin's tests, pass its folder, e.g. ```vendor/bin/phpunit IdnoPlugins/ActivityPub/Tests/```.
 
@@ -16,17 +22,15 @@ Some tests require a connection to your local Idno instance, so if this is anyth
 
 Before running the unit tests, set these by running, for example, ```export IDNO_DOMAIN='my.idno.domain'```
 
-## Testing code that fetches URLs
+### Testing code that fetches URLs
 
 Tests must not make requests to the public internet. A test of code that fetches a URL should extend `Tests\OutboundHttpTestCase`, which starts a small web server on 127.0.0.1 for the test class (`Tests\LocalHttpServer`; the pages it serves are listed in `Tests/Core/fixtures/http_server.php`).
 
 Idno refuses to fetch addresses on the server itself on behalf of a remote party, so a test that needs a "public" site calls `$this->useLocalServerAsProxy()` and uses addresses in `203.0.113.0/24`, a range reserved for documentation. Every request Idno makes is then answered by the local server, and `static::$server->requests()` lists what it was asked for. `Tests/Core/WebserviceTest.php` shows how.
 
-# Code style testing
+## Code style testing
 
 Idno includes a PHP Codesniffer ruleset.
-
-## Running style tests on your local machine
 
 The code style rules are defined in `phpcs.xml` in the project root. It checks the `Idno`, `IdnoPlugins` and `Tests` folders. To run the style tests, from the Idno root directory simply run:
 
@@ -39,3 +43,9 @@ PHP Code Sniffer works with individual folders, also. For example, to test the c
 ```vendor/bin/phpcs Idno```
 
 Contents of the `external` and `vendor` folders (relative to the project root) are exempt from these rules and will not be tested.
+
+## Where next
+
+* [Testing a plugin](plugins/testing.md)
+* [Coding standards](standards.md)
+* [Submitting a pull request](pull-requests.md)
