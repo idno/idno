@@ -42,7 +42,7 @@ class PageDocument
 
         $entity = ($page && $page->isPermalink()) ? $page->getEntity() : null;
 
-        if ($entity instanceof User) {
+        if ($entity instanceof User && Main::federates()) {
             return ['status' => 200, 'document' => ActivityBuilder::buildActor($entity)];
         }
 

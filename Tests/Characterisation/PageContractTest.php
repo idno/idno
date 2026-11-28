@@ -170,10 +170,12 @@ final class PageContractTest extends PrivateSiteTestCase
             $this->assertSame(403, $response->status, 'the form token endpoint ' . json_encode($headers));
             $this->assertStringNotContainsString('"token"', $response->body, 'no token reaches a visitor of a private site');
         }
-        // (the service worker, either spelling, and the manifest and WebFinger were public routes)
-        foreach (['/.well-known/webfinger?resource=acct:ada@' . $host, '/chrome/manifest.json', '/service-worker.min.js', '/service-worker.js'] as $path) {
+        // (the service worker, either spelling, and the manifest are public routes)
+        foreach (['/chrome/manifest.json', '/service-worker.min.js', '/service-worker.js'] as $path) {
             $this->assertSame(200, $client->request('GET', $path)->status, $path);
         }
+        // WebFinger is open to a stranger but names no member of a private site: the 404 page, a member who exists included
+        $this->assertSame(404, $client->request('GET', '/.well-known/webfinger?resource=acct:ada@' . $host)->status, 'a private site names no member');
     }
 
     public function testARefusedWalledGardenRequestFiresNoPageHead(): void

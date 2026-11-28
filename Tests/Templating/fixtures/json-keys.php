@@ -19,7 +19,7 @@ return [
     'admin /account/settings/tools/' => ['messages', 'title'],
     'admin /admin/' => ['messages', 'title'],
     'admin /admin/about/' => ['messages', 'title'],
-    'admin /admin/activitypub/' => ['description', 'messages', 'queue_ok', 'title', 'total_followers', 'total_users', 'user_stats'],
+    'admin /admin/activitypub/' => ['description', 'federation_off', 'messages', 'queue_ok', 'title', 'total_followers', 'total_users', 'user_stats'],
     'admin /admin/dependencies/' => ['extension', 'messages', 'title', 'version'],
     'admin /admin/diagnostics/' => ['basics', 'messages', 'title'],
     'admin /admin/email/' => ['messages', 'title'],

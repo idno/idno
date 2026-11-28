@@ -70,14 +70,16 @@ class ActivityBuilder
      * server fetches it.
      *
      * A post with no publish status counts as published (posts from before there were drafts
-     * have none). A private site (`walled_garden`) answers no visitor, other servers included,
-     * before this is asked.
+     * have none). On a private site (`walled_garden`) no post is federated.
      *
      * @param mixed $entity
      * @return bool
      */
     public static function isFederated($entity): bool
     {
+        if (!Main::federates()) {
+            return false;
+        }
         if (!($entity instanceof Entity) || $entity instanceof User) {
             return false;
         }

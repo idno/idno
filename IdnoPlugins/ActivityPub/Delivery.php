@@ -22,6 +22,12 @@ class Delivery
      */
     public static function deliver(User $user, array $activity, string $inboxUrl): bool
     {
+        // A private site sends nothing, whenever the delivery was queued
+        if (!Main::federates()) {
+            \Idno\Core\Idno::site()->logging()->debug('ActivityPub: This site is private; nothing is delivered');
+            return false;
+        }
+
         if (empty($inboxUrl) || !filter_var($inboxUrl, FILTER_VALIDATE_URL)) {
             \Idno\Core\Idno::site()->logging()->warning('ActivityPub: Invalid inbox URL for delivery: ' . $inboxUrl);
             return false;
@@ -74,6 +80,11 @@ class Delivery
      */
     public static function deliverToFollowers(User $user, array $activity): void
     {
+        // Nothing leaves a private site
+        if (!Main::federates()) {
+            return;
+        }
+
         $inboxes = ActivityPubFollower::getUniqueInboxesForUser($user->getUUID());
 
         if (empty($inboxes)) {
@@ -107,7 +118,8 @@ class Delivery
     public static function announceActorDeleted(User $user): int
     {
         $queued  = 0;
-        $inboxes = ActivityPubFollower::getUniqueInboxesForUser($user->getUUID());
+        // A private site sends nothing, the Delete of an actor included; the follower records are still removed below
+        $inboxes = Main::federates() ? ActivityPubFollower::getUniqueInboxesForUser($user->getUUID()) : [];
         $send    = [];
         if (!empty($inboxes) && !empty($user->privateKey)) {
             $actorId  = $user->getActivityPubActorID();
@@ -159,6 +171,11 @@ class Delivery
      */
     public static function deliverSigned(string $inboxUrl, string $body, array $headers): bool
     {
+        // A private site sends nothing, whenever the delivery was queued
+        if (!Main::federates()) {
+            return false;
+        }
+
         if (!filter_var($inboxUrl, FILTER_VALIDATE_URL)) {
             \Idno\Core\Idno::site()->logging()->warning('ActivityPub: Invalid inbox URL for delivery: ' . $inboxUrl);
             return false;

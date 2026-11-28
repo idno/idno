@@ -20,6 +20,13 @@ class WellKnownPublication extends Page
 {
     public function getContent()
     {
+        // A private site tells no other server who its members are
+        if (!\Idno\Core\Idno::site()->config()->isPublicSite()) {
+            $this->setResponse(404);
+            echo 'No AT Protocol publication configured.';
+            exit;
+        }
+
         $did = null;
 
         // Try admin users first

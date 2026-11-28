@@ -5270,9 +5270,14 @@ Each content plugin has an `Entry.php` entity class that defines
    `Accept` (`DefaultTemplate::autodetectTemplateType()` calls the page's `sendVaryAccept()`: a legacy page's `header()`, once, and a site page's context header, once). Pinned by
    `IdnoPlugins/ActivityPub/Tests/PostDocumentTest` (every content type, both Accept spellings, the view address, a browser, HEAD, each state of a post, a third-party subclass
    of the permalink page, the alternate link) and the permalink recordings (the `*-accept-activitypub` cases).
-   STILL TO COME with the port of the rest of the `dev` branch's ActivityPub work: the banned-owner checks (`isFederated()` and the profile's 410: the moderation plugin) and
-   the private-site check (`Main::federates()`: a private site tells no other server what its members post, `dev` commit `c1048f68a`, with its `PrivateSiteTest`). Until then a
-   private site's visitors are refused by the page before any of this is asked, and a signed-in member of a private site is given the object where `dev` answers 406.
+   A PRIVATE SITE DOES NOT FEDERATE (`Main::federates()`, which is `isPublicSite()`, asked on every request and every delivery, so making the site private or public again needs
+   nothing saved): `registerPages()` registers `Pages\NotFederating` (404 `{"error": "Not found"}` to any method, whoever asks: not 403 or 401, which servers ask again after, and
+   not 410, which tells them to forget the member) for the actor, inbox, outbox, followers, following, shared inbox, quote stamp and both NodeInfo addresses, still marked public so the
+   walled garden's 403 does not answer first; `ActivityHandler::handle()` answers 404 before anything of the sender is asked; `Delivery::deliver()`, `deliverSigned()`,
+   `deliverToFollowers()` and `announceActorDeleted()` send nothing (so a delivery queued while the site was public is refused when it runs; the account's follower records are
+   still removed), `ActivityBuilder::isFederated()` is false (a signed-in member who asks a permalink for ActivityPub gets the 406) and `PageDocument` gives no actor;
+   the followers stay stored and are sent new posts again when the site is made public; the ActivityPub admin page says why (`federation_off`).
+   Pinned by `IdnoPlugins/ActivityPub/Tests/PrivateSiteTest`. STILL TO COME with the port of the rest of the `dev` branch's ActivityPub work: the banned-owner checks (`isFederated()` and the profile's 410: the moderation plugin).
 3. **Incoming**: `ActivityHandler::handle()` verifies HTTP signatures, routes by
    activity type, and processes Follow (auto-accept), Undo, Delete, QuoteRequest.
 3b. **An account that is deleted**: when the account is closed (`account/closed`, see "Deleting an account is a job in two stages") the plugin sends the followers' servers ONE `Delete` whose object is the actor, signed in the request and queued as signed bodies (`activitypub/deliver-signed`, run as nobody, needing neither the account nor its
@@ -5286,9 +5291,8 @@ Each content plugin has an `Entry.php` entity class that defines
    query string and no percent-encoding because Mastodon normalises an address before it requests it (which decodes `%3A%2F%2F`) and drops the answer unless that address,
    the address it was given and the document's id are the same string: the earlier address (`?target=...&object=...&sig=...`,
    `buildLegacyQuoteStampUrl()`) was never accepted by it, and is still served, with that address as its id. `Pages/QuoteStamp.php` serves a stamp only while the quoted post is
-   federated (404 otherwise, a changed signature included). Pinned by `IdnoPlugins/ActivityPub/Tests/QuoteStampTest`. STILL TO COME with the port of the rest of the `dev` branch's ActivityPub
-   work: the banned-owner checks (`isFederated()` and the actor's 410: the moderation plugin) and the private-site check (`Main::federates()`: a private site tells no other server
-   what its members post, `dev` commit `c1048f68a`); a private site's visitors are refused by the page before any of this is asked.
+   federated (404 otherwise, a changed signature included). Pinned by `IdnoPlugins/ActivityPub/Tests/QuoteStampTest`. A private site federates nothing, so `isFederated()` is false there
+   and no stamp is served. STILL TO COME with the port of the rest of the `dev` branch's ActivityPub work: the banned-owner checks (`isFederated()` and the actor's 410: the moderation plugin).
 5. **Context**: Activities use the GoToSocial namespace (`gts:`) for interaction
    policies. The extended `CONTEXT_WITH_QUOTES` constant in `ActivityBuilder`
    defines all required JSON-LD terms.
@@ -5607,8 +5611,12 @@ no installer writes one.
   An upload path elsewhere in the document root needs a rule of its own (`docs/install/instructions.md`).
 - Private sites (`walled_garden`) and pages that controllers serve: `PageRequestListener` applies `LegacyPageLifecycle::mayView()` (a public site, a logged-on visitor, or `#[SitePage(publicOnPrivateSite: true)]`, which
   the legacy `addRoute(..., true)` and `addPublicRoute()` of the page's class also set) after OPTIONS and before the page is entered; a refusal is the site's 403 page in the request's template type, fires no
-  `page/head` or `page/get` and is logged as nothing. Public on a private site: the home page only where a plugin made its route public, the manifest, the service worker and WebFinger. Refused to a visitor: the
-  feeds, `/search`, tags, `robots.txt`, the mention search and the form token endpoint (`PageContractTest::testWalledGardenAnswersForEachPage`, `PrivateSiteAccessTest`). The form token endpoint
+  `page/head` or `page/get` and is logged as nothing. Public on a private site: the home page only where a plugin made its route public, the manifest, the service worker and WebFinger (which names no member there: see below). Refused to a visitor: the
+  feeds, `/search`, tags, `robots.txt`, the mention search and the form token endpoint (`PageContractTest::testWalledGardenAnswersForEachPage`, `PrivateSiteAccessTest`). A PRIVATE SITE TELLS NO OTHER SERVER WHAT ITS MEMBERS POST OR WHO THEY ARE: `WebSub::publish()` and its `published` listener ping no hub, `Webmention::queueMentions()` and
+  `pingMentions()` send no mention, the ActivityPub plugin federates nothing (see "ActivityPub Plugin"), StandardSiteSync writes nothing to a PDS (`shouldSync()`, the queued sync, delete and backfill handlers and the backfill page) and
+  `/.well-known/site.standard.publication` is a 404, and WebFinger is the site's 404 page for every resource, a member who exists included (`LegacyWebfingerDirectory::find()` describes nobody on a private site; the controller
+  stays `publicOnPrivateSite` so a stranger gets that 404 and no 403 that says the site is private). Each is asked when the thing is sent or answered, so an event queued while the site was public is refused when it runs.
+  `Tests/Core/PrivateSiteOutboundTest`, `IdnoPlugins/ActivityPub/Tests/PrivateSiteTest`, `PageContractTest::testWalledGardenAnswersForEachPage`. The form token endpoint
   (`/service/security/csrftoken/`) answers only an XHR request, the session's own stored token, `Cache-Control: no-store`, and no CORS header. Caching of every site page is the session's `nocache` lines unless the page
   asks with `PageContext::setCaching()`. THE FRONT DOOR: the 403 page (`templates/default/pages/403.html.twig`) of a visitor of a private site says the site is private (its title is the heading) and how an invited
   person gets in (the link in the invitation mail), and offers the sign-in page (the link keeps the id `soft-forward`); a visitor refused on a public site is asked to sign in; a SIGNED-IN member refused for lack of permission is
@@ -6127,7 +6135,6 @@ no installer writes one.
   - Six handlers skip the form token check (`Idno/Pages/File/Upload.php`, `Idno/Pages/File/Picker.php`, `Idno/Pages/Entity/Autosave.php`,
     `IdnoPlugins/StaticPages/Pages/Admin/ReorderCategory.php`, `ReorderPage.php`, and `IdnoPlugins/Like/Pages/Callback.php`, whose POST is its GET: a member's request for the title of an address) and rely on `SameSite=Lax` on the session cookie.
   - A webmention annotation stored before sources were recorded (every one on an upgraded site) has no `webmention_source` and is still replaced by any page that declares its address, once: the record then belongs to that page.
-  - A private site (`walled_garden`) still delivers its public posts to ActivityPub followers, pings its hub, sends webmentions and syncs to a PDS: the private-site check of `dev` (`c1048f68a`) is not ported here.
   - On a private site the webmention endpoint (public, as a sender is no visitor) tells a stranger which public-access posts exist (`target_not_found` or not) and stores mentions of them, which members then see.
   - IndieAuth access tokens are stored in plain text, never expire, and their scope is not enforced by the Micropub endpoint.
   - A site that sets no `trusted_proxies` still believes `X-Forwarded-Proto` from any client (`TrustedProxies::isSecure()`, behind `Page::isSSL()`), so a visitor can claim https for their own request; with the setting it is believed from the listed proxies alone (see "Configuration"). The line an API login failure logs still names the first `X-Forwarded-For` entry, which a client can choose. The login throttle counts by account,

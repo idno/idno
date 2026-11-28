@@ -58,7 +58,7 @@ namespace Idno\Core {
                     }
                     if ($object = $eventdata['object']) {
                         /* @var \Idno\Common\Entity $object */
-                        if ($object->isPublic()) {
+                        if ($object->isPublic() && Idno::site()->config()->isPublicSite()) {
                             Idno::site()->queue()->enqueue('default', self::PING_EVENT, $eventdata);
                         }
                     }
@@ -337,6 +337,12 @@ namespace Idno\Core {
          */
         static function publish($object)
         {
+            // A private site tells no hub that something was posted on it, whenever the ping was queued: the addresses it
+            // would send include the post's tags, and nobody could read the feeds anyway
+            if (!Idno::site()->config()->isPublicSite()) {
+                return false;
+            }
+
             if ($hub = Idno::site()->config()->hub) {
 
                 $base   = Idno::site()->config()->getDisplayURL();

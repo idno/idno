@@ -9,12 +9,16 @@ use Idno\Entities\User;
 use Idno\Http\Controller\Discovery\WebfingerDirectory;
 
 /**
- * The members WebFinger describes, over the legacy application: a user found by handle, the links the `webfinger` event's listeners give.
+ * The members WebFinger describes (none on a private site), over the legacy application: a user found by handle, the links the `webfinger` event's listeners give.
  */
 final class LegacyWebfingerDirectory implements WebfingerDirectory
 {
     public function find(string $resource): ?array
     {
+        // A private site names no member to anybody
+        if (!Idno::site()->config()->isPublicSite()) {
+            return null;
+        }
         if (substr($resource, 0, 5) !== 'acct:' || strlen($resource) <= 8) {
             return null;
         }

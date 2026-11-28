@@ -9,8 +9,8 @@ use Idno\Http\Page\PageRenderer;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * WebFinger (RFC 7033): the JSON resource descriptor of a member, for `?resource=acct:<handle>@<host>`. Public on a private site, as it always
- * was; a resource that names nobody is the site's 404 page.
+ * WebFinger (RFC 7033): the JSON resource descriptor of a member, for `?resource=acct:<handle>@<host>`. Open to a visitor of a private site, which is told
+ * nothing: the directory describes no member there, so every resource is the site's 404 page, as a resource that names nobody is anywhere.
  */
 final class Webfinger
 {

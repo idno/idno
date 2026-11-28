@@ -215,6 +215,11 @@ class Main extends Plugin
 
                 $data = $event->data();
 
+                // A private site writes nothing to a PDS, whenever the event was queued
+                if (!\Idno\Core\Idno::site()->config()->isPublicSite()) {
+                    return;
+                }
+
                 if (empty($data['entity_id'])) {
                     \Idno\Core\Idno::site()->logging()->warning(
                         'StandardSiteSync: Backfill event missing entity_id'
@@ -255,6 +260,12 @@ class Main extends Plugin
             function (\Idno\Core\Event $event) {
 
                 $data = $event->data();
+
+                // A private site writes nothing to a PDS, whenever the event was queued
+                if (!\Idno\Core\Idno::site()->config()->isPublicSite()) {
+                    return;
+                }
+
                 $object = $data['object'] ?? null;
 
                 if (empty($object) || !($object instanceof \Idno\Common\Entity)) {
@@ -286,6 +297,12 @@ class Main extends Plugin
             function (\Idno\Core\Event $event) {
 
                 $data = $event->data();
+
+                // A private site writes nothing to a PDS, whenever the event was queued
+                if (!\Idno\Core\Idno::site()->config()->isPublicSite()) {
+                    return;
+                }
+
                 $object = $data['object'] ?? null;
 
                 if (empty($object) || !($object instanceof \Idno\Common\Entity)) {
@@ -336,6 +353,11 @@ class Main extends Plugin
 
         // Must be a content entity
         if (!($object instanceof \Idno\Common\Entity)) {
+            return false;
+        }
+
+        // Nothing posted on a private site is public, whatever the post's own access says: it is written to no PDS
+        if (!\Idno\Core\Idno::site()->config()->isPublicSite()) {
             return false;
         }
 

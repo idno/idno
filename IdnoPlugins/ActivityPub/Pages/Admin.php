@@ -48,6 +48,7 @@ class Admin extends \Idno\Common\Page
                 'total_followers' => $totalFollowers,
                 'user_stats'     => $userStats,
                 'queue_ok'       => $queueOk,
+                'federation_off'  => !\IdnoPlugins\ActivityPub\Main::federates(),
                 'description'    => 'ActivityPub federation allows users on this site to be followed from Mastodon and other compatible platforms.',
             ]
         )->draw('activitypub/admin');

@@ -12,7 +12,7 @@ use Symfony\Component\HttpKernel\Attribute\AsController;
 use Symfony\Component\Routing\Attribute\Route;
 
 /**
- * `/.well-known/webfinger`: a page that was a legacy class (the `#[SitePage]` names it). Public on a private site.
+ * `/.well-known/webfinger`: a page that was a legacy class (the `#[SitePage]` names it). Open to a visitor of a private site, so that other servers get the same 404 for every resource and no 403 that says the site is private.
  */
 #[AsController]
 final class WebfingerController

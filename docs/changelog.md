@@ -11,6 +11,7 @@ Unreleased
 These changes are on the `dev` branch and will be part of the next release.
 
 * PHP 8.4 or later is now required
+* A private site no longer federates, and tells no other server what its members post or who they are: its members' followers on other servers are sent nothing, the actor, inbox, outbox and NodeInfo addresses and WebFinger answer 404, no Follow is accepted, the hub is not pinged, no webmention is sent and nothing is written to a PDS. The ActivityPub admin page says why. Followers are kept, and are sent new posts again if the site is made public
 * Removed the `wayback_machine` setting, which nothing read: no page was ever sent to the Internet Archive. A value stored for it by an existing site is ignored
 * Security: the tags of a post are text. A tag sent with markup (by a form post, a signed API request or the categories of a Micropub request) is stored as plain text, and the feeds, JSON, ActivityPub and KML print every tag escaped, so a tag can no longer put markup in front of a feed reader or another server. A list of tags that held something that was not text no longer stops a page with an error
 * A database or proxy password that holds an `@` is now removed whole from the diagnostics report and from the export archive's `config.json`; only the part before the first `@` was removed, so the rest of the password was shown

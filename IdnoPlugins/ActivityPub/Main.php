@@ -26,25 +26,31 @@ class Main extends Plugin
 
     function registerPages()
     {
-        // Per-user endpoints (marked public so they work even on non-public sites)
-        // Sub-path routes must be registered before the actor profile route
-        \Idno\Core\Idno::site()->routes()->addRoute('/actor/([^\/]+)/inbox/?', '\IdnoPlugins\ActivityPub\Pages\Inbox', true);
-        \Idno\Core\Idno::site()->routes()->addRoute('/actor/([^\/]+)/outbox/?', '\IdnoPlugins\ActivityPub\Pages\Outbox', true);
-        \Idno\Core\Idno::site()->routes()->addRoute('/actor/([^\/]+)/followers/?', '\IdnoPlugins\ActivityPub\Pages\Followers', true);
-        \Idno\Core\Idno::site()->routes()->addRoute('/actor/([^\/]+)/following/?', '\IdnoPlugins\ActivityPub\Pages\Following', true);
-        \Idno\Core\Idno::site()->routes()->addRoute('/actor/([^\/]+)/?', '\IdnoPlugins\ActivityPub\Pages\Actor', true);
+        // A private site does not federate: every one of these addresses answers 404 there (see Pages\NotFederating).
+        // Which it is is decided on each request. They are marked public: other servers do not log in, and the gatekeeper of a
+        // private site would answer them 403.
+        $federates = self::federates();
+        $page = static fn (string $name): string => '\IdnoPlugins\ActivityPub\Pages\\' . ($federates ? $name : 'NotFederating');
+        $routes = \Idno\Core\Idno::site()->routes();
+
+        // Per-user endpoints. Sub-path routes must be registered before the actor profile route
+        $routes->addRoute('/actor/([^\/]+)/inbox/?', $page('Inbox'), true);
+        $routes->addRoute('/actor/([^\/]+)/outbox/?', $page('Outbox'), true);
+        $routes->addRoute('/actor/([^\/]+)/followers/?', $page('Followers'), true);
+        $routes->addRoute('/actor/([^\/]+)/following/?', $page('Following'), true);
+        $routes->addRoute('/actor/([^\/]+)/?', $page('Actor'), true);
 
         // Shared inbox
-        \Idno\Core\Idno::site()->routes()->addRoute('/inbox/?', '\IdnoPlugins\ActivityPub\Pages\SharedInbox', true);
+        $routes->addRoute('/inbox/?', $page('SharedInbox'), true);
 
         // Quote authorization stamp endpoint (FEP-044f): the quoted post and the quoting post as
         // base64url, and an HMAC. The second route is the address stamps had before.
-        \Idno\Core\Idno::site()->routes()->addRoute('/activitypub/quote-stamp/([A-Za-z0-9_-]+)/([A-Za-z0-9_-]+)/([0-9a-f]+)', '\IdnoPlugins\ActivityPub\Pages\QuoteStamp', true);
-        \Idno\Core\Idno::site()->routes()->addRoute('/activitypub/quote-stamp/?', '\IdnoPlugins\ActivityPub\Pages\QuoteStamp', true);
+        $routes->addRoute('/activitypub/quote-stamp/([A-Za-z0-9_-]+)/([A-Za-z0-9_-]+)/([0-9a-f]+)', $page('QuoteStamp'), true);
+        $routes->addRoute('/activitypub/quote-stamp/?', $page('QuoteStamp'), true);
 
         // NodeInfo (public discovery endpoints)
-        \Idno\Core\Idno::site()->routes()->addRoute('/.well-known/nodeinfo/?', '\IdnoPlugins\ActivityPub\Pages\NodeInfoIndex', true);
-        \Idno\Core\Idno::site()->routes()->addRoute('/nodeinfo/2\\.0/?', '\IdnoPlugins\ActivityPub\Pages\NodeInfo', true);
+        $routes->addRoute('/.well-known/nodeinfo/?', $page('NodeInfoIndex'), true);
+        $routes->addRoute('/nodeinfo/2\\.0/?', $page('NodeInfo'), true);
 
         // Admin
         \Idno\Core\Idno::site()->routes()->addRoute('/admin/activitypub/?', '\IdnoPlugins\ActivityPub\Pages\Admin');
@@ -233,6 +239,16 @@ class Main extends Plugin
 
             Delivery::deliver($user, $data['activity'], $data['inbox']);
         });
+    }
+
+    /**
+     * Does this site federate? Not when it is private (the "walled_garden" setting): nothing its members post may leave it, and it does not say
+     * who they are. Then there are no actors, outboxes, collections, inboxes or NodeInfo, no Follow is accepted and nothing is delivered. This is
+     * asked on every request and every delivery, so making the site private or public again takes effect at once, with nothing saved again.
+     */
+    public static function federates(): bool
+    {
+        return \Idno\Core\Idno::site()->config()->isPublicSite();
     }
 
     function getAdminIcon()
