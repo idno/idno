@@ -58,13 +58,12 @@ composer console -- idno:import:mongo --target=sqlite:///data/new.sqlite   # mov
   `test:up:mysql`, `test:down`) is a list whose first entry is `Composer\Config::disableProcessTimeout`:
   Composer's default 300-second process timeout would kill the whole suite on MySQL (about four
   minutes). Arguments after `--` still reach the command. Keep that entry when you change one.
-  Rough times: the unit tier about ten seconds; the whole suite (7,696 tests) about 21 minutes on SQLite (measured with other work running beside it), and, measured
-  at 7,681 tests, 40 minutes on MySQL 8.0 and 33 minutes on MariaDB 10.6 (all on one development machine; the figures move with the machine's load).
+  Rough times: the unit tier about fifteen seconds (2,944 tests); the whole suite (8,000 tests) 28 minutes on SQLite, 64 minutes on MySQL 8.0 and 59 minutes on MariaDB 10.6 (all on one development machine; the figures move with the machine's load, and the MySQL and MariaDB runs were made with other work running beside them).
 - Likewise run the console as `composer console -- <command>` against the rig; on a site without
   `pedantic_mode` it is `php bin/console <command>` (`idno.php` and `known.php` are aliases). See
   "Console commands" below.
 - PHPUnit config: `phpunit.xml` (bootstrap: `Tests/_bootstrap.php`; `phpunit.xml` sets `memory_limit` to 512M, because the
-  whole suite runs in one process: the peak is 243 MB on SQLite (391 skipped) of 7,696 tests, and was 243 MB on MySQL 8.0 (23 skipped) and 245 MB on MariaDB 10.6 (24 skipped) of 7,681, well under the guard's 380 MB; the largest classes each leave about 20 MB or
+  whole suite runs in one process: the peak is 249 MB on SQLite (395 skipped), 257 MB on MySQL 8.0 (33 skipped) and 257 MB on MariaDB 10.6 (34 skipped), of 8,000 tests each, well under the guard's 380 MB; the largest classes each leave about 20 MB or
   less behind: a second kernel's container, the export archive tests), and it peaked at 455 MB when every entity a test
   built was kept alive for the rest of the run by the event listener `Entity::registerEventHooks()` added for each object
   (see below)) for `composer test`. The extension `Tests\Support\MemoryGuard` and its listener
