@@ -26,8 +26,8 @@ namespace Idno\Core {
             Idno::site()->routes()->addRoute('/account/register/?', \Idno\Legacy\ControllerRoute::class, true);
 
             // Password requests
-            Idno::site()->routes()->addRoute('/account/password/?', '\Idno\Pages\Account\Password', true);
-            Idno::site()->routes()->addRoute('/account/password/reset/?', '\Idno\Pages\Account\Password\Reset', true);
+            Idno::site()->routes()->addRoute('/account/password/?', \Idno\Legacy\ControllerRoute::class, true);
+            Idno::site()->routes()->addRoute('/account/password/reset/?', \Idno\Legacy\ControllerRoute::class, true);
 
             // Idno feedback
             Idno::site()->routes()->addRoute('/account/settings/feedback/?', '\Idno\Pages\Account\Settings\Feedback');

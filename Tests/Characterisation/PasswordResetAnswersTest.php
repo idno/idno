@@ -27,12 +27,22 @@ final class PasswordResetAnswersTest extends SignInSiteCase
 
     protected const GROUP = 'password-reset';
 
+    private const HOST_WHY = 'a request with a malformed Host is served by the legacy router, which has no page for the address now: its 404 page (the legacy page drew the form)';
+
+    private const XHR_WHY = 'an XHR GET gets the headers of the same request that is not XHR';
+
     /**
-     * Cases the page now answers differently on purpose: an address that is an array found the newest member (the lookup read it as no condition), issued
-     * that member a new recovery code and then failed to draw the mail; it is no address, so the answer is the one every unknown address gets.
+     * Cases the pages now answer differently on purpose, each asserted in `testWhatTheControllersAnswerDifferentlyFromTheLegacyPages`: an address that is an
+     * array found the newest member (the lookup read it as no condition), issued that member a new recovery code and then failed to draw the mail; it is no
+     * address, so the answer is the one every unknown address gets. The others are what every page that moved to a controller answers differently.
      */
     private const CHANGED = [
         'request-post-array' => 'an address that is not text finds no member: the redirect every address gets, with no code issued and no mail',
+        'request-xhr' => self::XHR_WHY,
+        'reset-form-valid-xhr' => self::XHR_WHY,
+        'request-malformed-host' => self::HOST_WHY,
+        'reset-form-valid-malformed-host' => self::HOST_WHY,
+        'reset-post-no-token-xhr' => 'a script\'s POST with a missing or wrong form token is the site\'s 403 page: the lifecycle\'s rule for every site page (the legacy page forwarded, which a script\'s request cannot follow, so it answered an empty 200)',
     ];
 
     private const NEW_PASSWORD = 'a-new-passphrase-77';
@@ -325,6 +335,39 @@ final class PasswordResetAnswersTest extends SignInSiteCase
             $this->get(['answer' => 'request-no-mail-sent'], '/account/password?sent=true');
             $this->post(['answer' => 'request-post-no-mail', 'then' => 'request-post-no-mail-then'], '/account/password', ['email' => 'nobody@example.com']);
         });
+    }
+
+    /**
+     * Catches: an XHR GET answered with the legacy router's second `Cache-Control` line, a request with a malformed Host served by a page that does not
+     * exist for it, and a script's POST with no form token forwarded where a script cannot follow (an empty 200 that looks like success) instead of refused,
+     * with the password changed behind it.
+     */
+    public function testWhatTheControllersAnswerDifferentlyFromTheLegacyPages(): void
+    {
+        $this->seedReset();
+        $this->arm();
+        $valid = '/account/password/reset?email=bob%40example.com&code=' . self::CODE_BOB;
+        foreach (['request' => ['/account/password', 'request-xhr'], 'reset' => [$valid, 'reset-form-valid-xhr']] as [$path, $case]) {
+            [$cookie, $token] = $this->visitorSession();
+            $answer = $this->site()->request('GET', $path, ['Cookie' => $cookie, 'X-Requested-With' => 'XMLHttpRequest']);
+            $plain = $this->site()->request('GET', $path, ['Cookie' => $cookie]);
+            $s = $this->scrubbed($token);
+            [$answeredHeaders, $answeredBody] = explode("\n\n", self::normalise(self::withoutLastModified($s($answer)), $this->baseUrl()), 2);
+            [$plainHeaders] = explode("\n\n", self::normalise(self::withoutLastModified($s($plain)), $this->baseUrl()), 2);
+            $this->assertSame($plainHeaders, $answeredHeaders, $case);
+            $this->assertSame(explode("\n\n", (string) file_get_contents(self::recordedAnswersDirectory() . '/' . static::GROUP . '/' . $case . '.txt'), 2)[1], $answeredBody, $case . ': the page is what it was');
+            $this->assertCount(1, $answer->lines('cache-control'));
+        }
+
+        foreach ([$valid, '/account/password'] as $path) {
+            $this->assertSame(404, $this->site()->request('GET', $path, ['Host' => 'bad host!'])->status, $path);
+        }
+
+        $before = $this->recoveryOf('bob');
+        $refused = $this->site()->request('POST', '/account/password/reset', ['Cookie' => $this->visitorSession()[0], 'X-Requested-With' => 'XMLHttpRequest'], self::reset());
+        $this->assertSame(403, $refused->status);
+        $this->assertSame($before, $this->recoveryOf('bob'), 'no token, no reset');
+        $this->assertTrue($this->signsIn('bob', self::PASSWORD));
     }
 
     public function testRequestingAReset(): void

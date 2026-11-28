@@ -394,6 +394,7 @@ Idno/
                                SessionController, with Session/SessionPages, the one implementation of the login page and the logout, and SignIn, the interface of what it asks the site;
                                CurrentUserController, with Session/CurrentUserPages, the one implementation of the current-user page (`/currentUser`), over the same SignIn;
                                RegistrationController, with Account/RegistrationPages, the one implementation of the registration page, Registrations, the interface of what it asks the site, and its value objects (RegistrationInvitation, RegistrationAdmission, NewAccount);
+                               PasswordResetController, with Account/PasswordResetPages, the one implementation of the two password-reset pages, and PasswordResets, the interface of what they ask the site;
                                FileController, with File/FilePages, the one implementation of the page of a stored file (streamed), StoredFiles, the interface of what it asks the site,
                                and its value objects (FileLookup, ServedFile, FileCaching, the enum FileOutcome) and static helpers (ByteRange, FileStream);
                                SiteFilesController, WebfingerController, MentionSearchController and FormTokenController, with
@@ -411,7 +412,7 @@ Idno/
                                BarePage, ControllerRoute (the placeholder in the legacy route table), LegacyRouteOverride, LegacyRoutedPages (and Placeholder/, the placeholders of pages routed by the legacy table: AnnotationView, AnnotationDelete, AnnotationOtherLayout and PermalinkOtherLayout),
                                LegacyPageLifecycle, LegacyPageDrawer, LegacyHeaderReconciler (with HeaderQueue and PhpHeaders:
                                the headers of a site page), the adapters of what the controllers' services ask the site
-                               (LegacyHomeStream, LegacyPermalinks, LegacyAnnotations, LegacyProfiles, LegacyMemberLists, LegacySignIn, LegacyRegistrations, LegacyStoredFiles, LegacySubscriptions, LegacySiteIcons, LegacyWebfingerDirectory, LegacyMentionCandidates, LegacyWebmentionTargets, LegacyWebmentionSources) and
+                               (LegacyHomeStream, LegacyPermalinks, LegacyAnnotations, LegacyProfiles, LegacyMemberLists, LegacySignIn, LegacyRegistrations, LegacyPasswordResets, LegacyStoredFiles, LegacySubscriptions, LegacySiteIcons, LegacyWebfingerDirectory, LegacyMentionCandidates, LegacyWebmentionTargets, LegacyWebmentionSources) and
                                PageShell (the base of the deprecated shells)
   start.php                    Boots the legacy application for code that includes it (tests, scripts)
   Common/                      Legacy base classes (Entity, Page, Plugin, ContentType, Theme)
@@ -1373,6 +1374,15 @@ for classes that extend `PageShell`, and holds each to the rule); it is `Idno\Pa
   and in `docs/developers/plugins/upgrading.md` (not in `docs/install/upgrade.md`: nothing an upgrader must do): a JSONP request is answered as the HTML settings page, as every `/account` page is (it was the JSONP shell, a script any site can load); an XHR GET gets the headers of the same request that is not XHR; an XHR POST with a missing or wrong
   form token is the site's 403 page (the legacy page ended it with an empty 200); a PUT or DELETE and a request with a malformed `Host` are the legacy router's 404 page (the legacy page answered the 403 of a missing token or the redirect home, drew the form, and a POST
   with a malformed `Host` made the account).
+
+- THE PASSWORD-RESET PAGES (`/account/password` and `/account/password/reset`). `Idno\Pages\Account\Password` and `Idno\Pages\Account\Password\Reset` are deleted (no shell is kept: nothing extends them in the repository; a plugin that does must be disabled before the upgrade). `Idno\Http\Controller\PasswordResetController` has `request()`
+  on `/{lead}account/password{slash}` (`idno_password`) and `reset()` on `/{lead}account/password/reset{slash}` (`idno_password_reset`), each GET, HEAD, OPTIONS and POST with `#[SitePage(name: <the deleted class's name>, accountPage: true, publicOnPrivateSite: true, methods: ['GET', 'POST'])]`: account pages (a signed
+  request is refused) that a visitor of a private site still reaches, as the legacy `addRoute(..., true)` made them (someone who forgot their password cannot sign in first). Core still registers both patterns where it always did (`Idno\Core\Account::init()`), public, with `Idno\Legacy\ControllerRoute`. The logic is
+  `Idno\Http\Controller\Account\PasswordResetPages` (`requestForm()` and `request()`, `resetForm()` and `reset()`), which asks the site only through the interface `PasswordResets` (`Idno\Legacy\LegacyPasswordResets`: who is signed in, the account an address may be sent a link for, issuing and mailing the code, the member an
+  address and a code name, the password rule, changing the password, whether mail is configured, the messages and the display address) and the throttle through `LoginAttempts`, so it is built and unit-tested without the legacy application (`Tests/Unit/Http/Controller/Account/PasswordResetPagesTest`, `Tests/Kernel/LegacyPasswordResetsTest`). The rules are in "Security", "The password reset": the pages are for visitors (a signed-in
+  member gets the page's own 403, for the forms and the POSTs), every address is answered alike, the CODE is judged before the passwords, a refused password is the form again at 400 with the code kept, a good reset ends at the sign-in page. Both forms are drawn through `PageRenderer::pageInExactShell()` with the code and address on a copy (`templateOnACopy()`) and `Referrer-Policy: no-referrer` (`PageContext::addHeader()`); a POST redirects through
+  `PageRenderer::redirect()`. Held by the recorded answers of `Tests/Characterisation/PasswordResetAnswersTest` (`fixtures/answers/password-reset/`), `PasswordResetFlowTest`, `MailFlowsTest`, `LoginThrottlingTest`, `PasswordChangeEndsOtherSessionsTest` and `ArrayInputTest`. Deliberate differences, each a `CHANGED` case with an assertion of the new answer
+  (`testWhatTheControllersAnswerDifferentlyFromTheLegacyPages`), and in `docs/developers/plugins/upgrading.md`: an XHR GET gets the headers of the same request that is not XHR; an XHR POST with a missing or wrong form token is the site's 403 page (the legacy page ended it with an empty 200); a request with a malformed `Host`, a PUT and a DELETE are the legacy router's 404 page (the legacy page drew the form).
 
 - THE FEED READER IS REMOVED. Following a FEED (a site's RSS, Atom or h-feed, to read its items in the site) never worked on a supported PHP, and nothing linked it: `Idno\Core\Reader::parseFeed()` and `getFeedDetails()` called
   `\DOMDocument::loadHTML()` statically, which is an `\Error` on PHP 8 (`@` does not stop it), so `/following/add/` and `/following/confirm/` answered the 500 page before any record was made and `/following/refresh/` read a collection nothing
@@ -4366,7 +4376,7 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   json, jsonp, rss, kml, jsonfeed and activitypub shells); `DefaultTemplate::shellHeaders($status)` gives the list for the template's type and
   `DefaultTemplate::sendShellHeaders()` sends it (`DefaultTemplate::renderPage($status, $shell)` is `drawPage(false)` with the list returned and nothing sent, for
   `PageRenderer`), called
-  by `drawPage()` and by the page that draws the shell with `draw('shell')` (`Account\Password`; the registration page draws it through `PageRenderer::pageInExactShell()`);
+  by `drawPage()` and by the page that draws the shell with `draw('shell')` (the registration and password-reset pages draw it through `PageRenderer::pageInExactShell()`);
   the simple shell (`shell/simple`) and `DefaultTemplate::sendSimpleShellHeaders()` are gone with the onboarding pages; `Discovery\SiteFiles` (a service, not `SiteFilesController`) sends `robots.txt` as `text/plain`; `chrome/manifest` is no template: it builds the JSON and answers
   `application/json`, so a theme's override of it no longer applies. A new template must not call `header()`: `Tests/Unit/Templating/ShellHeadersTest::testNoCoreOrBundledTemplateCallsHeader` fails for a core or bundled template that does (it scans every `.php` file, `.tpl.php` and plain, by tokens, `\header(` included, and every `.twig` file; a third party's `.tpl.php` shell that still calls it keeps working). Header values are unchanged
   (`Tests/Characterisation/PageHeadersTest`; `Tests/Kernel/ShellHeadersDrawTest` pins `DefaultTemplate::shellHeaders()` per type and status). Two behaviours changed with the table: `drawPageWithoutSideEffects()`
@@ -5871,7 +5881,7 @@ no installer writes one.
   `attempt($key)` RESERVES one attempt before the password is checked (so N parallel requests cannot get N guesses while the first
   is still in bcrypt) and is false when the window is full: that attempt is refused BEFORE the password is looked at, even a right
   one, with the same redirect as a failure and the message "Too many failed sign-in attempts ... Please wait a few minutes"; a
-  successful login calls `reset()`, and so does a password reset (a member who was locked out can sign in at once). The window opens
+  successful login calls `reset()`, and so does a password reset (`PasswordResetPages::reset()` calls `LoginAttempts::reset()` with the account's key: a member who was locked out can sign in at once). The window opens
   at the first attempt and its count is forgotten 300 seconds later; a refused attempt is not counted. Someone who knows a login
   name can therefore keep that account locked by repeating failures every five minutes; the member waits five minutes or resets
   the password. No lock is given to the limiter (a lock would need a store of its own), so concurrent cache writes can lose
@@ -5895,7 +5905,7 @@ no installer writes one.
   resets the count), and when it is not right NOTHING is changed (the name too). A request that changes neither needs no password. The form
   labels it and has `autocomplete="current-password"` (the new password `new-password`). A stolen session therefore cannot take the account
   over. Tests: `Tests/Characterisation/AccountSettingsCurrentPasswordTest`.
-- The password reset (`Idno\Pages\Account\Password` asks for a link, `Password\Reset` sets the password; both legacy pages, public on a private site, closed to a signed-in member by `reverseGatekeeper()`). The request page
+- The password reset (`/account/password` asks for a link, `/account/password/reset` sets the password; both are served by `Idno\Http\Controller\PasswordResetController` and `Account\PasswordResetPages`, see "THE PASSWORD-RESET PAGES"; public on a private site, closed to a signed-in member: the service answers the page's own 403). The request page
   answers every address alike (the redirect to `?sent=true`) and sends NO code and NO mail to an unknown address, an address on the site's blocked list (`Config::emailIsBlocked()` of the member's stored address) or an account
   that is being deleted; it warns every visitor, on the request page and the one after it, when the site has no mail service (`Email::isConfigured()`: `account/password/nomail`, a notice that says nothing about any account). The
   code is 128 random bits valid for three hours, and ONLY ITS SHA-256 is stored (`User::addPasswordRecoveryCode()` returns the code to mail and stores `hashPasswordRecoveryCode()`; `passwordRecoveryCodeMatches()` compares with
@@ -5904,7 +5914,7 @@ no installer writes one.
   address and the code in hidden fields, never the passwords, and no redirect, so the code is in no `Location`. The reset link carries the address and the code in its query (it must, from the mail), so the form pages send `Referrer-Policy: no-referrer`, and the form
   is drawn on a COPY of the page's template (`withVars()`): neither is a variable of the page, which a JSON request prints. All fields are read as text (`getTextInput()`): an array is an empty field, a validation answer, never a 500. A good
   reset sets the password (which ends every session of the account), clears the recovery code and the account's login-throttle count, signs nobody in, and sends the visitor to the SIGN-IN page (the home page of a private site would refuse them)
-  with "Your password was changed. Sign in with your new password." The form pages (and the request page) are drawn by `Password::drawInTheSitesShell()` in the site's own shell, with `renderPage(..., exactShell: true)`: the `default` type skips the settings shell of an address under `/account/`, every other type is chosen as for any page, so a JSONP request is still the HTML settings page and never a script; the draw ENDS the request (a legacy page that returns is forwarded home by `Page::post()`), so a refused password is the 400 form in every type, a script's request and `?_t=json` included. Redirects use the site's display address. Tests: `Tests/Characterisation/PasswordResetAnswersTest` (recorded
+  with "Your password was changed. Sign in with your new password." The form pages (and the request page) are drawn in the site's own shell through `PageRenderer::pageInExactShell()`: the `default` type skips the settings shell of an address under `/account/`, every other type is chosen as for any page, so a JSONP request is still the HTML settings page and never a script; a refused password is the 400 form in every type, a script's request and `?_t=json` included. Redirects use the site's display address. Tests: `Tests/Characterisation/PasswordResetAnswersTest` (recorded
   answers: `fixtures/answers/password-reset/`) and `PasswordResetFlowTest`.
 - A change of password ends the user's OTHER sessions. `User::setPassword()` (a real change) writes a random `password_generation`
   marker on the user; `Session::logUserOn()` and `refreshSessionUser()` (whenever it puts a different user's uuid into the session: a plugin's
@@ -5926,7 +5936,7 @@ no installer writes one.
   real change since markers began); when the user has a marker a session that cannot say it came after the change is logged off. The
   session that changes the password takes the new fingerprint in the same request and stays logged in; a user who has never
   changed their password since the marker was introduced has none (the fingerprint of an empty marker), so every session stays valid
-  until the first real change; a password reset ends every session of the user (the reset does not log anybody on). Stateless (API)
+  until the first real change; a password reset ends every session of the user (`PasswordResetPages::reset()` changes the password through `PasswordResets::changePassword()`, which is `User::setPassword()`; the reset does not log anybody on). Stateless (API)
   requests have no session fingerprint and are unaffected (the API key is the credential, and changing the password does not change
   it); the queue worker and `logUserOn()` in a test work as before. Tests: `Tests/Characterisation/PasswordChangeEndsOtherSessionsTest`,
   `Tests/Kernel/UserPasswordSaveTest`.

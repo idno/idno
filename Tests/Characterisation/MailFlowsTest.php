@@ -160,7 +160,7 @@ final class MailFlowsTest extends CharacterisationTestCase
 
     public function testThePasswordResetMail(): void
     {
-        // As Idno\Pages\Account\Password::postContent() builds it.
+        // As LegacyPasswordResets::mailCode() builds it.
         $address = 'someone@example.net';
         $code = 'code-1234';
         $email = new \Idno\Core\Email();

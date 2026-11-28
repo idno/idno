@@ -422,6 +422,9 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
     // The registration page, over the legacy session, finders and invitations
     $services->set(\Idno\Legacy\LegacyRegistrations::class);
     $services->alias(\Idno\Http\Controller\Account\Registrations::class, \Idno\Legacy\LegacyRegistrations::class);
+    // The password-reset pages, over the same session and finders and the mailer
+    $services->set(\Idno\Legacy\LegacyPasswordResets::class);
+    $services->alias(\Idno\Http\Controller\Account\PasswordResets::class, \Idno\Legacy\LegacyPasswordResets::class)->public();
     // The stored files, over the legacy file store and session: the file page's service takes the interface
     $services->set(\Idno\Legacy\LegacyStoredFiles::class);
     $services->alias(\Idno\Http\Controller\File\StoredFiles::class, \Idno\Legacy\LegacyStoredFiles::class);

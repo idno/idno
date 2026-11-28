@@ -98,7 +98,7 @@ final class MailpitDeliveryTest extends IdnoTestCase
         $this->mailSettings(['smtp_host' => $host, 'smtp_port' => $port, 'smtp_secure' => $secure, 'smtp_username' => 'mailer', 'smtp_password' => 'p@ss:w/rd%#? é', 'oops_notify' => 'ops@example.net', 'title' => 'Mailpit Site']);
         $this->deleteAll($kind);
 
-        // The password reset, as Idno\Pages\Account\Password builds it.
+        // The password reset, as LegacyPasswordResets::mailCode() builds it.
         $reset = new Email();
         $reset->addTo('someone@example.net');
         $reset->setBodyFromTemplate('account/password', ['email' => 'someone@example.net', 'code' => 'code-1']);
