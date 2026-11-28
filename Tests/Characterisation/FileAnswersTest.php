@@ -96,7 +96,7 @@ final class FileAnswersTest extends FileSiteCase
      *
      * @var array<string, array<string, mixed>>
      */
-    private const KINDS = [
+    protected const KINDS = [
         'html-visitor' => ['name' => 'html.bin'],
         'html-admin' => ['name' => 'html.bin'],
         'restricted-admin' => ['name' => 'restricted.bin'],

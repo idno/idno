@@ -17,6 +17,14 @@ use Idno\Http\Page\HttpDate;
  */
 abstract class FileSiteCase extends PermalinkSiteCase
 {
+    /**
+     * The cases a class answers differently from their recordings on purpose, by kind (see holdTheChangedAnswer()). Declared here, `protected`, so that a
+     * subclass declaring it `private` is a fatal error: a private copy was once invisible to the helper and none of the cases was ever held to its kind.
+     *
+     * @var array<string, array<string, mixed>>
+     */
+    protected const KINDS = [];
+
     /** The size of every file the site holds. */
     protected const SIZE = 300;
 
@@ -231,7 +239,7 @@ abstract class FileSiteCase extends PermalinkSiteCase
     /** @param array<string, string> $headers */
     private function holdTheChangedAnswer(string $case, SiteResponse $answer, string $method, string $path, array $headers, string $viewer): void
     {
-        $kinds = defined(static::class . '::KINDS') ? constant(static::class . '::KINDS') : [];
+        $kinds = static::KINDS;
         if (!isset($kinds[$case])) {
             return;
         }
@@ -251,7 +259,7 @@ abstract class FileSiteCase extends PermalinkSiteCase
         }
         if (isset($kind['hidden'])) {
             // a file of a post the viewer may not read answers exactly what a file that is not there answers, for the same request
-            $this->assertSame(1, preg_match('/[0-9a-f]{32}/', $path, $id), $case);
+            $this->assertSame(1, preg_match('/[0-9a-fA-F]{32}/', $path, $id), $case);
             $zeros = str_repeat('0', 32);
             $missing = $this->site()->request($method, str_replace($id[0], $zeros, $path), $this->asViewer($viewer, $headers));
             $this->assertSame(404, $answer->status, $case);
@@ -290,7 +298,8 @@ abstract class FileSiteCase extends PermalinkSiteCase
         $recorded = (string) file_get_contents(static::recordedAnswersDirectory() . '/' . static::GROUP . '/' . $case . '.txt');
         if (isset($kind['name']) || isset($kind['refused'])) {
             if (isset($kind['name'])) {
-                $recorded = (string) preg_replace('/^(content-disposition: attachment; filename=")[0-9a-f]{32}(")$/m', '${1}' . $kind['name'] . '${2}', $recorded);
+                // (the legacy page named a download after the id as the address wrote it, upper case included: a recording may hold either case)
+                $recorded = (string) preg_replace('/^(content-disposition: attachment; filename=")[0-9a-fA-F]{32}(")$/m', '${1}' . $kind['name'] . '${2}', $recorded);
             }
             if (isset($kind['refused'])) {
                 $recorded = self::withHeader($recorded, 'content-length', '<the length of the body>');
