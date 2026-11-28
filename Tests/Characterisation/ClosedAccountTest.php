@@ -444,6 +444,8 @@ final class ClosedAccountTest extends PrivateSiteTestCase
     {
         $this->prepare();
         $this->addUser('newest');
+        // (accounts made in one second have no promised order, so the newest is given a later stored creation time, which is what makes it newest)
+        $this->runInSite('$newest = \Idno\Entities\User::getByHandle("newest"); $newest->created = \Idno\Entities\User::getByHandle("ada")->created + 60; return (bool) $newest->save(true);');
         $signer = fn () => $this->runInSite(<<<'PHP'
         $method = new \ReflectionMethod(\IdnoPlugins\ActivityPub\RemoteActor::class, 'getSigningUser');
         $user = $method->invoke(null);
