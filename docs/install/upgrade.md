@@ -43,6 +43,15 @@ Check these before you replace the files:
   calls `Idno::site()->reader()`, or draws one of its templates will fail when that code runs. Disable it before you
   upgrade, and enable it again once it no longer does. No bundled plugin or theme used any of it; the classes and
   templates are listed in [changes for plugin and theme authors](../developers/plugins/changes.md).
+* **Settings in environment variables:** an `IDNO_` (or `KNOWN_`) variable whose whole value is `true`, `on`, `yes`,
+  `false`, `off`, `no` or `none`, in any letter case, now turns the setting on or off, as the same word does in
+  `config.ini`. Before, every one of them counted as on. If you set `IDNO_DEBUG=false` or the like, the setting is
+  now off, as you meant. A variable that must hold one of those words as text (a password, say) has to move to
+  `config.ini`, in quotes.
+* **A site at a `www.` address with a per-domain configuration file:** such a site reads
+  `configuration/www.example.com.ini`, as before. If there is no such file, it now reads
+  `configuration/example.com.ini`, which it used to ignore. If you have a file by that name that you did not mean
+  the `www.` site to use, rename or remove it.
 
 What you and your members will find changed, with nothing to do unless it says so:
 
