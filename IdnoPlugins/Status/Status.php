@@ -96,7 +96,7 @@ namespace IdnoPlugins\Status {
                     return !empty(trim($v));
                 }));
             }
-            $tags      = \Idno\Core\Idno::site()->currentPage()->getInput('tags');
+            $tags      = \Idno\Core\Tags::clean(\Idno\Core\Idno::site()->currentPage()->getInput('tags'));
             $access    = \Idno\Core\Idno::site()->currentPage()->getInput('access');
 
             if ($time = \Idno\Core\Idno::site()->currentPage()->getInput('created')) {

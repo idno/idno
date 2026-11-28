@@ -287,7 +287,8 @@ namespace Idno\Data {
                 $search .= $array['title'] . ' ';
             }
             if (!empty($array['tags'])) {
-                $search .= $array['tags'] . ' ';
+                // One text, or a list of them
+                $search .= implode(' ', \Idno\Core\Tags::texts($array['tags'])) . ' ';
             }
             if (!empty($array['description'])) {
                 $search .= $array['description'] . ' ';

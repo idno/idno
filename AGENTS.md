@@ -1254,6 +1254,21 @@ something). What existing sites, hubs and plugins hold was kept, and must stay:
   that holds backslashes that way: in a quoted PHP string `\\` is one backslash, which
   once turned a `\s` into "a backslash or the letter s" and refused every host that
   begins with "s".
+- Tags of a post: the `tags` field of an entity is what whoever made the post sent (no form has
+  a field for it, but a form POST, a signed API request and the categories of a Micropub request
+  all can), and it is drawn for every visitor. `\Idno\Core\Tags` holds the rules. A stored value
+  is one text or a list of texts; `Tags::clean()` makes that of what a request sent (one line of
+  plain text each: no elements, no angle brackets, no control characters, 255 characters, 100
+  tags; anything in a list that is no text or number is left out), and every content type's
+  `saveDataFromInput()` stores `Tags::clean($page->getInput('tags'))`, never the input itself.
+  Posts stored before November 2026 hold whatever was sent, so nothing that prints tags relies
+  on that: `forms/output/tags` (one in `templates/default`, one in Twenty26) reads the value
+  with `Tags::texts()`, which gives only its texts, and prints each with `htmlspecialchars()`,
+  with `Tags::url()` for the link. Anything else that reads `->tags` (`Entity::getTags()`, the
+  MySQL search text) goes through `Tags::texts()` too, because the value may be a list or hold
+  things that are no text. A new content type calls `Tags::clean()`; a theme that draws tags
+  itself uses `Tags::texts()` and escapes. `Tests/Core/TagOutputTest.php` and
+  `Tests/Pages/PostTagsTest.php` (over HTTP) check this.
 - SSRF protection: fetch a URL supplied by a remote party (webmention sources and
   endpoints, ActivityPub actors and inboxes, Micropub media URLs, link previews) with
   `\Idno\Core\Webservice::safeSend($verb, $url, $params, $headers)`, never with

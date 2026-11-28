@@ -127,7 +127,7 @@ namespace IdnoPlugins\Text {
                     }
                 }
 
-                $this->tags  = \Idno\Core\Idno::site()->currentPage()->getInput('tags');
+                $this->tags  = \Idno\Core\Tags::clean(\Idno\Core\Idno::site()->currentPage()->getInput('tags'));
                 $access      = \Idno\Core\Idno::site()->currentPage()->getInput('access');
                 $this->setAccess($access);
 
