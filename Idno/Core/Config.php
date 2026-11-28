@@ -61,8 +61,8 @@ namespace Idno\Core {
          * A setting is taken to be a secret when its name says so: see isSecretSetting().
          * A secret that is empty is left as it is, so that it can be seen that it is not set.
          * Any other text that is an address with a user name and password in it
-         * (scheme://user:password@host) has those replaced. Lists of settings are gone
-         * through at every depth.
+         * (scheme://user:password@host) has those replaced, up to the last @ before the
+         * path, as a password can hold one. Lists of settings are gone through at every depth.
          *
          * @param  array $settings Settings by name
          * @return array
@@ -77,11 +77,60 @@ namespace Idno\Core {
                 } else if (is_array($value)) {
                     $settings[$name] = static::redactSecrets($value);
                 } else if (is_string($value)) {
-                    $settings[$name] = preg_replace('#^([a-z][a-z0-9+.\-]*://)[^/@\s]+@#i', '$1' . static::REDACTED . '@', $value);
+                    $settings[$name] = preg_replace('#^([a-z][a-z0-9+.\-]*://)[^/\s]+@#i', '$1' . static::REDACTED . '@', $value);
                 }
             }
 
             return $settings;
+        }
+
+        /**
+         * A copy of PHP's server variables ($_SERVER, which holds the environment of the
+         * process and the headers of the request) for showing them, as the diagnostics report
+         * does. The names are all kept, so that it can be seen what is set; a value is replaced
+         * by self::REDACTED when the variable is a secret (see isSecretServerVariable()), and
+         * everything else goes through redactSecrets().
+         *
+         * @param  array $server Server variables by name
+         * @return array
+         */
+        static function redactServerVariables(array $server)
+        {
+            foreach ($server as $name => $value) {
+                if (static::isSecretServerVariable($name) && $value !== '' && $value !== null) {
+                    $server[$name] = static::REDACTED;
+                }
+            }
+
+            return static::redactSecrets($server);
+        }
+
+        /**
+         * Is a server variable one whose value must not be shown? True for
+         *  - a variable that sets a setting of the site (IDNO_<SETTING>, and KNOWN_<SETTING> as
+         *    it was called before: see loadIniFiles()) when that setting is a secret by
+         *    isSecretSetting(): IDNO_DBPASS and IDNO_SITE_SECRET, not IDNO_TITLE;
+         *  - what a request carries to say who sent it: the Cookie, Authorization and
+         *    Proxy-Authorization headers, the password and digest of HTTP authentication, and
+         *    the signature of an API request (X-IDNO-SIGNATURE, X-KNOWN-SIGNATURE);
+         *  - a name that ends in a word for a password.
+         * Apache puts REDIRECT_ before the name of a variable after an internal redirect, once
+         * for each redirect, so the name is read without it. (Any other name that
+         * isSecretSetting() knows, and an address with a password in it, such as
+         * IDNO_DATABASE_URL, are left to redactSecrets().)
+         *
+         * @param  string $name
+         * @return bool
+         */
+        static function isSecretServerVariable($name)
+        {
+            $name = preg_replace('/^(REDIRECT_)+/i', '', (string) $name);
+
+            if (preg_match('/^(?:IDNO|KNOWN)_(.+)$/i', $name, $setting)) {
+                return static::isSecretSetting(strtolower($setting[1]));
+            }
+
+            return (bool) preg_match('/(^|_)(COOKIE|AUTHORIZATION|SIGNATURE|PW|PWD|PASSWD)$|^PHP_AUTH_DIGEST$/i', $name);
         }
 
         /**

@@ -20,32 +20,7 @@ namespace Idno\Pages\Admin {
             // Create diagnostics report
             if ($this->xhr) {
 
-                $report = "Idno Diagnostics: Version " . \Idno\Core\Version::version() . '+' . \Idno\Core\Version::build() . " \nDate: " . date('r') . "\n\n";
-                $report .= "*** WARNING: This report contains sensitive information. Be careful about how you transmit it, and to whom. ***\n\n";
-                $report .= "Basics:\n-------\n\n";
-
-                if ($basics['status'] != 'Ok') {
-                    foreach ($basics['report'] as $item => $details) {
-                        $report .= "$item : {$details['status']}";
-                        if ($details['status'] != 'Ok') {
-                            $report .= " - {$details['message']}\n";
-                        }
-                        $report .= "\n";
-                    }
-                } else {
-                    $report .= "Basic checks on installation discovered no problems.\n\n";
-                }
-
-                // Secrets are left out by the rule the site export uses, see Config::redactSecrets()
-                $config = \Idno\Core\Idno::site()->config();
-                $running = [
-                    'config'     => \Idno\Core\Config::redactSecrets((array) $config->config),
-                    'ini_config' => \Idno\Core\Config::redactSecrets((array) $config->ini_config),
-                ];
-
-                $report .= "\nRunning config:\n---------------\n" . json_encode($running, JSON_PRETTY_PRINT) . "\n\n";
-                $report .= "\$_SESSION:\n----------\n" . json_encode($_SESSION, JSON_PRETTY_PRINT) . "\n\n";
-                $report .= "\$_SERVER:\n---------\n" . json_encode($_SERVER, JSON_PRETTY_PRINT) . "\n\n";
+                $report = static::report($basics, $_SESSION ?? [], $_SERVER);
 
                 // Hook so other plugins and subsystems can add their own data to the report.
                 $report = \Idno\Core\Idno::site()->events()->triggerEvent('diagnostics/report', [], $report);
@@ -58,6 +33,49 @@ namespace Idno\Pages\Admin {
                 $t->title = \Idno\Core\Idno::site()->language()->_('Diagnostics');
                 $t->drawPage();
             }
+        }
+
+        /**
+         * The detailed report, as text. It is made to be sent to somebody who helps with a
+         * problem, so secrets are left out of it: of the configuration by the rule the site
+         * export uses (Config::redactSecrets()), and of the server variables, which hold the
+         * environment the site may be configured with and the cookie of the request, by
+         * Config::redactServerVariables(). Print neither as it is.
+         *
+         * @param  array $basics  What getBasics() found
+         * @param  array $session The session of the request ($_SESSION)
+         * @param  array $server  The server variables of the request ($_SERVER)
+         * @return string
+         */
+        static function report(array $basics, array $session, array $server)
+        {
+            $report = "Idno Diagnostics: Version " . \Idno\Core\Version::version() . '+' . \Idno\Core\Version::build() . " \nDate: " . date('r') . "\n\n";
+            $report .= "*** WARNING: This report contains sensitive information. Be careful about how you transmit it, and to whom. ***\n\n";
+            $report .= "Basics:\n-------\n\n";
+
+            if ($basics['status'] != 'Ok') {
+                foreach ($basics['report'] as $item => $details) {
+                    $report .= "$item : {$details['status']}";
+                    if ($details['status'] != 'Ok') {
+                        $report .= " - {$details['message']}\n";
+                    }
+                    $report .= "\n";
+                }
+            } else {
+                $report .= "Basic checks on installation discovered no problems.\n\n";
+            }
+
+            $config = \Idno\Core\Idno::site()->config();
+            $running = [
+                'config'     => \Idno\Core\Config::redactSecrets((array) $config->config),
+                'ini_config' => \Idno\Core\Config::redactSecrets((array) $config->ini_config),
+            ];
+
+            $report .= "\nRunning config:\n---------------\n" . json_encode($running, JSON_PRETTY_PRINT) . "\n\n";
+            $report .= "\$_SESSION:\n----------\n" . json_encode($session, JSON_PRETTY_PRINT) . "\n\n";
+            $report .= "\$_SERVER:\n---------\n" . json_encode(\Idno\Core\Config::redactServerVariables($server), JSON_PRETTY_PRINT) . "\n\n";
+
+            return $report;
         }
 
         /**
