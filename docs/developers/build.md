@@ -1,6 +1,10 @@
-# Building Idno
+# Building JavaScript and CSS
 
-Once you have run `composer install`, Idno will run out of the box, and doesn't necessarily need to be "built" first. However, as a developer, you will sometimes need to perform certain steps in order for your changes (e.g. javascript / css) to be reflected.
+After this page you will be able to rebuild Idno's own scripts and stylesheets after changing them.
+
+Once you have run `composer install`, Idno runs as it is: the built scripts and stylesheets are part of the repository. You only need the steps on this page when you change core's JavaScript or CSS. A plugin's own scripts and styles need none of this.
+
+There are two sets of sources. The default look's are in `js/src` and `css/scss` and are built with Grunt, as described below. The Twenty26 theme's are in `Themes/Twenty26/src` and are built with Vite; see [The modern look](themes/modern.md#working-on-the-theme-itself). One file is shared: `css/moremenu.css` is used by the default look as it is and is also built into the Twenty26 stylesheet, so after changing it, rebuild Twenty26 (`npm run build` in `Themes/Twenty26`) and commit `dist/`.
 
 ## Building javascript
 
@@ -42,5 +46,8 @@ The `stylelint` grunt task will report errors.  Many of these can be fixed autom
 
 See [Languages](languages/index.md) for more detail, but in short ```npm run grunt -- build-lang```
 
-!!! note "Vagrant"
-    As a developer, you may find it helpful to set up a virtual machine to see your code running. A Vagrant configuration for Idno can be found on [Github](https://github.com/mapkyca/known-vagrant).
+## Where next
+
+* [Running the tests](testing.md)
+* [Coding standards](standards.md)
+* [Submitting a pull request](pull-requests.md)

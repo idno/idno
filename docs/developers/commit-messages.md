@@ -1,6 +1,8 @@
-# Commit Messages
+# Commit messages
 
-Commit messages are pretty much the primary mechanism that developers communicate to each other, and so the goal of your message should be to communicate your changes, and to help those attempting to debug your code.
+After this page you will be able to write a commit message that tells the next developer what changed and why.
+
+Commit messages are the main way developers tell each other what they did. Write yours for someone who is trying to understand, or debug, your change a year from now.
 
 ## Give a subject line
 
@@ -22,12 +24,8 @@ Use your best judgement, but think about how to find relevant commits when scann
 
 ## Explain why
 
-Unless immediately obvious, because the "why" part was included in the subject e.g. 
-```
-Updating array format to match style guidelines
-``` 
-
-After a blank line after the subject, you should normally include a "why" part, so for example:
+After a blank line, say why you made the change. You can leave this out when the subject already says it, as in
+`Updating array format to match style guidelines`. For example:
 
 ```
 Adds reset button to post form 
@@ -82,7 +80,7 @@ the user object stored in the current session.
 Fixes #2345
 ```
 
-And if a problem was introduced by a specific change request, mention that in your message as well.
+If an earlier commit or pull request caused the problem, link to it.
 
 ## Misc guidelines 
 
@@ -92,3 +90,7 @@ And if a problem was introduced by a specific change request, mention that in yo
 
 !!! note "Credits"
     This document borrows heavily on the [WordPress commit message guidelines](https://make.wordpress.org/core/handbook/best-practices/commit-messages/), so if there's something missing here, definitely follow their guidelines.
+
+## Where next
+
+* [Submitting a pull request](pull-requests.md)

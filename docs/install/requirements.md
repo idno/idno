@@ -1,65 +1,77 @@
-# System Requirements
+# System requirements
 
-Idno _requires_ the following server components:
+This page tells you what a server needs to run Idno, so you can check yours, or ask your host, before you install.
 
-+ A Web Server that supports URL rewriting (Apache + mod_rewrite recommended).
-+ If you are using Apache, you also need to make sure support for .htaccess is enabled (using [the AllowOverride All directive](https://help.ubuntu.com/community/EnablingUseOfApacheHtaccessFiles)).
-+ PHP 8.3 or above (the CI test suite runs on PHP 8.3, 8.4 and 8.5).
-+ MySQL / MariaDB or MongoDB. We recommend MySQL. The test suite runs against MySQL 8.0 and MongoDB 6. MongoDB support is deprecated, and needs the PHP `mongodb` extension and the `mongodb/mongodb` Composer package, which is not installed by default (`composer require mongodb/mongodb`).
+## What you need
 
-Idno can either be installed at the root of a domain or subdomain, or in a subdirectory.
+- **A web server that can rewrite addresses.** Idno sends every page address to `index.php`. Apache with `mod_rewrite` and nginx with PHP-FPM both work. See [Apache](#apache) and [nginx](#nginx) below.
+- **PHP 8.3 or later.** Idno is tested on PHP 8.3, 8.4 and 8.5.
+- **MySQL.** Idno is tested with MySQL 8.0. MongoDB also works but is deprecated; see [MongoDB](#mongodb).
+- **Composer**, to fetch the libraries Idno uses when you install or upgrade.
 
-If you use Apache 2.4, you either must install and activate:
+Idno can run at the root of a domain or subdomain, or in a subfolder.
 
-* mod_access_compat (see [http://httpd.apache.org/docs/2.4/mod/mod_access_compat.html](http://httpd.apache.org/docs/2.4/mod/mod_access_compat.html))
+## PHP extensions
 
-Or use the Apache 2.4 version of the rules, which is stored in `warmup/webserver-configs/htaccess-2.4.dist`, as your `.htaccess`. Or manually edit Idno's stock .htaccess file by replacing:
+Idno needs these PHP extensions. The installer checks for each one, and so does the Diagnostics page.
 
-    <Files ~ "\.ini$">
-    Order allow,deny
-    Deny from all
-    </Files>
-    <Files ~ "\.xml$">
-    Order allow,deny
-    Deny from all
-    </Files>
+- curl
+- date
+- dom
+- gd
+- gettext
+- json
+- libxml
+- mbstring
+- openssl
+- pdo
+- pdo_mysql
+- reflection
+- session
+- simplexml
 
-with:
+Most PHP packages include several of these already. On Debian or Ubuntu, the rest usually come from packages named like `php8.3-curl`, `php8.3-gd`, `php8.3-mbstring`, `php8.3-mysql` and `php8.3-xml`. Restart the web server or PHP-FPM after installing an extension.
 
-    <Files ~ "\.ini$">
-    Require all denied
-    </Files>
-    <Files ~ "\.xml$">
-    Require all denied
-    </Files>
+These are optional, and Idno uses them when they are there:
 
-Additionally, Idno requires the following PHP components:
+- **exif**, to read the orientation and details of uploaded photos.
+- **intl**, to handle accented letters better when it makes the address of a portfolio and when it compares usernames.
+- **phar**, to build the archive of a site export. It is part of most PHP installations.
 
-+ curl
-+ date
-+ dom
-+ gd
-+ json
-+ libxml
-+ mbstring
-+ openssl
-+ pdo
-+ pdo_mysql
-+ reflection
-+ session
-+ simplexml
-+ gettext
+## Apache
 
-The `exif` extension is optional. If it is installed, Idno uses it to read the orientation and metadata of uploaded photos.
+Allow `.htaccess` files for Idno's folder with `AllowOverride All`, and turn on `mod_rewrite`. The installer copies `warmup/webserver-configs/htaccess.dist` to `.htaccess` if there is none.
 
-!!! note "Note" 
-    You may need to restart the web server after installing these components. Idno's installer will tell you if a required module isn't available.
+That file uses the access rules of Apache 2.2 (`Order allow,deny`). Apache 2.4 understands them only with `mod_access_compat`. On Apache 2.4 either turn on `mod_access_compat`, or use the 2.4 version of the file instead:
 
-## Recommendations
+```bash
+cp warmup/webserver-configs/htaccess-2.4.dist .htaccess
+```
 
-Idno _recommends_ the following extra server components:
+The `configuration/` folder has an `.htaccess` file of its own (`deny from all`), which also needs `mod_access_compat` on Apache 2.4. Without it, replace its contents with `Require all denied`.
 
-+ Linux or UNIX-based server
-+ mod_headers (see [http://httpd.apache.org/docs/current/mod/mod_headers.html](http://httpd.apache.org/docs/current/mod/mod_headers.html))
-+ A PHP accelerator like OPcache
-+ A secure certificate (so connections to Idno can be made secure)
+## nginx
+
+`warmup/webserver-configs/nginx.conf` is a complete sample configuration. Change the `root` to your installation's folder and the `upstream` to your PHP-FPM address or socket. It sends addresses to `index.php`, refuses `.ini`, `.json` and similar files, and closes the `configuration/` and `Uploads/` folders.
+
+## MongoDB
+
+MongoDB support is deprecated. It needs:
+
+- the PHP `mongodb` extension, and
+- the `mongodb/mongodb` library, which Composer doesn't install by default: run `composer require mongodb/mongodb` in Idno's folder.
+
+Idno is tested with MongoDB 6.
+
+## Recommended
+
+- A Linux or other Unix-like server.
+- HTTPS, with a certificate for the site's name. Other sites on the IndieWeb and the Fediverse expect it, and the Diagnostics page warns without it.
+- OPcache, PHP's built-in code cache, for speed.
+- A way to run a long-lived background process (systemd, for example), or cron, for the [background worker](advanced.md).
+
+## Where next
+
+- [Installing Idno](instructions.md)
+- [Command line installer](cliinstaller.md)
+- [Configuration reference](config.md)

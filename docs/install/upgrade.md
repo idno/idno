@@ -4,7 +4,7 @@ Upgrading Idno is designed to be very simple.
 
 1. Take a backup of your Idno directory and database.
 2. Overwrite your Idno files _except_ your upload directory and your `configuration` directory (which holds your config.ini file).
-3. Access your Idno site homepage. If the database schema has changed, Idno applies the upgrade automatically the first time it connects.
+3. Access your Idno site homepage. If the database schema has changed, Idno applies the upgrade automatically the first time it connects. The database user needs permission to alter tables, and on a large site that first request can take several minutes: upgrading from 1.6.4 or earlier converts the search tables.
 
 That's it!
 
@@ -23,7 +23,6 @@ Thanks to [Chris Aldich](http://stream.boffosocko.com/2015/upgrading-withknown-o
 
 !!! warning "MongoDB Users"
     * Previous releases of Idno (<0.9.5) used a now deprecated mongo driver. If you are running your site on Mongo, you will first need to make sure that you have installed the new [PHP MongoDB driver](https://secure.php.net/manual/en/set.mongodb.php).
-    * Additionally, the 0.9.9 release changed the default database engine, so you'll need to specify ```database = 'MongoDB'``` in your config.ini
 
 ## Upgrading from 1.6.4 or earlier
 

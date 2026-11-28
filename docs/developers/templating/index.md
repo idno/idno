@@ -1,100 +1,188 @@
-# Templates in Idno
+# Templates
 
-Idno splits templating into *templates* and *template types*.
+After this page you will know how Idno turns data into output: how a template is named, where its file is
+found, how to pass it data, and how to draw one from a page or from another template.
 
-Templates are drawn by the site's template class, `\Idno\Core\HybridTwigTemplate` by default (you can choose another class with the `template` setting in `config.ini`). It draws [Twig](https://twig.symfony.com/) templates and Idno's own PHP templates, so a template can be written either way. All of the templates that ship with Idno and its bundled plugins and themes are PHP templates.
+## What a template is
 
-## Templates
+A template is a small PHP file that prints a piece of output. A page is built from many of them: one for the
+whole layout, one for the navigation, one for each post, one for each form field.
 
-Templates are the styling information for each individual page element.
+Every template has a **name**, which looks like a path: `shell`, `shell/footer`, `entity/Status`,
+`entity/Status/edit`. The name is how code asks for a template, and it is also where the file is:
 
-These have names of the form `foo`, or `foo/bar`, and may be split up with an indefinite number of forward-slashes. They are structured like relative folder paths. A PHP template is only drawn if its name contains nothing but letters, numbers, hyphens, underscores and forward-slashes (so no `..`).
+| Template | File |
+|---|---|
+| `shell` | `templates/default/shell.tpl.php` |
+| `shell/footer` | `templates/default/shell/footer.tpl.php` |
+| `entity/Status/edit` | `templates/default/entity/Status/edit.tpl.php` |
 
-Most Idno templates have lower-case names. The templates used to draw an entity are named after its class, e.g. `entity/Status`.
+Names are made of letters, digits, hyphens, underscores and slashes. Most are lower case. Templates that draw an
+entity are named after its class, which is why `Status` has a capital.
 
-Examples:
+The folder after `templates/` is the **template type**: `default` is ordinary HTML, and there are others for
+JSON, RSS, email and more. See [Template types and feeds](types.md).
 
-* `shell` is always the name of the page shell.
-* `shell/footer` is the name of the page footer.
-* `entity/Status/edit` is the form for editing a status update.
+## Where templates are found
 
-## Template types
+There is not one `templates` folder but several: core's, one in each enabled plugin, and one in the active theme.
+When a template is drawn, Idno looks through them in this order and uses the first file it finds:
 
-The template type is the *kind* or *category* of template we're dealing with.
+1. the active **theme**
+2. the enabled **plugins**, the most recently loaded first
+3. **core**
 
-By default, Idno assumes we're talking HTML5 (referred to internally as the `default` template type).
+So a plugin can provide a new template simply by having the file, and a theme or plugin can **replace** a core
+template by having a file of the same name. To add to a template without replacing it, see
+[Extending templates](extending.md).
 
-However, if you want to build an RSS feed, for example, your template type might be `rss`. Idno includes the template types `default`, `json`, `jsonp`, `rss`, `jsonfeed`, `kml`, `email`, `email-text` and `activitypub`.
+If the file is not found in any of them for the current template type, Idno goes through them again for
+`default`. That is why a plugin's `default` templates also work in a theme that uses a type of its own. It also
+means the type comes before the folder: under the `modern` type, a plugin's `modern` template is used before a
+theme's `default` template of the same name.
 
-On a page, Idno picks the template type from the `_t` request variable (e.g. `?_t=rss`), or from the `Accept` header if it asks for JSON or ActivityPub content. A template type only exists if some `templates/` folder contains a folder of that name.
+## Drawing a template
 
-Each template type contains its own set of templates. However, templates always fall back to the "default" template type, so that if you try to draw, for example, `page/navigation` in the `rss` template type, and it doesn't exist, `page/navigation` in the `default` template type will be called instead (if it exists).
+Get the template object from the site:
 
-## Template locations
+```php
+$t = \Idno\Core\Idno::site()->template();
+```
 
-Idno's own templates are PHP scripts with the extension `.tpl.php`. Twig templates have the extension `.html.twig`. These filenames correspond to the template name, such that:
+Give it variables and draw:
 
-* `shell/footer` would sit in `templates/default/shell/footer.tpl.php` for the `default` template type
-* `shell/footer` would sit in `templates/rss/shell/footer.tpl.php` for the `rss` template type
-* `shell/footer` would sit in `templates/comicsans/shell/footer.tpl.php` for the `comicsans` template type (hey, you never know)
+```php
+$html = $t->__(['fruit' => 'banana', 'count' => 3])->draw('banana/list');
+```
 
-If a Twig template (`templates/default/shell/footer.html.twig`) exists for a template, it is used; otherwise Idno looks for the PHP template.
+* `__([...])` sets variables and returns the template object, so that you can chain `draw()`.
+* `draw($name)` returns what the template printed, as a string. If there is no such template, it returns an
+  empty string.
 
-You can have multiple top-level `templates` folders. Each enabled plugin and the current theme add their own folder with `\Idno\Core\Bonita\Main::additionalPath($path)`; Idno searches the most recently added folder first, falling back to the main Idno folder at the end.
+### Drawing a whole page
 
-## Template variables
+From a [page](../plugins/pages.md), put your content in `body`, give the page a `title`, and call `drawPage()`:
 
-In a PHP template, variables are accessible through the `$vars` array (and each one is also available as a variable of its own name, e.g. `$title`). The template object is accessible in template files through a variable called `$t`. In a Twig template, variables are available by name, e.g. `{{ title }}`; Idno doesn't add any functions or filters of its own to Twig.
+```php
+$t = \Idno\Core\Idno::site()->template();
 
-Examples:
+$t->__([
+    'title' => 'Bananas',
+    'body'  => $t->__(['bananas' => $bananas])->draw('banana/list'),
+])->drawPage();
+```
 
-* `<?=$vars['title']?>` echoes a passed variable called `title`.
-* `<?=$t->draw('page/navigation')?>` inserts the `page/navigation` template using the same variables that this template was called with.
+`drawPage()` draws the template called `shell` (the page layout, with `body` in the middle), sends it, and ends
+the request.
 
-## Calling a template
+Other variables the shell understands include `description`, a plain-text summary used in the page's metadata.
 
-Templates are called by accessing the current site template:
+## Writing a template
 
-    $t = \Idno\Core\Idno::site()->template();
+Inside a template:
 
-You can add variables to pass to the templates by simply adding them as properties to the template object:
+* The variables are in the array **`$vars`**: `$vars['fruit']`.
+* **`$this`** is the template object, so you can draw other templates.
 
-    $t->title = 'Example title';
-    $t->foo = $bar;
+`IdnoPlugins/Banana/templates/default/banana/list.tpl.php`:
 
-If you want to set a template type other than `default`, you call it using `setTemplateType($templateType)` (it returns `false`, and leaves the type unchanged, if no such template type exists):
+```php
+<h1><?php echo \Idno\Core\Idno::site()->language()->_('Bananas') ?></h1>
 
-    $t->setTemplateType('comicsans'); // See?
+<?php if (empty($vars['bananas'])) { ?>
+    <p><?php echo \Idno\Core\Idno::site()->language()->_('No bananas yet.') ?></p>
+<?php } else { ?>
+    <ul>
+        <?php foreach ($vars['bananas'] as $banana) { ?>
+            <li><?php echo $this->__(['banana' => $banana])->draw('banana/item') ?></li>
+        <?php } ?>
+    </ul>
+<?php } ?>
+```
 
-Finally, to draw a particular template, you call `$t->draw($templateName)`, which returns the rendered template as a string:
+and `banana/item.tpl.php`:
 
-    $renderedContent = $t->draw('foo/bar');
+```php
+<a href="<?php echo htmlspecialchars($vars['banana']->getDisplayURL()) ?>">
+    <?php echo htmlspecialchars((string) $vars['banana']->variety) ?>
+</a>
+```
 
-Or to echo it directly:
+### Three rules
 
-    echo $t->draw('foo/bar');
+**Escape everything that came from a person.** A template prints exactly what you tell it to. Wrap values in
+`htmlspecialchars()`, in text and in attributes. Put an address in `href` or `src` only after
+`\Idno\Core\UrlValidator::httpUrl()` has accepted it. See the
+[security checklist](../plugins/security.md#3-escape-what-you-print).
 
-The template object also contains a special function to draw the page. This echoes the `shell` template and then ends the request, and assumes you have (at a bare minimum) set the `title` and `body` variables:
+**Variables stay set.** The template object keeps its variables from one `draw()` to the next. A template that
+reads `$vars['class']` without being given one may see the `class` that an earlier template was given. So pass
+every variable a template uses, every time, even when the value is empty.
 
-    $t->drawPage();
+**Keep logic out.** A template decides how to show things, not what is true. Look things up and check
+permissions in the page, and hand the template what it needs.
 
-## Example
+### Useful methods in a template
 
-For example, to display a stream of items stored in an array called `$items`, using a template called `example/items` you might call the templating engine as follows:
+| Call | Gives you |
+|---|---|
+| `$this->draw('name')` | Another template, with the current variables |
+| `$this->__(['a' => 1])->draw('name')` | Another template, with these variables added |
+| `$this->parseURLs($html)` | The text with web addresses turned into links |
+| `$this->parseHashtags($html)` | The text with `#hashtags` turned into links |
+| `$this->parseUsers($html)` | The text with `@names` turned into links |
+| `$this->autop($text)` | The text with line breaks turned into paragraphs |
+| `$this->sampleText($html, $words)` | The first words of a text, without tags |
+| `$this->getURLWithVar($name, $value, $url)` | An address with a query parameter added |
+| `$this->drawPagination($count)` | Links to earlier and later pages of a list |
 
-    $t = \Idno\Core\Idno::site()->template();
-    $t->title = 'Stream';
-    $t->items = $items;
-    $t->body = $t->draw('example/items');
-    $t->drawPage();
+The three `parse...` methods are for text that has **already** been escaped or sanitized. Escape first, then
+link:
 
-The `example/items` template file itself needs to be stored in `templates/default/example/items.tpl.php`, and might look something like this:
+```php
+echo $this->parseURLs($this->parseHashtags(htmlspecialchars((string) $vars['object']->body)));
+```
 
-    <?php
-        if (!empty($vars['items'])) {
-            foreach($vars['items'] as $item) {
-                echo $this->__(['item' => $item])->draw('example/item');
-            }
-        }
+And these are often needed:
 
-The template file could also contain raw HTML.
+| Call | Gives you |
+|---|---|
+| `\Idno\Core\Idno::site()->config()->getDisplayURL()` | The site's address, ending in `/` |
+| `\Idno\Core\Idno::site()->config()->getStaticURL()` | The address to load your plugin's own scripts, styles and images from: add `IdnoPlugins/Banana/...` |
+| `\Idno\Core\Idno::site()->language()->_('Text')` | Translated text |
+| `\Idno\Core\Idno::site()->session()->isLoggedIn()` | Whether a member is signed in |
+| `\Idno\Core\Idno::site()->currentPage()` | The page being drawn |
+| `\Idno\Core\Idno::site()->actions()->signForm($path)` | The token fields for a form |
+
+## How entities are drawn
+
+To draw an entity, call its `draw()` method:
+
+```php
+echo $post->draw();
+```
+
+This draws the template named after the entity's class, `entity/Status` for a `Status`, with the entity in
+`$vars['object']`. If there is no such template, `entity/default` is drawn.
+
+When a post appears in a list or on its own page, core does not draw that template bare. It draws
+`entity/shell`, which adds the author, the date, the menu and the comments around it. So the template you write
+for a kind of post, `entity/Banana`, is only the middle: the content.
+
+The edit form is `entity/Banana/edit`, and the icon for the default look's "new post" menu is
+`entity/Banana/icon`. See [Content types](../plugins/content-types.md).
+
+## Twig
+
+Idno's template class can also draw [Twig](https://twig.symfony.com/) templates. If a Twig template of the name
+exists (`templates/default/shell/footer.html.twig`), it is drawn; otherwise the PHP template is. In a Twig
+template the variables are available by name (`{{ title }}`).
+
+Everything that ships with Idno is a PHP template, and Idno adds no functions or filters of its own to Twig, so
+the helpers above are not available there. Unless you have a reason to prefer Twig, write PHP templates.
+
+## Where next
+
+* [Template types and feeds](types.md)
+* [Extending templates](extending.md)
+* [Themes](../themes/index.md)

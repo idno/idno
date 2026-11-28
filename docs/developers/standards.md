@@ -1,4 +1,6 @@
-# Coding Standards
+# Coding standards
+
+After this page you will know how code in Idno is expected to look and behave, so that a pull request is reviewed for what it does and not for how it is laid out. The rules apply to core and to the bundled plugins; following them in your own plugins makes them easier for others to read.
 
 ## The basics
 
@@ -35,7 +37,7 @@ is bad.
 * Namespaces should be UpperCamelCase, with a matching /UpperCamelCase/ file path. Code in a plugin or theme uses the braced form, `namespace IdnoPlugins\Foo { ... }`.
 * Classes should use UpperCamelCase, with a matching UpperCamelCase.php file.
 * All method names should use lower camelCase 
-* All variable names should use snake_case.
+* Prefer snake_case for variable names in new code.
 
 ## Indentation
 
@@ -67,7 +69,7 @@ switch ($var) {
 ## Variables
 
 * You should try and make use of [type hinting](https://www.php.net/manual/en/functions.arguments.php#functions.arguments.type-declaration) in your function arguments.
-* Since Idno requires PHP 8.3 or later, you should also try and make use of return type hinting where appropriate (advanced warning, in future we will turn on strict type checking for this!)
+* Use return types too, where you can.
 
 ## Error handling
 
@@ -113,3 +115,9 @@ Use [phpDocumentor blocks](http://docs.phpdoc.org/references/phpdoc/basic-syntax
 
 * Open your PHP blocks with ```<?php```, and close with ```?>```
 * Shorthand ```<?=``` is ok in templates
+
+## Where next
+
+* [Security checklist](plugins/security.md)
+* [Running the tests](testing.md), which includes the code style check.
+* [Commit messages](commit-messages.md)
