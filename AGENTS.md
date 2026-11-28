@@ -5433,10 +5433,10 @@ Boot config precedence, highest first (pinned by `Tests/Kernel/LegacyConfigLoade
 
 1. `IDNO_*` environment variables from `$_SERVER` (key = lower-cased name without the
    prefix, e.g. `IDNO_DBNAME` -> `dbname`; `IDNO_DOMAIN` -> `domain`)
-   An `IDNO_*` (or `KNOWN_*`) value that is exactly `true`, `on`, `yes`, `false`, `off`, `no` or `none` (any letter case)
-   is the boolean config.ini reads that word as (`LegacyConfigLoader::environmentValue()`: `IDNO_DEBUG=false` is off); every other value,
-   `0` and `1` included, stays text, and so does the value of a secret key (`SettingsRedactor::isSecretKey()`) or of a setting in
-   `LegacyConfigLoader::TEXT_SETTINGS` (a title of `No`, a database named `none`).
+   For a setting in `LegacyConfigLoader::BOOLEAN_SETTINGS` (the settings the code tests as booleans: the boolean defaults of `Config` and each `config()->name` read as a condition), an
+   `IDNO_*` (or `KNOWN_*`) value that is exactly `true`, `on`, `yes`, `false`, `off`, `no` or `none` (any letter case) is what `parse_ini_file()` makes of that word in config.ini, `"1"` or `""`
+   (`LegacyConfigLoader::environmentValue()`: `IDNO_DEBUG=false` and `IDNO_WALLED_GARDEN=false` are off). Every other value, `0` and `1` included, and every value of any other setting
+   (text and lists such as `trusted_proxies`, `http_allow_private`, `hub`, a title, a password), stays as written and reaches its own validation. A new boolean setting is added to the list.
 2. Special variables from `$_ENV`: `IDNO_DATABASE_URL`, `CLOUDCUBE_URL`,
    `IDNO_AWS_S3_*`, `IDNO_UPLOAD_PATH` (each with a `KNOWN_` fallback; `IDNO_` wins).
    Within this group `IDNO_UPLOAD_PATH` beats the S3-derived `uploadpath`.

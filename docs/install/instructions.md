@@ -81,7 +81,8 @@ Every `config.ini` setting can be an environment variable named `IDNO_` plus the
     IDNO_URL = "https://example.com/"
     IDNO_UPLOADPATH = "/data/uploads/"
 
-A variable whose whole value is `true`, `on` or `yes` turns a setting on, and `false`, `off`, `no` or `none` turns it off, in any letter case, as the same words do in `config.ini`. So `IDNO_DEBUG=false` turns debugging off. Any other value is text, exactly as you set it. Passwords and settings that are always text (the title, the database name, the site's address and the like) are never read as on or off, so a password of `off` stays `off`.
+For the on-or-off settings (`debug`, `walled_garden`, `open_registration`, `single_user` and the like), a variable whose whole value is `true`, `on` or `yes` turns the setting on, and `false`, `off`, `no` or `none` turns it off, in any letter case, as the same words do in `config.ini`. So `IDNO_DEBUG=false` turns debugging off. Any other value is text, exactly as you set it, and so is the value of every setting that is not on or off (the title, the database name, the site's address, lists, passwords), so a password of `off` stays `off`.
+
 
 `IDNO_DATABASE_URL` (for example `mysql://user:password@host:3306/dbname`, or `sqlite:///data/idno.sqlite`) gives the database in one variable. A site whose environment names a database is installed: it needs no configuration file, and the web installer is not offered. Create the tables and the administrator as above (`idno:upgrade`, then `idno:admin:create`; the password can come from a file or standard input, see [Command line installation](cliinstaller.md)).
 

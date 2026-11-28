@@ -88,29 +88,37 @@ final class LegacyConfigLoader
         return new BootConfig($config, $default);
     }
 
-    /** The words config.ini reads as on and as off; an environment variable means the same by them. */
+    /**
+     * The words config.ini reads as on and as off, and what it makes of them: `parse_ini_file()` in its normal mode reads true, on and yes as
+     * "1", and false, off, no and none as "". An environment variable means the same by them, for the settings below.
+     */
     private const WORDS = [
-        'true' => true, 'on' => true, 'yes' => true,
-        'false' => false, 'off' => false, 'no' => false, 'none' => false,
-    ];
-
-    /** Settings that are always text: a title or a database name may read "No" or "none". */
-    private const TEXT_SETTINGS = [
-        'title', 'description', 'url', 'domain', 'dbname', 'dbhost', 'dbport', 'database', 'uploadpath', 'theme', 'language',
-        'timezone', 'from_email', 'from_name', 'reply_to_email', 'smtp_host', 'smtp_port', 'smtp_secure', 'filesystem', 'hub', 'cachepath',
-        'event_queue', 'loglevel', 'proxy_type', 'template', 'sessions_storage', 'session_path',
+        'true' => '1', 'on' => '1', 'yes' => '1',
+        'false' => '', 'off' => '', 'no' => '', 'none' => '',
     ];
 
     /**
-     * What an IDNO_ or KNOWN_ variable is as a setting. A variable is text, so "false" would be text that is not
-     * empty and a setting code tests with empty() (`debug`) would count as on. A value that is exactly true, on,
-     * yes, false, off, no or none, in any letter case, is the boolean config.ini reads that word as; every other
-     * value ("0" and "1" included) is kept as written. A password and a setting that is text by nature
-     * keep the word the owner typed.
+     * The settings the code tests as booleans (`empty()`, `(bool)` or a condition), and no others: every setting of `Idno\Core\Config`'s defaults whose
+     * default is a boolean, and each setting read as a condition in `Idno/` and `IdnoPlugins/` (found by listing every `config()->name` and reading
+     * how each is used). A setting that is text or a list (`trusted_proxies`, `http_allow_private`, `hub`, a title, a password) never becomes
+     * anything but the text given, so `none` or `no` there reaches its own validation as written.
+     */
+    private const BOOLEAN_SETTINGS = [
+        'boolean_search', 'bypass_fulltext_search', 'capture_logs', 'debug', 'disable_cleartext_warning', 'disable_ssl_verify',
+        'experimental', 'forward_trace', 'indieweb_citation', 'indieweb_reference', 'lang_debug', 'multi_syndication',
+        'open_registration', 'pedantic_mode', 'sessions_database', 'show_privacy', 'single_user', 'standardsitesync_enabled',
+        'unique_urls', 'user_avatar_favicons', 'walled_garden',
+    ];
+
+    /**
+     * What an IDNO_ or KNOWN_ variable is as a setting. A variable is text, so "false" would be text that is not empty and a setting the code
+     * tests with empty() (`debug`, `walled_garden`) would count as on. For a setting in BOOLEAN_SETTINGS a value that is exactly true, on, yes,
+     * false, off, no or none, in any letter case, is what config.ini makes of that word ("1" or ""). Every other value, "0" and "1" included,
+     * and every value of any other setting, is kept as written.
      */
     private static function environmentValue(string $key, mixed $value): mixed
     {
-        if (!is_string($value) || in_array($key, self::TEXT_SETTINGS, true) || \Idno\Portability\SettingsRedactor::isSecretKey($key)) {
+        if (!is_string($value) || !in_array($key, self::BOOLEAN_SETTINGS, true)) {
             return $value;
         }
         $word = strtolower($value);

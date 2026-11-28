@@ -86,34 +86,53 @@ final class LegacyConfigLoaderTest extends TestCase
     public function testAnEnvironmentSettingSaidOffIsOff(): void
     {
         foreach (['false', 'FALSE', 'Off', 'no', 'NONE'] as $word) {
-            $this->assertFalse($this->load($this->project(), ['IDNO_DEBUG' => $word])->get('debug'), $word);
+            $this->assertTrue(empty($this->load($this->project(), ['IDNO_DEBUG' => $word])->get('debug')), $word);
         }
         foreach (['true', 'On', 'YES'] as $word) {
-            $this->assertTrue($this->load($this->project(), ['IDNO_DEBUG' => $word])->get('debug'), $word);
+            $this->assertFalse(empty($this->load($this->project(), ['IDNO_DEBUG' => $word])->get('debug')), $word);
         }
-        $this->assertFalse($this->load($this->project(), ['KNOWN_DEBUG' => 'off'])->get('debug'));
+        $this->assertTrue(empty($this->load($this->project(), ['KNOWN_DEBUG' => 'off'])->get('debug')));
     }
 
-    /** The environment and config.ini agree: the same word is the same boolean, and other text is untouched. */
-    public function testAnEnvironmentWordAgreesWithTheFileAndOtherValuesAreKept(): void
+    /** IDNO_WALLED_GARDEN=false must not leave a site private: the setting is tested with empty(). */
+    public function testAPrivateSiteSettingSaidOffInTheEnvironmentIsNotPrivate(): void
     {
-        $this->assertSame('0', $this->load($this->project(), ['IDNO_DEBUG' => '0'])->get('debug'));
-        $this->assertSame('1', $this->load($this->project(), ['IDNO_DEBUG' => '1'])->get('debug'));
-        $this->assertSame('maybe', $this->load($this->project(), ['IDNO_DEBUG' => 'maybe'])->get('debug'));
+        $this->assertTrue(empty($this->load($this->project(), ['IDNO_WALLED_GARDEN' => 'false'])->get('walled_garden')));
+        $this->assertFalse(empty($this->load($this->project(), ['IDNO_WALLED_GARDEN' => 'yes'])->get('walled_garden')));
     }
 
-    /** A password or a title that happens to read "off" or "No" stays the text the owner typed. */
+    /** The environment and config.ini agree: the same word is the same value, for each setting the code tests as a boolean. */
+    public function testAnEnvironmentWordIsWhatTheFileMakesOfIt(): void
+    {
+        foreach (['true', 'on', 'yes', 'false', 'off', 'no', 'none'] as $word) {
+            $dir = $this->project(['configuration/config.ini' => "debug = $word\n"]);
+            $this->assertSame($this->load($dir)->get('debug'), $this->load($this->project(), ['IDNO_DEBUG' => $word])->get('debug'), $word);
+        }
+    }
+
+    /** Text and list settings are never read as on or off: `none` reaches the validation of trusted_proxies as text, a title of "No" stays "No". */
     public function testAValueMeantAsTextIsNeverTurnedIntoABoolean(): void
     {
         $config = $this->load($this->project(), [
-            'IDNO_DBPASS' => 'off', 'IDNO_SITE_SECRET' => 'no', 'IDNO_TITLE' => 'No', 'IDNO_DBNAME' => 'none', 'IDNO_DBUSER' => 'yes', 'IDNO_SMTP_PASSWORD' => 'true',
+            'IDNO_TRUSTED_PROXIES' => 'none', 'IDNO_HTTP_ALLOW_PRIVATE' => 'no', 'IDNO_HUB' => 'off', 'IDNO_DBPASS' => 'off', 'IDNO_SITE_SECRET' => 'no',
+            'IDNO_TITLE' => 'No', 'IDNO_DBNAME' => 'none', 'IDNO_SMTP_PASSWORD' => 'true',
         ]);
+        $this->assertSame('none', $config->get('trusted_proxies'));
+        $this->assertSame('no', $config->get('http_allow_private'));
+        $this->assertSame('off', $config->get('hub'));
         $this->assertSame('off', $config->get('dbpass'));
         $this->assertSame('no', $config->get('site_secret'));
         $this->assertSame('No', $config->get('title'));
         $this->assertSame('none', $config->get('dbname'));
-        $this->assertSame('yes', $config->get('dbuser'));
         $this->assertSame('true', $config->get('smtp_password'));
+    }
+
+    /** "0", "1" and other text keep what was written (they already mean off, on and a value to anything that tests the setting). */
+    public function testOtherValuesOfABooleanSettingAreKept(): void
+    {
+        foreach (['0', '1', 'maybe'] as $value) {
+            $this->assertSame($value, $this->load($this->project(), ['IDNO_DEBUG' => $value])->get('debug'));
+        }
     }
 
     public function testKnownEnvDoesNotOverrideIdnoEnv(): void
