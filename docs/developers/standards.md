@@ -1,4 +1,6 @@
-# Coding Standards
+# Coding standards
+
+After this page you will know how code in Idno is expected to look and behave, so that a pull request is reviewed for what it does and not for how it is laid out. The rules apply to core and to the bundled plugins; following them in your own plugins makes them easier for others to read.
 
 ## The basics
 
@@ -113,3 +115,9 @@ Use [phpDocumentor blocks](http://docs.phpdoc.org/references/phpdoc/basic-syntax
 
 * Open your PHP blocks with ```<?php```, and close with ```?>```
 * Shorthand ```<?=``` is ok in templates
+
+## Where next
+
+* [Security checklist](plugins/security.md)
+* [Running the tests](testing.md), which includes the code style check.
+* [Commit messages](commit-messages.md)

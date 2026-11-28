@@ -1,4 +1,6 @@
-# Pull Requests
+# Submitting a pull request
+
+After this page you will know how to send a change to Idno and what happens to it next.
 
 Once you're ready to send code back to the Idno project, you need to submit a pull request to the [core GitHub repository](https://github.com/idno/idno), against the `dev` branch. The pull request template includes a checklist; please work through it before asking for a review.
 
@@ -18,4 +20,15 @@ Please note that even if there is a review requested from a particular individua
 
 ## Merging
 
-Once a pull request has had an approved review, **the original author should merge it and delete the branch**. This way, should any code conflicts have arisen between submission and review, it is the author's responsibility to clean it up. Also, it feels good to hit the button to merge your code into the core codebase!  
+Once a pull request has had an approved review, **the original author should merge it and delete the branch**. This way, should any code conflicts have arisen between submission and review, it is the author's responsibility to clean it up. Also, it feels good to hit the button to merge your code into the core codebase!
+
+## Before you ask for a review
+
+* [Run the tests and the code style check](testing.md).
+* Add or update tests for what you changed.
+* If you changed how something works, update the documentation in `docs/`, and add a line to `docs/changelog.md` under "Unreleased".
+
+## Where next
+
+* [Commit messages](commit-messages.md)
+* [Coding standards](standards.md)
