@@ -45,11 +45,24 @@ namespace Idno\Core {
         }
 
         /**
-         * Extension-aware version of the template drawing function
+         * Draws a template together with everything that was registered for it, from
+         * Twig templates (.html.twig) where there are any.
+         *
+         * The Twig templates are drawn in the order DefaultTemplate::draw() uses: the
+         * templates registered with prependTemplate(); then, for every template type
+         * ('*') and for the current one, the replacement registered with
+         * replaceTemplate() followed by the templates registered with extendTemplate();
+         * then the template itself, unless a replacement was drawn. So here too an
+         * extension's output comes before the output of the template it extends.
+         *
+         * If any of that gave output, it is the result, and nothing is added to it:
+         * no PHP template (.tpl.php) is drawn, and neither is content added with
+         * extendTemplateWithContent(). If none of it gave output, the PHP templates
+         * are drawn by DefaultTemplate::draw().
          *
          * @param  string $templateName
-         * @param  bool   $returnBlank  Should we return a blank string if the template doesn't exist? (Defaults to true)
-         * @param  book   $replacements Should we honor template replacements? (Defaults to true)
+         * @param  bool   $returnBlank  Should we return a blank string if nothing was drawn? (Defaults to true; otherwise false is returned)
+         * @param  bool   $replacements Should replacements registered with replaceTemplate() be drawn? (Defaults to true)
          * @return false|string
          */
         function draw($templateName, $returnBlank = true, $replacements = true)

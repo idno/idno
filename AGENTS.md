@@ -80,6 +80,12 @@ Tests/                         Core unit tests
   `Tests/Common/EntityGetByUrlListenerTest.php` checks this.
 - **Template system**: Twig-based (`HybridTwigTemplate`). Templates are extended
   via `extendTemplate()` to inject plugin UI into shell chrome, admin menus, etc.
+  `DefaultTemplate::draw()` puts a template together in this order: the templates registered
+  with `prependTemplate()`, then its replacement (`replaceTemplate()`) if it has one, then its
+  extensions in the order they were added, then the template itself unless it was replaced, then
+  content added with `extendTemplateWithContent()`; so an extension's output comes BEFORE the
+  template it extends, and plugins and themes are written against that (don't change it).
+  `Tests/Core/TemplateDrawOrderTest.php` checks this.
 - **Current item of the Twenty26 side navigation**: `Themes\Twenty26\Navigation::currentItem()`
   decides which item of `templates/modern/shell/nav.tpl.php` is the current page, from the page
   being served (its class, and the `q` input of a `Homepage`), never from the address, and
