@@ -11,6 +11,7 @@ Unreleased
 These changes are on the `dev` branch and will be part of the next release.
 
 * PHP 8.4 or later is now required
+* Removed the `wayback_machine` setting, which nothing read: no page was ever sent to the Internet Archive. A value stored for it by an existing site is ignored
 * Security: the tags of a post are text. A tag sent with markup (by a form post, a signed API request or the categories of a Micropub request) is stored as plain text, and the feeds, JSON, ActivityPub and KML print every tag escaped, so a tag can no longer put markup in front of a feed reader or another server. A list of tags that held something that was not text no longer stops a page with an error
 * A database or proxy password that holds an `@` is now removed whole from the diagnostics report and from the export archive's `config.json`; only the part before the first `@` was removed, so the rest of the password was shown
 * Security: a setting turned off in an environment variable is off. `IDNO_DEBUG=false` (or `off`, `no`, `none`) was read as text that is not empty, so the setting counted as on and a site whose operator had turned debugging off that way showed visitors error messages and stack traces. A variable whose whole value is `true`, `on`, `yes`, `false`, `off`, `no` or `none`, in any letter case, now means what that word means in `config.ini`; passwords and settings that are text by nature are never read this way

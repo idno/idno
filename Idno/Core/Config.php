@@ -33,7 +33,6 @@ namespace Idno\Core {
             'default_config'         => true, // This is a trip-switch - changed to false if configuration is loaded from an ini file / the db
             'loglevel'               => 5,
             'multi_syndication'      => true,
-            'wayback_machine'        => false,
             'static_url'             => false,
             'user_avatar_favicons'   => true,
             'form_token_expiry'      => 3600,
@@ -271,7 +270,6 @@ namespace Idno\Core {
             $this->sessions_database         = true; // Let the database handle the session
             $this->disable_cleartext_warning = false; // Set to true to disable warning when access credentials are sent in the clear
             $this->multi_syndication         = true; // Do we allow multiple accounts per syndication endpoint?
-            $this->wayback_machine           = false; // Automatically ping new pages on public sites to the Internet Archive
 
             $this->loadIniFiles();
             $this->sanitizeValues();
