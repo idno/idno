@@ -45,6 +45,7 @@ bar, the server's log and the `Referer` of the next request.
 
 The template is `forms/link`; a theme that has its own copy should ask `\Idno\Core\Actions::linkMethod()` the same
 way and print `method="post"` on the form.
+
 ## Tags of a post
 
 The `tags` field of a post holds what whoever made the post sent, and it used to be stored and printed as it came.
