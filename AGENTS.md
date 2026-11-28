@@ -1005,9 +1005,12 @@ lower case) in `registerTranslations()`.
 - Where a setting comes from, later ones winning (`Config::loadIniFiles()`): the database, `config.ini`,
   `config.json`, the per-domain file, then every `IDNO_<SETTING>` server variable. A `KNOWN_<SETTING>`
   variable only fills a setting that nothing else set.
-- A value from the environment goes through `Config::environmentValue()`: one that is exactly `true`, `on`,
-  `yes`, `false`, `off`, `no` or `none` (any letter case; `Config::ENVIRONMENT_WORDS`) becomes that boolean,
-  as the word means in `config.ini`; anything else is the text it was. Without it `IDNO_DEBUG=false` is a
+- A value from the environment goes through `Config::environmentValue($value, $setting)`: one that is exactly
+  `true`, `on`, `yes`, `false`, `off`, `no`, `none` or `null` (any letter case; `Config::ENVIRONMENT_WORDS`)
+  becomes that boolean, as the word means in `config.ini`; anything else is the text it was. A setting that is
+  text by its nature is never converted (`Config::isTextSetting()`: the names in `Config::TEXT_SETTINGS`, and a
+  name that ENDS in `pass`, `password`, `passwd`, `secret`, `key`, `token` or `salt`), because the environment
+  has no quotes to say `dbpass = "no"` with; a switch must not be given such a name. Without it `IDNO_DEBUG=false` is a
   text that is not empty, and debugging is on. Don't copy a server variable into the configuration any
   other way, and test a boolean setting with `empty()` or as a condition, never against the text `'false'`
   (`parse_ini_file()` gives `"1"` and `""` for the same words, not booleans).

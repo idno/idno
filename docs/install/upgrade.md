@@ -43,11 +43,26 @@ Check these before you replace the files:
   calls `Idno::site()->reader()`, or draws one of its templates will fail when that code runs. Disable it before you
   upgrade, and enable it again once it no longer does. No bundled plugin or theme used any of it; the classes and
   templates are listed in [changes for plugin and theme authors](../developers/plugins/changes.md).
-* **Settings in environment variables:** an `IDNO_` (or `KNOWN_`) variable whose whole value is `true`, `on`, `yes`,
-  `false`, `off`, `no` or `none`, in any letter case, now turns the setting on or off, as the same word does in
-  `config.ini`. Before, every one of them counted as on. If you set `IDNO_DEBUG=false` or the like, the setting is
-  now off, as you meant. A variable that must hold one of those words as text (a password, say) has to move to
-  `config.ini`, in quotes.
+* **Settings in environment variables: check them before you upgrade.** Until now, an `IDNO_` (or `KNOWN_`)
+  variable set to `false`, `off`, `no`, `none` or `null` turned its setting **on**: any value counted as on unless
+  it was empty or `0`. From this version those words turn the setting off, as they do in `config.ini`. So a site that
+  has such a variable behaves differently from the moment the new files are in place:
+    * `IDNO_WALLED_GARDEN=false` (or one of the other words): your site has been **private**, whatever you meant.
+      After the upgrade it is **public**: visitors can read every public post and feed, and the site starts to
+      federate and to send webmentions. If the site must stay private, set the variable to `true`, or remove it and
+      turn on "Make site private" on the site settings page, before you upgrade.
+    * `IDNO_OPEN_REGISTRATION=false`: anyone has been able to register. After the upgrade registration is closed,
+      and new members need an invitation.
+    * `IDNO_DEBUG=false`: debugging has been on, and error pages have shown details of your server. After the upgrade
+      it is off.
+    * `IDNO_DISABLE_SSL_VERIFY=false`: certificates have not been checked. After the upgrade they are.
+
+    Look through the environment of your web server or container for every `IDNO_` and `KNOWN_` variable whose whole
+    value is one of those five words, in any letter case, and decide what each setting should be. A variable set to
+    `true`, `on`, `yes`, `1`, `0` or nothing means what it did before. A password, key or token, and the names
+    `title`, `description`, `dbname`, `dbuser`, `sessionname`, `from_name` and `smtp_username`, are always read as
+    the text you set, whatever the word. Any other setting that must hold one of these words as text has to move to
+    `config.ini`, in quotes.
 * **A site at a `www.` address with a per-domain configuration file:** such a site reads
   `configuration/www.example.com.ini`, as before. If there is no such file, it now reads
   `configuration/example.com.ini`, which it used to ignore. If you have a file by that name that you did not mean

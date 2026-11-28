@@ -329,8 +329,11 @@ namespace Idno\Core {
         /// The words that config.ini reads as on and as off; an environment variable means the same by them
         const ENVIRONMENT_WORDS = [
             'true' => true, 'on' => true, 'yes' => true,
-            'false' => false, 'off' => false, 'no' => false, 'none' => false,
+            'false' => false, 'off' => false, 'no' => false, 'none' => false, 'null' => false,
         ];
+
+        /// Settings that hold a name or other words of the operator's own, and are never a switch
+        const TEXT_SETTINGS = ['title', 'description', 'dbname', 'dbuser', 'sessionname', 'from_name', 'smtp_username'];
 
         /**
          * What the value of an IDNO_ or KNOWN_ environment variable is as a setting. A variable is
@@ -339,12 +342,17 @@ namespace Idno\Core {
          * self::ENVIRONMENT_WORDS, in any letter case, is that boolean; any other value, "0", "1"
          * and the empty text included, is returned as it is.
          *
-         * @param  mixed $value
+         * A setting that is text by its nature (isTextSetting(): a password, a key, the site's
+         * name) is never read as a switch: config.ini can say dbpass = "no" in quotes, and the
+         * environment has no quotes to say it with.
+         *
+         * @param  mixed       $value
+         * @param  string|null $setting The name of the setting the value is for, when known
          * @return mixed
          */
-        static function environmentValue($value)
+        static function environmentValue($value, $setting = null)
         {
-            if (is_string($value)) {
+            if (is_string($value) && !static::isTextSetting($setting)) {
                 $word = strtolower($value);
                 if (array_key_exists($word, static::ENVIRONMENT_WORDS)) {
                     return static::ENVIRONMENT_WORDS[$word];
@@ -352,6 +360,23 @@ namespace Idno\Core {
             }
 
             return $value;
+        }
+
+        /**
+         * Is a setting text by its nature, so that no word given for it turns it on or off? True
+         * for the names in self::TEXT_SETTINGS and for a name that ends in a word for a secret
+         * (dbpass, smtp_password, site_secret, api_key, some_token, salt). The word must end the
+         * name: bypass_fulltext_search and show_api_keys are switches.
+         *
+         * @param  string|null $name
+         * @return bool
+         */
+        static function isTextSetting($name)
+        {
+            $name = strtolower((string) $name);
+
+            return in_array($name, static::TEXT_SETTINGS, true)
+                || (bool) preg_match('/(^|_)(db)?(pass|password|passwd|secret|key|token|salt)$/', $name);
         }
 
         /**
@@ -414,7 +439,7 @@ namespace Idno\Core {
                 foreach ($_SERVER as $name => $val) {
                     if (substr($name, 0, 5) == 'IDNO_') {
                         $configName = strtolower(str_replace('IDNO_', '', $name));
-                        $this->ini_config[$configName] = static::environmentValue($val);
+                        $this->ini_config[$configName] = static::environmentValue($val, $configName);
                     }
                 }
                 // Backwards compat: also process KNOWN_ but don't override IDNO_ values
@@ -422,7 +447,7 @@ namespace Idno\Core {
                     if (substr($name, 0, 6) == 'KNOWN_') {
                         $configName = strtolower(str_replace('KNOWN_', '', $name));
                         if (!isset($this->ini_config[$configName])) {
-                            $this->ini_config[$configName] = static::environmentValue($val);
+                            $this->ini_config[$configName] = static::environmentValue($val, $configName);
                         }
                     }
                 }
