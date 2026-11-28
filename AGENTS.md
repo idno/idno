@@ -1330,6 +1330,12 @@ lower case) in `registerTranslations()`.
   `UrlValidator::httpUrl()` accepts it), class, title and confirmation text escaped; the
   confirmation text goes into the handler as one JSON string. The label is markup by design and is
   printed as given, so a caller must escape any text it puts in the label.
+  The hidden form holds the form token and the data, and a browser sends a form as GET or POST
+  only (any other method goes out as a GET, every field in the address), so the form is always
+  `method="post"`: `Actions::linkMethod()` reads the `method` option as `POST` for anything but
+  `GET` (and logs a `PUT`, `DELETE` or unknown one), and a `GET` link is a plain link with no
+  form, no token and no data. Never print a caller's method on a form that holds a token; a
+  theme's own `forms/link` asks `linkMethod()` too.
   `Tests/Core/CreateLinkOutputTest.php` checks this.
 - TLS: `Webservice` verifies the certificate and host name of every HTTPS request, unless
   the site sets `disable_ssl_verify`. Don't set `CURLOPT_SSL_VERIFYPEER` or

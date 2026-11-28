@@ -27,6 +27,25 @@ the database back end supports. Any other array makes the query match nothing, o
 * A page that reads one text from the request should use `$this->getTextInput('name')`, which gives an empty string
   when the field was sent as an array (`name[]=x`).
 
+## Action links: the `method` option
+
+`\Idno\Core\Idno::site()->actions()->createLink($url, $label, $data, $options)` draws a link that sends a hidden form
+with a form token. A browser sends a form as GET or POST only, and one that names another method goes out as a GET
+with every field in the address. So a link made with `'method' => 'PUT'` or `'DELETE'` never reached `putContent()`
+or `deleteContent()`: the page's `getContent()` answered, and the form token and the data were left in the address
+bar, the server's log and the `Referer` of the next request.
+
+* **`POST`, or no `method`**: unchanged. This is what an action link is for.
+* **`PUT`, `DELETE` or any other value**: the form is sent as a POST, so the page's `postContent()` answers, and a
+  warning is logged. If you passed one of these, handle the action in `postContent()` (send a field in `$data` to
+  say what is wanted if the page does several things), or send the PUT or DELETE from a script, with the token
+  fields in the body.
+* **`GET`**: the link is a plain link to `$url`. It has no form and no token, and `$data` is not sent: put what the
+  page needs in the address yourself, and never anything secret. `confirm` still asks first.
+
+The template is `forms/link`; a theme that has its own copy should ask `\Idno\Core\Actions::linkMethod()` the same
+way and print `method="post"` on the form.
+
 ## Tags of a post
 
 The `tags` field of a post holds what whoever made the post sent, and it used to be stored and printed as it came.
