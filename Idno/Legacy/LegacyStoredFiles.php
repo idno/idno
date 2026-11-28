@@ -20,6 +20,8 @@ use Idno\Http\Controller\File\StoredFiles;
  * earlier release has no mark: the one the settings record is an archive, and restricted all the same (the setting is the request's own, loaded from the
  * database, not an entity).
  *
+ * On a private site (`walled_garden`) a visitor who is not signed in is given no file at all (the outcome of a missing file), before any rule below is asked.
+ *
  * A file attached to an entity is for those who may read it (to anyone else it does not exist: the outcome is the one of a missing file): the entity is loaded whether or not the viewer can see it (a lookup that respected access would
  * not find it, and the check would be skipped), and its `canRead()` decides. A file attached to a post that is not public or not published is restricted:
  * no shared cache keeps it.
@@ -28,6 +30,14 @@ final class LegacyStoredFiles implements StoredFiles
 {
     public function lookUp(string $id): FileLookup
     {
+        // A private site gives a visitor (nobody signed in) no stored file: the files are those of the members' posts and the members' pictures, and the
+        // site's own images are static files, not stored ones. The answer is the one of a file that is not there, for an archive too, so nothing tells a
+        // visitor which files exist. The route stays public so that the page can answer this 404 and not the walled garden's 403. A file attached to
+        // no entity (an upload that was never used) is refused the same way.
+        if (!Idno::site()->config()->isPublicSite() && !Idno::site()->session()->isLoggedOn()) {
+            return new FileLookup(FileOutcome::Missing);
+        }
+
         // (an id of '0' is no id, as the legacy page took it)
         $object = in_array($id, ['', '0'], true) ? false : \Idno\Entities\File::getByID($id);
         if (empty($object)) {

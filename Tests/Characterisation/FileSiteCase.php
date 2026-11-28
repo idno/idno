@@ -239,10 +239,10 @@ abstract class FileSiteCase extends PermalinkSiteCase
         if (isset($kind['xhr'])) {
             // the headers of the same request that is not XHR, and the body the legacy page gave
             $plain = $this->site()->request($method, $path, $this->asViewer($viewer, array_diff_key($headers, ['X-Requested-With' => true])));
-            [$answeredHeaders, $answeredBody] = explode("\n\n", self::normalise(self::withoutTheRequestTime(self::forTheRecording($answer)), $this->baseUrl()), 2);
-            [$plainHeaders] = explode("\n\n", self::normalise(self::withoutTheRequestTime(self::forTheRecording($plain)), $this->baseUrl()), 2);
+            [$answeredHeaders, $answeredBody] = explode("\n\n", static::normalise(self::withoutTheRequestTime(self::forTheRecording($answer)), $this->baseUrl()), 2);
+            [$plainHeaders] = explode("\n\n", static::normalise(self::withoutTheRequestTime(self::forTheRecording($plain)), $this->baseUrl()), 2);
             $this->assertSame($plainHeaders, $answeredHeaders, $case . ': the headers of the same request that is not XHR');
-            $recorded = (string) file_get_contents(self::recordedAnswersDirectory() . '/' . static::GROUP . '/' . $case . '.txt');
+            $recorded = (string) file_get_contents(static::recordedAnswersDirectory() . '/' . static::GROUP . '/' . $case . '.txt');
             $recordedBody = explode("\n\n", $recorded, 2)[1];
             $this->assertSame($recordedBody, $answeredBody, $case . ': the body is what it was');
             $this->assertCount(1, $answer->lines('cache-control'), $case . ': one Cache-Control line');
@@ -256,8 +256,8 @@ abstract class FileSiteCase extends PermalinkSiteCase
             $missing = $this->site()->request($method, str_replace($id[0], $zeros, $path), $this->asViewer($viewer, $headers));
             $this->assertSame(404, $answer->status, $case);
             $this->assertSame(
-                self::normalise(self::forTheRecording($missing), $this->baseUrl()),
-                str_replace($id[0], $zeros, self::normalise(self::forTheRecording($answer), $this->baseUrl())),
+                static::normalise(self::forTheRecording($missing), $this->baseUrl()),
+                str_replace($id[0], $zeros, static::normalise(self::forTheRecording($answer), $this->baseUrl())),
                 $case . ': exactly the answer of a missing file'
             );
 
@@ -287,7 +287,7 @@ abstract class FileSiteCase extends PermalinkSiteCase
     protected function assertTheAnswerThatChanged(string $case, SiteResponse $answer, array $kind, string $nonXhrPath = ''): void
     {
         $marked = self::forTheRecording($answer);
-        $recorded = (string) file_get_contents(self::recordedAnswersDirectory() . '/' . static::GROUP . '/' . $case . '.txt');
+        $recorded = (string) file_get_contents(static::recordedAnswersDirectory() . '/' . static::GROUP . '/' . $case . '.txt');
         if (isset($kind['name']) || isset($kind['refused'])) {
             if (isset($kind['name'])) {
                 $recorded = (string) preg_replace('/^(content-disposition: attachment; filename=")[0-9a-f]{32}(")$/m', '${1}' . $kind['name'] . '${2}', $recorded);
@@ -295,7 +295,7 @@ abstract class FileSiteCase extends PermalinkSiteCase
             if (isset($kind['refused'])) {
                 $recorded = self::withHeader($recorded, 'content-length', '<the length of the body>');
             }
-            $this->assertSame($recorded, self::normalise($marked, $this->baseUrl()), $case . ': the recording, but for ' . implode(' and ', array_keys($kind)));
+            $this->assertSame($recorded, static::normalise($marked, $this->baseUrl()), $case . ': the recording, but for ' . implode(' and ', array_keys($kind)));
             if (isset($kind['refused'])) {
                 $this->assertSame('', $answer->body, $case . ': no body');
             }
@@ -308,14 +308,14 @@ abstract class FileSiteCase extends PermalinkSiteCase
             $this->assertNull($answer->header('Content-Disposition'), $case);
         }
         if (isset($kind['like'])) {
-            $sibling = (string) file_get_contents(self::recordedAnswersDirectory() . '/' . static::GROUP . '/' . $kind['like'] . '.txt');
-            $this->assertSame($sibling, self::normalise($marked, $this->baseUrl()), $case . ': the recording of ' . $kind['like']);
+            $sibling = (string) file_get_contents(static::recordedAnswersDirectory() . '/' . static::GROUP . '/' . $kind['like'] . '.txt');
+            $this->assertSame($sibling, static::normalise($marked, $this->baseUrl()), $case . ': the recording of ' . $kind['like']);
         }
         if (isset($kind['similar'])) {
             // the recording of another case, but for the address and the name the download is given
             $strip = static fn (string $text): string => (string) preg_replace('/^(link: [^\n]*rel="self"|content-disposition: [^\n]*)\n/m', '', $text);
-            $sibling = (string) file_get_contents(self::recordedAnswersDirectory() . '/' . static::GROUP . '/' . $kind['similar'] . '.txt');
-            $this->assertSame($strip($sibling), $strip(self::normalise($marked, $this->baseUrl())), $case . ': like ' . $kind['similar']);
+            $sibling = (string) file_get_contents(static::recordedAnswersDirectory() . '/' . static::GROUP . '/' . $kind['similar'] . '.txt');
+            $this->assertSame($strip($sibling), $strip(static::normalise($marked, $this->baseUrl())), $case . ': like ' . $kind['similar']);
         }
         if (isset($kind['status'])) {
             $this->assertSame($kind['status'], $answer->status, $case);

@@ -24,18 +24,37 @@ final class FileWalledAnswersTest extends FileSiteCase
      * they were, and each case is held to the recording but for what changed.
      */
     private const CHANGED = [
-        'attached-site-visitor' => self::WHY_HIDDEN,
-        'attached-owner-visitor' => self::WHY_HIDDEN,
-        'html-visitor' => self::WHY_DOWNLOAD,
+        'image-visitor' => self::WHY_PRIVATE,
+        'image-visitor-range' => self::WHY_PRIVATE,
+        'image-visitor-conditional' => self::WHY_PRIVATE,
+        'html-visitor' => self::WHY_PRIVATE,
+        'attached-public-visitor' => self::WHY_PRIVATE,
+        'attached-site-visitor' => self::WHY_PRIVATE,
+        'attached-owner-visitor' => self::WHY_PRIVATE,
+        'restricted-visitor' => self::WHY_PRIVATE,
+        'recorded-visitor' => self::WHY_PRIVATE,
+        'head-image-visitor' => self::WHY_PRIVATE,
+        'head-restricted-visitor' => self::WHY_PRIVATE,
         'restricted-admin' => self::WHY_DOWNLOAD,
         'recorded-admin' => self::WHY_DOWNLOAD,
     ];
 
+    /** Why a visitor gets no file of a private site: a missing file's answer, whatever the file is */
+    private const WHY_PRIVATE = 'a private site gives a visitor no stored file: the answer is exactly what a file that is not there answers (it was the file, or a 403 for an archive), so nothing tells a visitor which files exist';
+
     /** @var array<string, array<string, mixed>> what changed in each of them */
-    private const KINDS = [
+    protected const KINDS = [
+        'image-visitor' => ['hidden' => true],
+        'image-visitor-range' => ['hidden' => true],
+        'image-visitor-conditional' => ['hidden' => true],
+        'html-visitor' => ['hidden' => true],
+        'attached-public-visitor' => ['hidden' => true],
         'attached-site-visitor' => ['hidden' => true],
         'attached-owner-visitor' => ['hidden' => true],
-        'html-visitor' => ['name' => 'x.bin'],
+        'restricted-visitor' => ['hidden' => true],
+        'recorded-visitor' => ['hidden' => true],
+        'head-image-visitor' => ['hidden' => true],
+        'head-restricted-visitor' => ['hidden' => true],
         'restricted-admin' => ['name' => 'x.bin'],
         'recorded-admin' => ['name' => 'x.bin'],
     ];
@@ -91,6 +110,8 @@ final class FileWalledAnswersTest extends FileSiteCase
 
     public function testAHeadAnOptionsAndAMissingFileOfAPrivateSite(): void
     {
+        // (a copy the visitor holds is no reason to answer 304 for a file they may not have)
+        $this->recordFile('image-visitor-conditional', 'GET', $this->fileAddress('image'), ['If-Modified-Since' => gmdate('D, d M Y H:i:s', self::WRITTEN + 86400) . ' GMT'], 'visitor');
         $this->recordFile('head-image-visitor', 'HEAD', $this->fileAddress('image'), [], 'visitor');
         $this->recordFile('head-restricted-visitor', 'HEAD', $this->fileAddress('restricted'), [], 'visitor');
         $this->recordFile('options-image-visitor', 'OPTIONS', $this->fileAddress('image'), [], 'visitor');
