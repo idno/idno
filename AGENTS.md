@@ -939,6 +939,22 @@ something). What existing sites, hubs and plugins hold was kept, and must stay:
   deprecated names. `Tests/Core/WebSubCompatibilityTest.php` checks that the earlier class names, event name
   and the callback address still work, and `Tests/Pages/WebSub/CallbackTest.php` asks the callback over HTTP.
 
+## Translations
+
+`Idno::site()->language()` (`Idno\Core\Language`) asks each registered `Translation` in turn and takes the first
+answer that is not the string itself. `GetTextTranslation($domain, $path)` reads a compiled gettext catalogue,
+`<path>/<locale>/LC_MESSAGES/<domain>.mo`; a plugin or theme registers one for a domain of its own (its name in
+lower case) in `registerTranslations()`.
+
+- **Core's domain is `idno`** (`GetTextTranslation::CORE_DOMAIN`), the name of the template that
+  `php idno.php build-lang core` writes (`languages/source/idno.pot`), and the constructor's default.
+- **It was `known`**, and sites have catalogues compiled as `known.mo`. `Idno::init()` registers what
+  `GetTextTranslation::forCore()` returns: the `idno` domain, then the `known` one
+  (`EARLIER_CORE_DOMAIN`), which is reached only for a string `idno` has no translation of. Keep the second
+  registration and its place after the first. A domain with no catalogue returns every string unchanged.
+- `Tests/Core/CoreTranslationCatalogueTest.php` compiles catalogues of its own and reads them through gettext; it
+  is skipped on a machine without the gettext extension or the `en_US.UTF-8` locale.
+
 ## Code Style
 
 - PHP 8.3+ required; uses PSR-4 autoloading (`Idno\`, `IdnoPlugins\`, `Themes\`, `ConsolePlugins\`)

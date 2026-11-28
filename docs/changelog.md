@@ -29,6 +29,7 @@ These changes are on the `dev` branch and will be part of the next release.
 * New Atmosphere plugin (first called StandardSiteSync), which saves a member's posts to their own AT Protocol PDS: articles as standard.site documents, status updates, videos and audio as records of their own (`co.idno.feed.*`), and as Bluesky posts only if the member asks. A site that enabled it under the old name keeps it enabled; members who had connected an account must connect again
 * Link previews are now fetched by the server instead of the browser
 * The language tools (formerly the separate known-language-tools package) are part of core
+* Core's translations are in the gettext domain `idno`, like their template `idno.pot`: a language's catalogue is `languages/<locale>/LC_MESSAGES/idno.mo`. A catalogue compiled as `known.mo` is still read, so a translated site needs nothing done; see [the changes for plugin and theme authors](developers/plugins/changes.md)
 * The MongoDB driver was upgraded to version 2 and is now an optional dependency
 * TinyMCE upgraded to version 8
 * Security: fixes for cross-site scripting, server-side request forgery, an open redirect, access control on uploaded files, and ActivityPub actor spoofing
