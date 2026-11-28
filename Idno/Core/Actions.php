@@ -48,6 +48,34 @@ namespace Idno\Core {
         }
 
         /**
+         * How a link drawn by createLink() is sent: 'POST' (a hidden form that holds the form
+         * token) or 'GET' (a plain link, with no form and no token).
+         *
+         * A browser sends a form as GET or POST only, and sends one that names any other method
+         * as a GET, with every field, the form token included, in the address. So a link asked
+         * for with PUT, DELETE or anything else is drawn as a POST, and that is logged once for
+         * each method in a process.
+         *
+         * @param  mixed $method The 'method' option given to createLink()
+         * @return string 'POST' or 'GET'
+         */
+        static function linkMethod($method)
+        {
+            static $logged = [];
+
+            $method = is_string($method) ? strtoupper(trim($method)) : '';
+            if ($method === 'GET') {
+                return 'GET';
+            }
+            if ($method !== '' && $method !== 'POST' && empty($logged[$method])) {
+                $logged[$method] = true;
+                site()->logging()->warning('An action link was asked for with the method ' . preg_replace('/[^A-Z]/', '?', substr($method, 0, 16)) . ', which a browser cannot send from a link or a form. It was drawn as a POST.');
+            }
+
+            return 'POST';
+        }
+
+        /**
          * Creates a properly-signed POST form
          *
          * @param  string $pageurl URL of the page to point to
