@@ -59,9 +59,9 @@ namespace Idno\Core {
          *
          * A setting is taken to be a secret when its name says so: see isSecretSetting().
          * A secret that is empty is left as it is, so that it can be seen that it is not set.
-         * Any other text that is an address with a user name and password in it
-         * (scheme://user:password@host) has those replaced, up to the last @ before the
-         * path, as a password can hold one. Lists of settings are gone through at every depth.
+         * Any other text has the user name and password taken out of every address in it
+         * (scheme://user:password@host): see redactAddresses(). Lists of settings are gone
+         * through at every depth.
          *
          * @param  array $settings Settings by name
          * @return array
@@ -76,11 +76,36 @@ namespace Idno\Core {
                 } else if (is_array($value)) {
                     $settings[$name] = static::redactSecrets($value);
                 } else if (is_string($value)) {
-                    $settings[$name] = preg_replace('#^([a-z][a-z0-9+.\-]*://)[^/\s]+@#i', '$1' . static::REDACTED . '@', $value);
+                    $settings[$name] = static::redactAddresses($value);
                 }
             }
 
             return $settings;
+        }
+
+        /// What follows "scheme://" in an address that holds a password: a colon, and an @ after it
+        const ADDRESS_WITH_PASSWORD = <<<'PATTERN'
+#([a-z][a-z0-9+.\-]*://)\S*:\S*@#i
+PATTERN;
+
+        /**
+         * A text with the user name and password taken out of every address in it
+         * (scheme://user:password@host), wherever in the text the address is.
+         *
+         * A password can hold any character, "/", "?", "#" and "@" included, and a user name can
+         * be an email address, so nothing is read out of the part between "//" and the host: when
+         * there is a colon after "//" and an @ after that colon, before any white space,
+         * everything from "//" to the LAST @ is replaced. That removes more than the password
+         * from an address such as https://host:8080/@name, which is the side to err on. An
+         * address with no colon before an @ (https://host/@name) holds no password and is left
+         * as it is.
+         *
+         * @param  string $text
+         * @return string
+         */
+        static function redactAddresses($text)
+        {
+            return (string) preg_replace(static::ADDRESS_WITH_PASSWORD, '$1' . static::REDACTED . '@', (string) $text);
         }
 
         /**
@@ -112,7 +137,8 @@ namespace Idno\Core {
          *  - what a request carries to say who sent it: the Cookie, Authorization and
          *    Proxy-Authorization headers, the password and digest of HTTP authentication, and
          *    the signature of an API request (X-IDNO-SIGNATURE, X-KNOWN-SIGNATURE);
-         *  - a name that ends in a word for a password.
+         *  - a name that ends in a word for a password (MYSQL_PWD, PGPASSWD; not PWD and OLDPWD
+         *    themselves, which are the working folders of the process).
          * Apache puts REDIRECT_ before the name of a variable after an internal redirect, once
          * for each redirect, so the name is read without it. (Any other name that
          * isSecretSetting() knows, and an address with a password in it, such as
@@ -129,7 +155,8 @@ namespace Idno\Core {
                 return static::isSecretSetting(strtolower($setting[1]));
             }
 
-            return (bool) preg_match('/(^|_)(COOKIE|AUTHORIZATION|SIGNATURE|PW|PWD|PASSWD)$|^PHP_AUTH_DIGEST$/i', $name);
+            // PWD and OLDPWD are the shell's working folders; MYSQL_PWD is a password
+            return (bool) preg_match('/(^|_)(COOKIE|AUTHORIZATION|SIGNATURE|PW|PASSWD)$|_PWD$|^PHP_AUTH_DIGEST$/i', $name);
         }
 
         /**

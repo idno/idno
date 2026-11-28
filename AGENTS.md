@@ -1421,7 +1421,12 @@ lower case) in `registerTranslations()`.
   `\Idno\Core\Config::redactSecrets()` first. It replaces the value of every setting whose
   name says it is a secret (`Config::isSecretSetting()`: "pass", "secret", "token", "key",
   "salt", "credential", "private", "signature", `dbstring`, `proxy_string`) and the user
-  name and password inside any address. The diagnostics report and the export's
+  name and password inside any address (`Config::redactAddresses()`). That fails closed: a
+  password can hold `/`, `?`, `#` and `@`, so nothing is parsed, and wherever `scheme://` is
+  followed by a colon and, after it, an `@` (before any white space), everything from `//` to
+  the LAST `@` is replaced, in every address of the value. An address with no colon before an
+  `@` (`https://host/@name`) is left alone. Don't narrow the pattern to what a URL parser
+  would call the userinfo. The diagnostics report and the export's
   `config.json` both use it; never `json_encode()` the `Config` object itself, which holds
   the database password and everything else from `config.ini`. `config.json` holds
   `Config::getStoredSettings()` only: the saved settings, minus the ones that describe the
@@ -1439,11 +1444,12 @@ lower case) in `registerTranslations()`.
   `IDNO_TITLE` and the like are shown), of `HTTP_COOKIE`, `HTTP_AUTHORIZATION`,
   `HTTP_PROXY_AUTHORIZATION`, `PHP_AUTH_PW`, `PHP_AUTH_DIGEST`, the `X-IDNO-SIGNATURE` /
   `X-KNOWN-SIGNATURE` headers and any name that ends in a word for a password
-  (`Config::isSecretServerVariable()`), and then applies `redactSecrets()` to the rest, which
+  (`Config::isSecretServerVariable()`: `MYSQL_PWD`, not the shell's own `PWD` and `OLDPWD`), and then applies `redactSecrets()` to the rest, which
   takes the user name and password out of an address. So a secret given to the site through
   its environment needs a setting name the rule recognises, as one in `config.ini` does. The
   diagnostics report (`Idno\Pages\Admin\Diagnostics::report()`) is the one place that prints
-  them. `Tests/Pages/Admin/DiagnosticsReportTest.php` checks this.
+  them. It prints the session through `redactSecrets()` too: a plugin may keep a key there
+  while a member connects an account. `Tests/Pages/Admin/DiagnosticsReportTest.php` checks this.
 - Annotations (replies, likes, shares, mentions and RSVPs, most of which arrive as
   webmentions): `Entity::addAnnotation()` keeps the owner's address, the owner's image and
   the annotation's address only when `UrlValidator::httpUrl()` accepts them, and stores an
