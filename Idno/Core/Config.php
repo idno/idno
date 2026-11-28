@@ -293,6 +293,68 @@ namespace Idno\Core {
         }
 
         /**
+         * The folders configuration files are read from, in the order they are read.
+         *
+         * @return string[]
+         */
+        protected function configurationPaths()
+        {
+            return [
+                $this->path,                    // Check old location (Warning: @deprecated and will be removed in future installs)
+                $this->path . '/configuration'  // Check for configuration in the new location
+            ];
+        }
+
+        /**
+         * The names a per-domain configuration file may have, without ".ini", in the order they are
+         * tried: the host as it is in the site's address, and then, for a host that begins with
+         * "www.", the host without it. That second name is what the host goes by everywhere else:
+         * `host` once init() has finished, the `hosts/<host>/` folders of plugins and themes, the
+         * database of a multitenant site and its folder of uploads. Only the first file found is
+         * read, so a site that has a file named with "www." is configured by that file alone.
+         *
+         * @return string[]
+         */
+        protected function hostConfigurationNames()
+        {
+            $host  = (string) $this->host;
+            $names = [$host];
+            if (substr($host, 0, 4) == 'www.') {
+                $names[] = substr($host, 4);
+            }
+
+            return $names;
+        }
+
+        /// The words that config.ini reads as on and as off; an environment variable means the same by them
+        const ENVIRONMENT_WORDS = [
+            'true' => true, 'on' => true, 'yes' => true,
+            'false' => false, 'off' => false, 'no' => false, 'none' => false,
+        ];
+
+        /**
+         * What the value of an IDNO_ or KNOWN_ environment variable is as a setting. A variable is
+         * always text, so "false" would be a text that is not empty, and a setting that code tests
+         * with empty() or as a condition (`debug`, say) would be on. A value that is exactly one of
+         * self::ENVIRONMENT_WORDS, in any letter case, is that boolean; any other value, "0", "1"
+         * and the empty text included, is returned as it is.
+         *
+         * @param  mixed $value
+         * @return mixed
+         */
+        static function environmentValue($value)
+        {
+            if (is_string($value)) {
+                $word = strtolower($value);
+                if (array_key_exists($word, static::ENVIRONMENT_WORDS)) {
+                    return static::ENVIRONMENT_WORDS[$word];
+                }
+            }
+
+            return $value;
+        }
+
+        /**
          * Load configuration from ini files
          */
         function loadIniFiles()
@@ -301,10 +363,7 @@ namespace Idno\Core {
 
                 $this->ini_config = array();
 
-                foreach ([
-                    $this->path,                    // Check old location (Warning: @deprecated and will be removed in future installs)
-                    $this->path . '/configuration'  // Check for configuration in the new location
-                ] as $path) {
+                foreach ($this->configurationPaths() as $path) {
 
                     if ($config = @parse_ini_file($path . '/config.ini', true)) {
                         if (!empty($config)) {
@@ -338,12 +397,15 @@ namespace Idno\Core {
                         $this->ini_config['uploadpath'] = $uploadPath;
                     }
 
-                    // Per domain configuration
-                    if ($config = @parse_ini_file($path . '/' . $this->host . '.ini', true)) {
-                        unset($this->ini_config['initial_plugins']);  // Don't let plugin settings be merged
-                        unset($this->ini_config['alwaysplugins']);
-                        unset($this->ini_config['antiplugins']);
-                        $this->ini_config = array_replace_recursive($this->ini_config, $config);
+                    // Per domain configuration: one file, the first of the host's names that has one
+                    foreach ($this->hostConfigurationNames() as $name) {
+                        if ($config = @parse_ini_file($path . '/' . $name . '.ini', true)) {
+                            unset($this->ini_config['initial_plugins']);  // Don't let plugin settings be merged
+                            unset($this->ini_config['alwaysplugins']);
+                            unset($this->ini_config['antiplugins']);
+                            $this->ini_config = array_replace_recursive($this->ini_config, $config);
+                            break;
+                        }
                     }
                 }
 
@@ -352,7 +414,7 @@ namespace Idno\Core {
                 foreach ($_SERVER as $name => $val) {
                     if (substr($name, 0, 5) == 'IDNO_') {
                         $configName = strtolower(str_replace('IDNO_', '', $name));
-                        $this->ini_config[$configName] = $val;
+                        $this->ini_config[$configName] = static::environmentValue($val);
                     }
                 }
                 // Backwards compat: also process KNOWN_ but don't override IDNO_ values
@@ -360,7 +422,7 @@ namespace Idno\Core {
                     if (substr($name, 0, 6) == 'KNOWN_') {
                         $configName = strtolower(str_replace('KNOWN_', '', $name));
                         if (!isset($this->ini_config[$configName])) {
-                            $this->ini_config[$configName] = $val;
+                            $this->ini_config[$configName] = static::environmentValue($val);
                         }
                     }
                 }

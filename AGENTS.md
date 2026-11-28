@@ -939,6 +939,22 @@ something). What existing sites, hubs and plugins hold was kept, and must stay:
   deprecated names. `Tests/Core/WebSubCompatibilityTest.php` checks that the earlier class names, event name
   and the callback address still work, and `Tests/Pages/WebSub/CallbackTest.php` asks the callback over HTTP.
 
+## Translations
+
+`Idno::site()->language()` (`Idno\Core\Language`) asks each registered `Translation` in turn and takes the first
+answer that is not the string itself. `GetTextTranslation($domain, $path)` reads a compiled gettext catalogue,
+`<path>/<locale>/LC_MESSAGES/<domain>.mo`; a plugin or theme registers one for a domain of its own (its name in
+lower case) in `registerTranslations()`.
+
+- **Core's domain is `idno`** (`GetTextTranslation::CORE_DOMAIN`), the name of the template that
+  `php idno.php build-lang core` writes (`languages/source/idno.pot`), and the constructor's default.
+- **It was `known`**, and sites have catalogues compiled as `known.mo`. `Idno::init()` registers what
+  `GetTextTranslation::forCore()` returns: the `idno` domain, then the `known` one
+  (`EARLIER_CORE_DOMAIN`), which is reached only for a string `idno` has no translation of. Keep the second
+  registration and its place after the first. A domain with no catalogue returns every string unchanged.
+- `Tests/Core/CoreTranslationCatalogueTest.php` compiles catalogues of its own and reads them through gettext; it
+  is skipped on a machine without the gettext extension or the `en_US.UTF-8` locale.
+
 ## Code Style
 
 - PHP 8.3+ required; uses PSR-4 autoloading (`Idno\`, `IdnoPlugins\`, `Themes\`, `ConsolePlugins\`)
@@ -957,6 +973,22 @@ something). What existing sites, hubs and plugins hold was kept, and must stay:
 - Key settings: `database`, `dbname`, `dbhost`, `dbuser`, `dbpass`, `event_queue`,
   `filesystem`, `uploadpath`, `site_secret`
 - `event_queue = 'AsynchronousQueue'` enables the async pipeline (required for ActivityPub)
+- Where a setting comes from, later ones winning (`Config::loadIniFiles()`): the database, `config.ini`,
+  `config.json`, the per-domain file, then every `IDNO_<SETTING>` server variable. A `KNOWN_<SETTING>`
+  variable only fills a setting that nothing else set.
+- A value from the environment goes through `Config::environmentValue()`: one that is exactly `true`, `on`,
+  `yes`, `false`, `off`, `no` or `none` (any letter case; `Config::ENVIRONMENT_WORDS`) becomes that boolean,
+  as the word means in `config.ini`; anything else is the text it was. Without it `IDNO_DEBUG=false` is a
+  text that is not empty, and debugging is on. Don't copy a server variable into the configuration any
+  other way, and test a boolean setting with `empty()` or as a condition, never against the text `'false'`
+  (`parse_ini_file()` gives `"1"` and `""` for the same words, not booleans).
+- The per-domain file is `<host>.ini` beside `config.ini`. `Config::hostConfigurationNames()` gives the names
+  tried, in order: the host of the site's address, then, for a host that begins with `www.`, the host without
+  it, which is what the host is called everywhere else (`host` after `init()`, `hosts/<host>/`, the
+  multitenant database, the upload folder). Only the first file found is read. On the command line the host
+  comes from `IDNO_DOMAIN`.
+- `Tests/Core/ConfigLoadingTest.php` checks both, with a configuration that reads a folder of the test's
+  (`Config::configurationPaths()` is the seam).
 - Sensitive files: `.env`, `config.ini`, `configuration/` — never commit these
 
 ## Security
@@ -1238,6 +1270,21 @@ something). What existing sites, hubs and plugins hold was kept, and must stay:
   that holds backslashes that way: in a quoted PHP string `\\` is one backslash, which
   once turned a `\s` into "a backslash or the letter s" and refused every host that
   begins with "s".
+- Tags of a post: the `tags` field of an entity is what whoever made the post sent (no form has
+  a field for it, but a form POST, a signed API request and the categories of a Micropub request
+  all can), and it is drawn for every visitor. `\Idno\Core\Tags` holds the rules. A stored value
+  is one text or a list of texts; `Tags::clean()` makes that of what a request sent (one line of
+  plain text each: no elements, no angle brackets, no control characters, 255 characters, 100
+  tags; anything in a list that is no text or number is left out), and every content type's
+  `saveDataFromInput()` stores `Tags::clean($page->getInput('tags'))`, never the input itself.
+  Posts stored before November 2026 hold whatever was sent, so nothing that prints tags relies
+  on that: `forms/output/tags` (one in `templates/default`, one in Twenty26) reads the value
+  with `Tags::texts()`, which gives only its texts, and prints each with `htmlspecialchars()`,
+  with `Tags::url()` for the link. Anything else that reads `->tags` (`Entity::getTags()`, the
+  MySQL search text) goes through `Tags::texts()` too, because the value may be a list or hold
+  things that are no text. A new content type calls `Tags::clean()`; a theme that draws tags
+  itself uses `Tags::texts()` and escapes. `Tests/Core/TagOutputTest.php` and
+  `Tests/Pages/PostTagsTest.php` (over HTTP) check this.
 - SSRF protection: fetch a URL supplied by a remote party (webmention sources and
   endpoints, ActivityPub actors and inboxes, Micropub media URLs, link previews) with
   `\Idno\Core\Webservice::safeSend($verb, $url, $params, $headers)`, never with

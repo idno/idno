@@ -192,12 +192,11 @@ namespace IdnoPlugins\Checkin {
                 $new = false;
             }
             $body         = \Idno\Core\Idno::site()->currentPage()->getInput('body');
-            $tags         = \Idno\Core\Idno::site()->currentPage()->getInput('tags');
             $lat          = \Idno\Core\Idno::site()->currentPage()->getInput('lat');
             $long         = \Idno\Core\Idno::site()->currentPage()->getInput('long');
             $user_address = \Idno\Core\Idno::site()->currentPage()->getInput('user_address');
             $placename    = \Idno\Core\Idno::site()->currentPage()->getInput('placename');
-            $tags         = \Idno\Core\Idno::site()->currentPage()->getInput('tags');
+            $tags         = \Idno\Core\Tags::clean(\Idno\Core\Idno::site()->currentPage()->getInput('tags'));
             $access       = \Idno\Core\Idno::site()->currentPage()->getInput('access');
             $anonymity       = \Idno\Core\Idno::site()->currentPage()->getInput('anonymity');
 

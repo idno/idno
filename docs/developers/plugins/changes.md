@@ -45,6 +45,20 @@ bar, the server's log and the `Referer` of the next request.
 
 The template is `forms/link`; a theme that has its own copy should ask `\Idno\Core\Actions::linkMethod()` the same
 way and print `method="post"` on the form.
+## Tags of a post
+
+The `tags` field of a post holds what whoever made the post sent, and it used to be stored and printed as it came.
+It is now handled by `\Idno\Core\Tags`.
+
+- **A theme that has its own `forms/output/tags` template** (a copy of the one in `templates/default`, for
+  example) must print each tag as text. Read the value with `\Idno\Core\Tags::texts($vars['tags'])`, which gives a
+  list of texts whatever was stored (one text, a list, or a list that holds other things), print each with
+  `htmlspecialchars()`, and build the link with `htmlspecialchars(\Idno\Core\Tags::url($tag))`. A copy of the
+  earlier template lets a member put markup into the page of every visitor. The same goes for any template of
+  yours that prints `$object->tags` itself.
+- **A content type that stores tags from the request** should store
+  `\Idno\Core\Tags::clean($page->getInput('tags'))`: one line of plain text, or a list of them, or `null`.
+  Posts stored earlier are not rewritten, so escape when printing whether or not you clean when storing.
 
 ## Deleting an account
 
@@ -84,6 +98,19 @@ Following a person, the `follow` and `unfollow` events and WebSub subscriptions 
   `Idno::site()->reader()`, or draws one of those templates will fail when that code runs. No bundled plugin or theme used any of it.
 
 ## Names that changed
+
+### The gettext domain of core's translations
+
+Core's own strings are in the gettext domain `idno`, the name of their template (`languages/source/idno.pot`): the
+catalogue of a language is `languages/<locale>/LC_MESSAGES/idno.mo`. The domain was `known` before.
+
+* A catalogue compiled under the earlier name, `known.mo`, is still read, so a site that is already translated
+  stays translated. Where a language has both files, `idno.mo` is asked first and `known.mo` only for a string it
+  does not translate. Name new catalogues `idno.po` and `idno.mo`.
+* The default domain of `new \Idno\Core\GetTextTranslation()` is now `idno`. A plugin or theme that created one
+  with no arguments to reach core's strings gets the new domain; pass `'known'` to read the earlier one, or use
+  `\Idno\Core\GetTextTranslation::forCore()`, which gives both in the order core registers them. No bundled plugin
+  or theme did this: each registers a domain of its own, and those have not changed.
 
 ### WebSub (formerly PubSubHubbub)
 
