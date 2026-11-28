@@ -8,10 +8,10 @@ The following individuals have made major contributions to Idno.
 
 ## Emeritus Known team
 
+These were core members of the team when the project was Known.
+
 * Erin Jo Richey [https://erinjorichey.com/](https://erinjorichey.com/)
 * Marcus Povey [https://www.marcus-povey.co.uk](https://www.marcus-povey.co.uk)
-
-Homepage: [https://idno.co/](https://idno.co/)
 
 ## Community contributors
 
