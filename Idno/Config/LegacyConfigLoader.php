@@ -58,7 +58,8 @@ final class LegacyConfigLoader
         foreach ($server as $name => $val) {
             $name = (string) $name;
             if (str_starts_with($name, 'IDNO_')) {
-                $config[strtolower(str_replace('IDNO_', '', $name))] = $val;
+                $key = strtolower(str_replace('IDNO_', '', $name));
+                $config[$key] = self::environmentValue($key, $val);
             }
         }
         // Backwards compatibility: KNOWN_ never overrides a value that is already set.
@@ -67,7 +68,7 @@ final class LegacyConfigLoader
             if (str_starts_with($name, 'KNOWN_')) {
                 $configName = strtolower(str_replace('KNOWN_', '', $name));
                 if (!isset($config[$configName])) {
-                    $config[$configName] = $val;
+                    $config[$configName] = self::environmentValue($configName, $val);
                 }
             }
         }
@@ -85,6 +86,36 @@ final class LegacyConfigLoader
         unset($config['host']); // Host should always come from the URL
 
         return new BootConfig($config, $default);
+    }
+
+    /** The words config.ini reads as on and as off; an environment variable means the same by them. */
+    private const WORDS = [
+        'true' => true, 'on' => true, 'yes' => true,
+        'false' => false, 'off' => false, 'no' => false, 'none' => false,
+    ];
+
+    /** Settings that are always text: a title or a database name may read "No" or "none". */
+    private const TEXT_SETTINGS = [
+        'title', 'description', 'url', 'domain', 'dbname', 'dbhost', 'dbport', 'database', 'uploadpath', 'theme', 'language',
+        'timezone', 'from_email', 'from_name', 'reply_to_email', 'smtp_host', 'smtp_port', 'smtp_secure', 'filesystem', 'hub', 'cachepath',
+        'event_queue', 'loglevel', 'proxy_type', 'template', 'sessions_storage', 'session_path',
+    ];
+
+    /**
+     * What an IDNO_ or KNOWN_ variable is as a setting. A variable is text, so "false" would be text that is not
+     * empty and a setting code tests with empty() (`debug`) would count as on. A value that is exactly true, on,
+     * yes, false, off, no or none, in any letter case, is the boolean config.ini reads that word as; every other
+     * value ("0" and "1" included) is kept as written. A password and a setting that is text by nature
+     * keep the word the owner typed.
+     */
+    private static function environmentValue(string $key, mixed $value): mixed
+    {
+        if (!is_string($value) || in_array($key, self::TEXT_SETTINGS, true) || \Idno\Portability\SettingsRedactor::isSecretKey($key)) {
+            return $value;
+        }
+        $word = strtolower($value);
+
+        return array_key_exists($word, self::WORDS) ? self::WORDS[$word] : $value;
     }
 
     /**

@@ -82,6 +82,40 @@ final class LegacyConfigLoaderTest extends TestCase
         $this->assertSame('env', $this->load($dir, ['IDNO_DBNAME' => 'env'])->get('dbname'));
     }
 
+    /** A site owner who sets IDNO_DEBUG=false (any spelling of off) must not have visitors shown stack traces. */
+    public function testAnEnvironmentSettingSaidOffIsOff(): void
+    {
+        foreach (['false', 'FALSE', 'Off', 'no', 'NONE'] as $word) {
+            $this->assertFalse($this->load($this->project(), ['IDNO_DEBUG' => $word])->get('debug'), $word);
+        }
+        foreach (['true', 'On', 'YES'] as $word) {
+            $this->assertTrue($this->load($this->project(), ['IDNO_DEBUG' => $word])->get('debug'), $word);
+        }
+        $this->assertFalse($this->load($this->project(), ['KNOWN_DEBUG' => 'off'])->get('debug'));
+    }
+
+    /** The environment and config.ini agree: the same word is the same boolean, and other text is untouched. */
+    public function testAnEnvironmentWordAgreesWithTheFileAndOtherValuesAreKept(): void
+    {
+        $this->assertSame('0', $this->load($this->project(), ['IDNO_DEBUG' => '0'])->get('debug'));
+        $this->assertSame('1', $this->load($this->project(), ['IDNO_DEBUG' => '1'])->get('debug'));
+        $this->assertSame('maybe', $this->load($this->project(), ['IDNO_DEBUG' => 'maybe'])->get('debug'));
+    }
+
+    /** A password or a title that happens to read "off" or "No" stays the text the owner typed. */
+    public function testAValueMeantAsTextIsNeverTurnedIntoABoolean(): void
+    {
+        $config = $this->load($this->project(), [
+            'IDNO_DBPASS' => 'off', 'IDNO_SITE_SECRET' => 'no', 'IDNO_TITLE' => 'No', 'IDNO_DBNAME' => 'none', 'IDNO_DBUSER' => 'yes', 'IDNO_SMTP_PASSWORD' => 'true',
+        ]);
+        $this->assertSame('off', $config->get('dbpass'));
+        $this->assertSame('no', $config->get('site_secret'));
+        $this->assertSame('No', $config->get('title'));
+        $this->assertSame('none', $config->get('dbname'));
+        $this->assertSame('yes', $config->get('dbuser'));
+        $this->assertSame('true', $config->get('smtp_password'));
+    }
+
     public function testKnownEnvDoesNotOverrideIdnoEnv(): void
     {
         $config = $this->load($this->project(), ['IDNO_DBNAME' => 'i', 'KNOWN_DBNAME' => 'k']);

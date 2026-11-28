@@ -5429,6 +5429,10 @@ Boot config precedence, highest first (pinned by `Tests/Kernel/LegacyConfigLoade
 
 1. `IDNO_*` environment variables from `$_SERVER` (key = lower-cased name without the
    prefix, e.g. `IDNO_DBNAME` -> `dbname`; `IDNO_DOMAIN` -> `domain`)
+   An `IDNO_*` (or `KNOWN_*`) value that is exactly `true`, `on`, `yes`, `false`, `off`, `no` or `none` (any letter case)
+   is the boolean config.ini reads that word as (`LegacyConfigLoader::environmentValue()`: `IDNO_DEBUG=false` is off); every other value,
+   `0` and `1` included, stays text, and so does the value of a secret key (`SettingsRedactor::isSecretKey()`) or of a setting in
+   `LegacyConfigLoader::TEXT_SETTINGS` (a title of `No`, a database named `none`).
 2. Special variables from `$_ENV`: `IDNO_DATABASE_URL`, `CLOUDCUBE_URL`,
    `IDNO_AWS_S3_*`, `IDNO_UPLOAD_PATH` (each with a `KNOWN_` fallback; `IDNO_` wins).
    Within this group `IDNO_UPLOAD_PATH` beats the S3-derived `uploadpath`.
