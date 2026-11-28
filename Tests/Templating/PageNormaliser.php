@@ -96,6 +96,10 @@ final class PageNormaliser
             $body = preg_replace_callback('/\b(photo-|spinner_|category-name-|edit-category-)([0-9a-f]{32})(?![0-9a-f])/', static fn (array $m): string => $m[1] . $numbers[$m[2]], $body) ?? $body;
         }
 
+        // The offset in the label of a time zone option (`(GMT-05:00) America, New_York`, `(GMT) Europe, London`): it is the zone's offset on the day
+        // the page is drawn, so it moves when daylight saving time starts or ends.
+        $body = preg_replace('/\(GMT(?:[+-]\d\d:\d\d)?\)(?= [A-Z][A-Za-z_]*, )/', '(GMT{offset})', $body) ?? $body;
+
         if (!$html) {
             return $body;
         }

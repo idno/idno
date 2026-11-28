@@ -231,6 +231,15 @@ final class PageNormaliserTest extends TestCase
         $this->assertSame('{"html": "<p>a</p>   <p>b</p>"}', $this->normalise('{"html": "<p>a</p>   <p>b</p>"}'), 'the JSON of a page');
     }
 
+    /** Catches: a golden page that fails twice a year, when the offset in a time zone's label moves with daylight saving time. */
+    public function testTheOffsetInATimeZoneLabelIsReplacedAndNothingNearItIs(): void
+    {
+        $this->assertSame('<option value="America/New_York" >(GMT{offset}) America, New_York</option>', $this->normalise('<option value="America/New_York" >(GMT-04:00) America, New_York</option>'));
+        $this->assertSame('(GMT{offset}) Europe, London', $this->normalise('(GMT) Europe, London'));
+        $near = 'Meet at (GMT-05:00) in the lobby; the (GMT) column; (UTC-05:00) America, New_York; (GMT-5) America, New_York';
+        $this->assertSame($near, $this->normalise($near), 'a time written in a sentence, or another label, is the content');
+    }
+
     public function testNothingElseIsReplaced(): void
     {
         $page = '<div id="entry-1" data-uuid="00000000-0000-4000-8000-000000000011" class="h-entry"><time class="dt-published" datetime="2026-03-01T12:00:00+00:00">1772366400</time>'
