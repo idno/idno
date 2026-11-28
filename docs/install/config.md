@@ -337,11 +337,9 @@ These take the name of a class, either in full or as a name inside Idno's own na
 The code still reads or stores these, but setting them changes nothing you can see:
 
 - **`indieweb_reference`**: saved by "Include permalinks" on the Site settings page. Nothing uses it.
-- **`wayback_machine`**: saved as off by the Site settings page. Nothing uses it.
 - **`force_ssl`**, **`ignore_ssl_gatekeeper`**: read only by a check that no page calls.
 - **`multi_syndication`**: read by `Config::multipleSyndicationAccounts()`, which nothing calls.
 - **`external_plugin_path`**: meant for plugins kept in another folder; use `directloadplugins[]` instead.
-- **`aws_key`**, **`aws_secret`**, **`aws_bucket`**, **`aws_region`** and the `IDNO_AWS_S3_*` and `CLOUDCUBE_*` environment variables: these point `uploadpath` at an `s3://` address, but Idno has no file system for one. They work only if something else on the server makes PHP understand `s3://` paths.
 
 ## Set by Idno itself
 

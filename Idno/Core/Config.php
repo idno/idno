@@ -38,7 +38,6 @@ namespace Idno\Core {
             'default_config'         => true, // This is a trip-switch - changed to false if configuration is loaded from an ini file / the db
             'loglevel'               => 5,
             'multi_syndication'      => true,
-            'wayback_machine'        => false,
             'static_url'             => false,
             'user_avatar_favicons'   => true,
             'form_token_expiry'      => 3600,
@@ -334,38 +333,6 @@ namespace Idno\Core {
                         $this->ini_config['dbport'] = $parsed['port'];
                     }
 
-                    $cloudcube = array_key_exists('CLOUDCUBE_URL', $_ENV);
-                    $aws_s3 = array_key_exists('IDNO_AWS_S3_BUCKET', $_ENV) || array_key_exists('KNOWN_AWS_S3_BUCKET', $_ENV);
-                    $bucket = '';
-
-                    if ($cloudcube) {
-                        $parsed = parse_url($_ENV['CLOUDCUBE_URL']);
-                        $host_parts = explode('.', $parsed['host']);
-                        $bucket = $host_parts[0];
-                        $this->ini_config['aws_key'] = $_ENV['CLOUDCUBE_ACCESS_KEY_ID'];
-                        $this->ini_config['aws_secret'] = $_ENV['CLOUDCUBE_SECRET_ACCESS_KEY'];
-                        $this->ini_config['aws_bucket'] = $bucket;
-                        $this->ini_config['aws_region'] = $bucket == 'cloud-cube-eu' ? 'eu-west-1' : 'us-east-1';
-                        $path = $parsed['path'];
-                    } elseif ($aws_s3) {
-                        $bucket = $_ENV['IDNO_AWS_S3_BUCKET'] ?? $_ENV['KNOWN_AWS_S3_BUCKET'];
-                        $this->ini_config['aws_key'] = $_ENV['IDNO_AWS_S3_ACCESS_KEY_ID'] ?? $_ENV['KNOWN_AWS_S3_ACCESS_KEY_ID'];
-                        $this->ini_config['aws_secret'] = $_ENV['IDNO_AWS_S3_SECRET_ACCESS_KEY'] ?? $_ENV['KNOWN_AWS_S3_SECRET_ACCESS_KEY'];
-                        $this->ini_config['aws_bucket'] = $bucket;
-                        $this->ini_config['aws_region'] = $_ENV['IDNO_AWS_S3_REGION'] ?? $_ENV['KNOWN_AWS_S3_REGION'];
-                        $path = str_replace('//', '/', '/'.($_ENV['IDNO_AWS_S3_PATH_PREFIX'] ?? $_ENV['KNOWN_AWS_S3_PATH_PREFIX']));
-                    }
-
-                    if (($cloudcube || $aws_s3) && (!empty($bucket))) {
-                        $this->ini_config['filesystem'] = 'local';
-                        $this->ini_config['uploadpath'] = "s3://{$bucket}{$path}";
-                    }
-
-                    $awsRegion = $_ENV['IDNO_AWS_S3_REGION'] ?? $_ENV['KNOWN_AWS_S3_REGION'] ?? null;
-                    if ($awsRegion) {
-                        $this->ini_config['aws_region'] = $awsRegion;
-                    }
-
                     $uploadPath = $_ENV['IDNO_UPLOAD_PATH'] ?? $_ENV['KNOWN_UPLOAD_PATH'] ?? null;
                     if ($uploadPath) {
                         $this->ini_config['uploadpath'] = $uploadPath;
@@ -484,7 +451,6 @@ namespace Idno\Core {
             $this->disable_cleartext_warning = false; // Set to true to disable warning when access credentials are sent in the clear
             $this->cookie_jar                = rtrim(sys_get_temp_dir(), '/\\') . DIRECTORY_SEPARATOR; // Cookie jar for API requests, default location isn't terribly secure on shared hosts!
             $this->multi_syndication         = true; // Do we allow multiple accounts per syndication endpoint?
-            $this->wayback_machine           = false; // Automatically ping new pages on public sites to the Internet Archive
 
             $this->loadIniFiles();
             $this->sanitizeValues();
