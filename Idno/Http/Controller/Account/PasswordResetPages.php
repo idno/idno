@@ -68,7 +68,7 @@ final class PasswordResetPages
         if ($this->resets->isSignedIn()) {
             return $this->renderer->denied($page);
         }
-        $email = self::text($page, 'email');
+        $email = $page->text('email');
 
         // An account that is being deleted, and an address the site has blocked, are sent no code: the answer is the same
         $account = $this->resets->accountForRequest($email);
@@ -88,8 +88,8 @@ final class PasswordResetPages
         if ($this->resets->isSignedIn()) {
             return $this->renderer->denied($page);
         }
-        $code = self::text($page, 'code');
-        $email = self::text($page, 'email');
+        $code = $page->text('code');
+        $email = $page->text('email');
 
         if ($this->resets->memberFor($email, $code) === null) {
             return $this->refuseTheCode($page);
@@ -106,10 +106,10 @@ final class PasswordResetPages
         if ($this->resets->isSignedIn()) {
             return $this->renderer->denied($page);
         }
-        $code = self::text($page, 'code');
-        $email = self::text($page, 'email');
-        $password = trim(self::text($page, 'password'));
-        $password2 = trim(self::text($page, 'password2'));
+        $code = $page->text('code');
+        $email = $page->text('email');
+        $password = trim($page->text('password'));
+        $password2 = trim($page->text('password2'));
 
         // The code is judged first: whoever has not a right one is told only that, whatever they typed as passwords
         $account = $this->resets->memberFor($email, $code);
@@ -158,17 +158,4 @@ final class PasswordResetPages
         ], $status);
     }
 
-    /**
-     * A request field as text: a field sent as an array (`code[]=x`, `email[$gt]=a`) is an empty one, never an error.
-     */
-    private static function text(PageContext $page, string $name): string
-    {
-        $value = $page->input($name);
-
-        return match (true) {
-            is_string($value) => $value,
-            is_int($value), is_float($value) => (string) $value,
-            default => '',
-        };
-    }
 }

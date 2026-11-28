@@ -370,10 +370,11 @@ return static function (ContainerConfigurator $container, ContainerBuilder $buil
     $services->set(\Idno\Security\NativeSession::class)->public();
 
     // Failed logins are counted on the site's one cache pool, which is built when first fetched (it needs the legacy
-    // application), so the throttle is built then too: the login page fetches it.
+    // application), so the throttle is built then too: the sign-in attempt rule below takes it.
     $services->set(\Idno\Security\LoginThrottle::class)->args([service(\Psr\Cache\CacheItemPoolInterface::class)])->public();
 
-    // The sign-in attempt rule over the throttle: public, because the legacy login page's facade fetches it.
+    // The sign-in attempt rule over the throttle: the login controller takes it by injection; public because the legacy account settings page and the
+    // deprecated `Idno\Pages\Session\Login` delegates fetch it from the container.
     $services->set(\Idno\Security\LoginAttempts::class)->public();
 
     // Symfony Security knows who is making each request (config/packages/security.php): the legacy application authenticates

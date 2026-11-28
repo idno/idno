@@ -45,8 +45,8 @@ final class RegistrationPages
             return $early;
         }
         // Texts: a field sent as an array is an empty one
-        $code = self::text($page, 'code');
-        $email = self::text($page, 'email');
+        $code = $page->text('code');
+        $email = $page->text('email');
 
         $admission = $this->admission($email, $code);
         if ($admission->problem !== '') {
@@ -65,12 +65,12 @@ final class RegistrationPages
             return $early;
         }
         // Texts: a field sent as an array is an empty one
-        $name = self::text($page, 'name');
-        $handle = trim(self::text($page, 'handle'));
-        $password = trim(self::text($page, 'password'));
-        $password2 = trim(self::text($page, 'password2'));
-        $email = trim(self::text($page, 'email'));
-        $code = self::text($page, 'code');
+        $name = $page->text('name');
+        $handle = trim($page->text('handle'));
+        $password = trim($page->text('password'));
+        $password2 = trim($page->text('password2'));
+        $email = trim($page->text('email'));
+        $code = $page->text('code');
 
         $admission = $this->admission($email, $code);
         if ($admission->problem !== '') {
@@ -263,17 +263,4 @@ final class RegistrationPages
         return $value === '' || $value === '0';
     }
 
-    /**
-     * A request field as text: a field sent as an array (`code[]=x`, `email[$gt]=a`) is an empty one, never an error.
-     */
-    private static function text(PageContext $page, string $name): string
-    {
-        $value = $page->input($name);
-
-        return match (true) {
-            is_string($value) => $value,
-            is_int($value), is_float($value) => (string) $value,
-            default => '',
-        };
-    }
 }

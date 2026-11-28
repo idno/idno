@@ -1000,7 +1000,7 @@ namespace Idno\Common {
                 $why = $object->whyNotRemovableBy(\Idno\Core\Idno::site()->session()->currentUserUUID());
                 if ($why !== '') {
                     $object->explainWhyNotRemovable($why);
-                    $this->forward(\Idno\Pages\Session\Login::sanitizeRedirectUrl($_SERVER['HTTP_REFERER'] ?? ''));
+                    $this->forward(\Idno\Http\RedirectTarget::sanitize((string) ($_SERVER['HTTP_REFERER'] ?? ''), \Idno\Core\Idno::site()->config()->getDisplayURL(), \Idno\Core\Idno::site()->config()->getURL()));
 
                     return false;
                 }
@@ -1024,7 +1024,7 @@ namespace Idno\Common {
             if ($object->delete()) {
                 \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->esc_('%s was deleted.', [$object->getTitle()]));
             }
-            $this->forward(\Idno\Pages\Session\Login::sanitizeRedirectUrl($_SERVER['HTTP_REFERER'] ?? ''));
+            $this->forward(\Idno\Http\RedirectTarget::sanitize((string) ($_SERVER['HTTP_REFERER'] ?? ''), \Idno\Core\Idno::site()->config()->getDisplayURL(), \Idno\Core\Idno::site()->config()->getURL()));
         }
 
         /**

@@ -58,7 +58,7 @@ namespace IdnoPlugins\Media\Pages {
             $this->editGatekeeper($object);
 
             if ($object->saveDataFromInput()) {
-                $forward = \Idno\Pages\Session\Login::sanitizeRedirectUrl($this->getInput('forward-to', $object->getDisplayURL()));
+                $forward = \Idno\Http\RedirectTarget::sanitize((string) ($this->getInput('forward-to', $object->getDisplayURL())), \Idno\Core\Idno::site()->config()->getDisplayURL(), \Idno\Core\Idno::site()->config()->getURL());
                 $this->forward($forward);
             }
 

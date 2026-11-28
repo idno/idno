@@ -17,7 +17,7 @@ namespace Idno\Pages\Annotation {
         // Handle GET requests to a comment
         function getContent()
         {
-            $this->forward(\Idno\Pages\Session\Login::sanitizeRedirectUrl($_SERVER['HTTP_REFERER'] ?? '')); // Send the user back to whence they came
+            $this->forward(\Idno\Http\RedirectTarget::sanitize((string) ($_SERVER['HTTP_REFERER'] ?? ''), \Idno\Core\Idno::site()->config()->getDisplayURL(), \Idno\Core\Idno::site()->config()->getURL())); // Send the user back to whence they came
         }
 
         // Handle POST requests: this is where the interesting stuff happens

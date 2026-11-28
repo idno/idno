@@ -323,20 +323,6 @@ namespace Idno\Entities {
         }
 
         /**
-         * A cleanup utility method to remove all invitations associated with a given email address
-         *
-         * @param string $email
-         */
-        static function removeByEmail($email)
-        {
-            foreach (static::allForEmail($email) as $row) {
-                static::unrestricted(static fn () => $row->delete());
-            }
-
-            return true;
-        }
-
-        /**
          * Use this invitation up, once. It is read again (an administrator may have withdrawn it, or sent it again
          * with a new code, since the page looked) and then CLAIMED: one conditional delete that only one caller can
          * win, so of two registrations that arrive with the same link exactly one is told yes. A claim does not run

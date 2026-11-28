@@ -68,7 +68,7 @@ namespace IdnoPlugins\StaticPages\Pages {
             if ($object->saveDataFromInput()) {
                 $this->forward($object->getURL());
             } else {
-                $this->forward(\Idno\Pages\Session\Login::sanitizeRedirectUrl($_SERVER['HTTP_REFERER'] ?? ''));
+                $this->forward(\Idno\Http\RedirectTarget::sanitize((string) ($_SERVER['HTTP_REFERER'] ?? ''), \Idno\Core\Idno::site()->config()->getDisplayURL(), \Idno\Core\Idno::site()->config()->getURL()));
             }
 
         }

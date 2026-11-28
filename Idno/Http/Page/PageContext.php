@@ -101,6 +101,21 @@ final class PageContext
     }
 
     /**
+     * An input of the request as text: a string or a number as sent, and anything else (a field sent as an array, `code[]=x` or `email[$gt]=a`, or no field)
+     * an empty string, never an error.
+     */
+    public function text(string $name): string
+    {
+        $value = $this->input($name);
+
+        return match (true) {
+            is_string($value) => $value,
+            is_int($value), is_float($value) => (string) $value,
+            default => '',
+        };
+    }
+
+    /**
      * An input of the request: its form fields (a POST over the query string; never a cookie), then what the page set
      * (setInput()), then the fields of a `json` input and of a JSON body (a request that is not a GET).
      */

@@ -95,11 +95,6 @@ final class NativeSession
         return session_id();
     }
 
-    public function name(): string
-    {
-        return session_name();
-    }
-
     /**
      * Installs a session save handler (`session_write_close()` is called at the end of the request through it).
      */

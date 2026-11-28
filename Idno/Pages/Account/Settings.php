@@ -40,20 +40,20 @@ namespace Idno\Pages\Account {
             // right nothing is changed.
             $language = \Idno\Core\Idno::site()->language();
             if ((!empty($email) && $email != $user->email) || !empty($password)) {
-                $key = \Idno\Pages\Session\Login::throttleKeyFor($user);
-                if (!\Idno\Pages\Session\Login::throttleAttempt($key)) {
+                $key = \Idno\Security\LoginThrottle::keyForAccount((string) $user->getUUID());
+                if (!\Idno\Core\Idno::container()->get(\Idno\Security\LoginAttempts::class)->attempt($key)) {
                     \Idno\Core\Idno::site()->session()->addErrorMessage($language->_("Too many failed sign-in attempts for that username or email address. Please wait a few minutes and try again."));
-                    $this->forward(\Idno\Pages\Session\Login::sanitizeRedirectUrl($_SERVER['HTTP_REFERER'] ?? ''));
+                    $this->forward(\Idno\Http\RedirectTarget::sanitize((string) ($_SERVER['HTTP_REFERER'] ?? ''), \Idno\Core\Idno::site()->config()->getDisplayURL(), \Idno\Core\Idno::site()->config()->getURL()));
 
                     return;
                 }
                 if (!$user->checkPassword(trim((string)$this->getInput('current_password')))) {
                     \Idno\Core\Idno::site()->session()->addErrorMessage($language->_("Your current password isn't right, so nothing was changed. Please enter it to change your email address or password."));
-                    $this->forward(\Idno\Pages\Session\Login::sanitizeRedirectUrl($_SERVER['HTTP_REFERER'] ?? ''));
+                    $this->forward(\Idno\Http\RedirectTarget::sanitize((string) ($_SERVER['HTTP_REFERER'] ?? ''), \Idno\Core\Idno::site()->config()->getDisplayURL(), \Idno\Core\Idno::site()->config()->getURL()));
 
                     return;
                 }
-                \Idno\Pages\Session\Login::throttleReset($key);
+                \Idno\Core\Idno::container()->get(\Idno\Security\LoginAttempts::class)->reset($key);
             }
 
             if (!empty($name)) {
@@ -86,7 +86,7 @@ namespace Idno\Pages\Account {
             if ($user->save()) {
                 \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->_("Your details were saved."));
             }
-            $this->forward(\Idno\Pages\Session\Login::sanitizeRedirectUrl($_SERVER['HTTP_REFERER'] ?? ''));
+            $this->forward(\Idno\Http\RedirectTarget::sanitize((string) ($_SERVER['HTTP_REFERER'] ?? ''), \Idno\Core\Idno::site()->config()->getDisplayURL(), \Idno\Core\Idno::site()->config()->getURL()));
         }
 
     }
