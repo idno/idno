@@ -6,6 +6,7 @@ namespace Idno\Http\Page;
 
 use Idno\Common\Entity;
 use Idno\Entities\User;
+use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -113,6 +114,61 @@ final class PageContext
             is_int($value), is_float($value) => (string) $value,
             default => '',
         };
+    }
+
+    /**
+     * A file field of the request, read from the request's files (never `$_FILES`). Only a file PHP itself received through HTTP is
+     * received: a path a request names in a field is never an upload. A field that holds a list of files, or no file, is missing.
+     * PHP's size refusals are `TooLarge` and its other refusals `Failed`.
+     *
+     * A POST whose body is over `post_max_size` reaches PHP with no fields and no files, which looks like nothing chosen; a POST of a form (multipart or
+     * urlencoded) that holds no field and no file, whose declared `Content-Length` is over the limit, is `TooLarge` (`$postMaxBytes` is the limit; when null, the smaller of PHP's
+     * `post_max_size` and `upload_max_filesize`, as Symfony reads them; 0 or less is no limit).
+     */
+    public function file(string $name, ?int $postMaxBytes = null): Upload
+    {
+        $file = $name === '' ? null : $this->request->files->all()[$name] ?? null;
+
+        if (!$file instanceof UploadedFile) {
+            return $this->bodyRefused($postMaxBytes) ? new Upload(UploadState::TooLarge) : Upload::missing();
+        }
+
+        $error = $file->getError();
+        if ($error === UPLOAD_ERR_NO_FILE) {
+            return Upload::missing();
+        }
+        if ($error === UPLOAD_ERR_INI_SIZE || $error === UPLOAD_ERR_FORM_SIZE) {
+            return new Upload(UploadState::TooLarge);
+        }
+        if ($error !== UPLOAD_ERR_OK || !$file->isValid()) {
+            return new Upload(UploadState::Failed);
+        }
+
+        $path = $file->getPathname();
+        $size = is_file($path) && is_readable($path) ? @filesize($path) : false;
+        if ($size === false) {
+            return new Upload(UploadState::Failed);
+        }
+
+        $base = basename(str_replace('\\', '/', $file->getClientOriginalName()));
+
+        return new Upload(UploadState::Received, $path, preg_replace('/[\x00-\x1f\x7f]/', '', $base) ?? '', $size);
+    }
+
+    private function bodyRefused(?int $limit): bool
+    {
+        if ($this->request->getRealMethod() !== 'POST' || $this->request->request->count() > 0 || $this->request->files->count() > 0) {
+            return false;
+        }
+        // (only a form body is parsed into fields and files: a JSON or other body is never "refused" by PHP)
+        $type = strtolower((string) $this->request->headers->get('Content-Type'));
+        if (!str_starts_with($type, 'multipart/form-data') && !str_starts_with($type, 'application/x-www-form-urlencoded')) {
+            return false;
+        }
+        $limit ??= UploadedFile::getMaxFilesize();
+        $length = $this->request->server->get('CONTENT_LENGTH');
+
+        return $limit > 0 && is_numeric($length) && (int) $length > $limit;
     }
 
     /**

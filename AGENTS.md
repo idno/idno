@@ -932,6 +932,11 @@ and `Tests/Upgrade/UpgradeEndToEndTest`. Do not add another.
   so `$request->request` is empty for form-encoded `PUT`, `PATCH` and `DELETE` requests
   (it is filled for `POST`). Read the raw body with `$request->getContent()` and parse it
   yourself (e.g. `parse_str()` or `json_decode()`).
+- A controller reads an uploaded file with `PageContext::file($name): Upload` (never `$_FILES`; the request carries the files PHP received for a multipart POST, and a PUT,
+  PATCH or DELETE body carries none). `Upload` has a `state` (`UploadState`: `Received`, `Missing`, `TooLarge`, `Failed`), the temporary `path`, the client's `name` reduced to a base name
+  with control characters removed (a label, never a path), and the `size` on disk. Only a file PHP received through HTTP is `Received`: a path named in a field is `Failed`; a list of files
+  under the name is `Missing`; `UPLOAD_ERR_INI_SIZE` and `FORM_SIZE` are `TooLarge`, the other PHP errors `Failed`. A POST over `post_max_size` reaches PHP with no fields and no files, so a form POST (multipart or urlencoded)
+  holding neither whose `Content-Length` is over the limit is `TooLarge` too (`Tests/Unit/Http/Page/PageContextUploadTest`).
 - Do not assume a clean header slate: the legacy application boots before routing, and
   the headers it has already set (`Set-Cookie`, `Expires`, `Link`, a
   `Cache-Control`, `Pragma: no-cache`) are sent with your response, alongside the response's own headers
