@@ -80,6 +80,12 @@ Tests/                         Core unit tests
   `Tests/Common/EntityGetByUrlListenerTest.php` checks this.
 - **Template system**: Twig-based (`HybridTwigTemplate`). Templates are extended
   via `extendTemplate()` to inject plugin UI into shell chrome, admin menus, etc.
+  `DefaultTemplate::draw()` puts a template together in this order: the templates registered
+  with `prependTemplate()`, then its replacement (`replaceTemplate()`) if it has one, then its
+  extensions in the order they were added, then the template itself unless it was replaced, then
+  content added with `extendTemplateWithContent()`; so an extension's output comes BEFORE the
+  template it extends, and plugins and themes are written against that (don't change it).
+  `Tests/Core/TemplateDrawOrderTest.php` checks this.
 - **Current item of the Twenty26 side navigation**: `Themes\Twenty26\Navigation::currentItem()`
   decides which item of `templates/modern/shell/nav.tpl.php` is the current page, from the page
   being served (its class, and the `q` input of a `Homepage`), never from the address, and
@@ -1346,6 +1352,21 @@ something). What existing sites, hubs and plugins hold was kept, and must stay:
   `config.ini` or the environment sets. A plugin that stores a secret in the configuration must give the
   setting a name the rule recognises. `Tests/Pages/Admin/ExportArchiveTest.php` checks all
   of this.
+- Showing the server variables: `$_SERVER` holds the environment of the process, and a site can
+  take any setting from it (`IDNO_<SETTING>`, and `KNOWN_<SETTING>` as it was called before:
+  `IDNO_DBPASS`, `IDNO_SITE_SECRET`, `IDNO_DATABASE_URL`), beside the cookie and the
+  credentials of the request. Never print it, `$_ENV` or `getenv()` as they are: pass them
+  through `\Idno\Core\Config::redactServerVariables()`, which keeps every name, so that a
+  reader sees what is set, and replaces the value of an `IDNO_` or `KNOWN_` variable whose
+  setting is a secret by `isSecretSetting()` (with Apache's `REDIRECT_` before the name too;
+  `IDNO_TITLE` and the like are shown), of `HTTP_COOKIE`, `HTTP_AUTHORIZATION`,
+  `HTTP_PROXY_AUTHORIZATION`, `PHP_AUTH_PW`, `PHP_AUTH_DIGEST`, the `X-IDNO-SIGNATURE` /
+  `X-KNOWN-SIGNATURE` headers and any name that ends in a word for a password
+  (`Config::isSecretServerVariable()`), and then applies `redactSecrets()` to the rest, which
+  takes the user name and password out of an address. So a secret given to the site through
+  its environment needs a setting name the rule recognises, as one in `config.ini` does. The
+  diagnostics report (`Idno\Pages\Admin\Diagnostics::report()`) is the one place that prints
+  them. `Tests/Pages/Admin/DiagnosticsReportTest.php` checks this.
 - Annotations (replies, likes, shares, mentions and RSVPs, most of which arrive as
   webmentions): `Entity::addAnnotation()` keeps the owner's address, the owner's image and
   the annotation's address only when `UrlValidator::httpUrl()` accepts them, and stores an
