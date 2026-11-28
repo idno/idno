@@ -18,12 +18,13 @@ deliver posts. With the **ActivityPub** plugin on, each member of your site can 
 
 The plugin is on for a new site.
 
-### It needs the asynchronous queue
+### Use the asynchronous queue
 
-ActivityPub does its work in the background: accepting new followers, and delivering each new, changed or deleted
-post to every follower's server. That needs Idno's **asynchronous queue** and a worker that keeps running on your
-server. Without them, this work is done inside the request that caused it, while the member waits, which is slow and
-can time out. Any site that federates should use the queue.
+ActivityPub works on any site, but it works best in the background. Each new, changed or deleted post is delivered
+to every follower's server. With Idno's **asynchronous queue** and a worker that keeps running on your server, that
+happens after the member's page has come back. Without them, every delivery is made inside the request that caused
+it, while the member waits: fine for a handful of followers, slow and likely to time out for many. Any site that
+federates should use the queue.
 
 Setting this up is a job for whoever runs the server. In short, add this line to `config.ini`:
 
@@ -35,7 +36,8 @@ and keep `./idno.php service-event-queue` running. [Advanced options](../install
 
 Open `/admin/activitypub/` ("ActivityPub" in the menu). It shows:
 
-- a warning if the asynchronous queue is not set up, and another if the site is private;
+- a notice that posts are delivered while members wait, if the asynchronous queue is not set up, and another if the
+  site is private;
 - how many members the site has, and how many ActivityPub followers they have between them;
 - for each member, their username, their number of followers, and whether their **keys** are ready ("Generated") or
   not yet ("Pending"). Keys are what other servers use to check that a delivery really came from your site. A
