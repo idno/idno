@@ -59,7 +59,7 @@ Any setting can also come from an environment variable named `IDNO_` followed by
 - nginx with PHP-FPM: `fastcgi_param IDNO_DBPASS "a long password";`.
 - The command line and services: set the variable in the shell, or with `Environment=` in a systemd unit.
 
-A variable whose whole value is `true`, `on` or `yes` turns a setting on, and `false`, `off`, `no` or `none` turns it off, in any letter case, as the same words do in `config.ini`. So `IDNO_DEBUG=false` turns debugging off. Any other value is text, exactly as you set it. A value that has to be one of those words as text (a password, say) can't come from the environment: put it in the file, in quotes.
+A variable whose whole value is `true`, `on` or `yes` turns a setting on, and `false`, `off`, `no`, `none` or `null` turns it off, in any letter case, as the same words do in `config.ini`. So `IDNO_DEBUG=false` turns debugging off. Any other value is text, exactly as you set it. Passwords, keys and tokens (a setting whose name ends in `pass`, `password`, `secret`, `key`, `token` or `salt`) and the names `title`, `description`, `dbname`, `dbuser`, `sessionname`, `from_name` and `smtp_username` are always text, so a password that happens to be the word `no` stays `no`. Any other setting that has to hold one of those words as text can't come from the environment: put it in the file, in quotes.
 
 An environment variable holds a single text value, so settings that are lists (`alwaysplugins`, `antiplugins` and so on) must go in a file.
 

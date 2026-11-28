@@ -64,7 +64,7 @@ namespace Tests\Core {
 
         public static function wordsForOff(): array
         {
-            return [['false'], ['False'], ['FALSE'], ['off'], ['Off'], ['no'], ['NO'], ['none']];
+            return [['false'], ['False'], ['FALSE'], ['off'], ['Off'], ['no'], ['NO'], ['none'], ['null']];
         }
 
         /**
@@ -109,7 +109,7 @@ namespace Tests\Core {
 
         public static function valuesThatAreNotWords(): array
         {
-            return [['0'], ['1'], [''], ['2'], ['nothing'], ['yes please'], [' false'], ['null'], ['secret=no']];
+            return [['0'], ['1'], [''], ['2'], ['nothing'], ['yes please'], [' false'], ['secret=no']];
         }
 
         /**
@@ -120,11 +120,50 @@ namespace Tests\Core {
          */
         public function testAnyOtherValueFromTheEnvironmentIsKeptAsItIs(string $value)
         {
-            $_SERVER['IDNO_SMTP_PASSWORD'] = $value;
+            $_SERVER['IDNO_SMTP_HOST'] = $value;
 
             $config = new ConfigInFolder();
 
-            $this->assertSame($value, $config->smtp_password);
+            $this->assertSame($value, $config->smtp_host);
+        }
+
+        public static function textSettings(): array
+        {
+            return [
+                ['IDNO_DBPASS', 'dbpass', 'no'], ['IDNO_SMTP_PASSWORD', 'smtp_password', 'Off'],
+                ['IDNO_SITE_SECRET', 'site_secret', 'yes'], ['KNOWN_API_KEY', 'api_key', 'none'],
+                ['IDNO_TITLE', 'title', 'No'], ['IDNO_DBUSER', 'dbuser', 'true'],
+            ];
+        }
+
+        /**
+         * A site whose database password (or title) is the word "no" could not be given it in
+         * the environment: it arrived as false, and the site could not reach its database.
+         *
+         * @dataProvider textSettings
+         */
+        public function testAPasswordOrNameThatIsOneOfTheWordsStaysText(string $variable, string $setting, string $word)
+        {
+            $_SERVER[$variable] = $word;
+
+            $config = new ConfigInFolder();
+
+            $this->assertSame($word, $config->$setting);
+        }
+
+        /**
+         * Only a name that ends in a word for a secret is one: a switch whose name merely
+         * holds such a word (bypass_fulltext_search) is still turned off by "false".
+         */
+        public function testASwitchWhoseNameHoldsAWordForASecretIsStillASwitch()
+        {
+            $_SERVER['IDNO_BYPASS_FULLTEXT_SEARCH'] = 'false';
+            $_SERVER['IDNO_SHOW_API_KEYS']          = 'off';
+
+            $config = new ConfigInFolder();
+
+            $this->assertFalse($config->bypass_fulltext_search);
+            $this->assertFalse($config->show_api_keys);
         }
 
         /**
