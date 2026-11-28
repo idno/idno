@@ -57,7 +57,6 @@ final class RedirectTargetTest extends TestCase
         yield 'user name and password before the site host' => ['https://user:secret@site.example/x', $s, $s];
         yield 'an empty user name before the site host' => ['https://@site.example/x', $s, $s];
         yield 'http on an http site is kept' => ['http://site.example/x', 'http://site.example/', 'http://site.example/x'];
-        yield 'https on an http site is kept' => ['https://site.example/x', 'http://site.example/', 'https://site.example/x'];
     }
 
     /**

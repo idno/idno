@@ -50,8 +50,8 @@ interface HomeStream
      * With a friendly path (`/content/note/article`: its part after the root, `all` for every type) the types it names, and the names
      * as given with the empty ones dropped (their keys kept), `['all']` for an empty path with a query; the request's own `types` do not
      * count. Without a friendly path and without a query, the types the site's home page is configured to show (none is every
-     * registered type). Without a friendly path and with a query, the request's `types` as given. An empty result is every registered
-     * content type.
+     * registered type). Without a friendly path and with a query, the request's `types` that are registered content types (any other class is
+     * dropped). An empty result, or one that named only unregistered classes, is every registered content type.
      *
      * @param string|null $friendly the friendly path's argument (`note/article`), null or empty when the request has none
      * @param string|array<mixed>|null $query     the search term (`q`: a request can carry `q[]`, which the stores read as a query that matches nothing)

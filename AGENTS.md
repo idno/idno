@@ -379,7 +379,7 @@ Idno/
   Kernel.php                   Idno\Kernel: the Symfony kernel (MicroKernelTrait)
   Kernel/                      Cache directory and code fingerprint for the compiled container; DoctrineTrimPass,
                                MessengerTrimPass, TwigTrimPass
-  Http/                        FrontController (what index.php runs); RedirectTarget (the redirect rule, static); Client/ (HttpClientFactory and
+  Http/                        FrontController (what index.php runs); RedirectTarget (the redirect rule, static); TrustedProxies (the `trusted_proxies` setting and the one rule for whether a request is https, static: see "Configuration"); Client/ (HttpClientFactory and
                                BoundedBody: the site's HTTP clients, see "Kernel and services"); Page/ (SitePage, PageContext,
                                PageContextResolver, PageRedirect, PageEnded, PageNotModified, PageError, PageLifecycle, PageRequestListener,
                                PageExceptionListener, PageRenderer, PageDrawer, ExactShellDrawer, DrawnPage, AddedHeaders, ConditionalRequest, HttpDate, RoutedByLegacyTable: what a controller
@@ -475,7 +475,7 @@ Idno/
                                IdnoTwigExtension) and their helpers. See "Templates"
   Security/                    Passwords (the password service on symfony/password-hasher) and what lets Symfony Security know who is
                                making a request (modern style): SessionUser, CurrentUserSource, CurrentUserAuthenticator,
-                               StatelessAuthentication, ApiSignatureVerifier, DeniedResponder, ForbiddenPage, LoginThrottle, LoginAttempts and NativeSession (the one owner of PHP's session, with SessionSettings). See "Security architecture"
+                               StatelessAuthentication, ApiSignatureVerifier, DeniedResponder, ForbiddenPage, LoginThrottle, LoginAttempts, FormToken (with HexTokenGenerator and SessionTokenStorage: the session's one form token), LegacyBcryptPasswordHasher and NativeSession (the one owner of PHP's session, with SessionSettings, SessionDirectory and SessionDirectoryReport: where a file-session site keeps its sessions). See "Security architecture"
   Install/                     The installation (modern style): the web installer of a site with no configuration
                                (InstallGateListener, WebInstaller, InstallPage), the step that creates the first
                                administrator (SetupGateListener, SetupToken, FirstAdministrator), and the pure pieces
@@ -779,7 +779,7 @@ environment only, `config/services_test.php` builds `BootConfig` and `InstallPat
    `Idno\Install\InstallGateListener` answers the request with the installer (see "Installation"); otherwise the schema gate is asked
    (`Idno\Upgrade\SchemaGate`, see "The schema gate and the upgrade"); and, when it is open, the
    legacy application is booted by `Idno\Legacy\LegacyBootstrap` (configuration, `Idno::site()`,
-   plugins, the legacy session — `session_start()` happens here, before routing). When the gate
+   plugins, the legacy session: `Idno\Core\Session::init()` starts PHP's session through `NativeSession`, before routing). When the gate
    is closed the legacy application is NOT booted (no `Idno::site()`, no session, no legacy
    error handler) and `Idno\Upgrade\UpgradeGateListener` (a `kernel.request` listener at priority
    300, before the router) answers every request with the upgrade page or a plain 503, except one
@@ -833,7 +833,7 @@ Four kinds of request therefore take four paths through the kernel:
 
 - A LEGACY PAGE (`Idno\Common\Page`, a plugin's, or a core page that is still a legacy class): router, the catch-all, `LegacyController`, a `LegacyResponse`; the page runs while the response is sent, writes
   with `header()`/`echo`/`exit`, and its exceptions are the legacy handler's (`Page::exception()`, the 500 page).
-- A SITE PAGE (a controller with `#[SitePage]`: the home page, the feeds, the search, the tag pages, `robots.txt`, the manifest, the service worker, WebFinger, the mention search, the form token endpoint, the shortlink, the annotation pages, a stored file, the webmention endpoint, the WebSub callback, the member's drafts and following pages, the login page and the logout):
+- A SITE PAGE (a controller with `#[SitePage]`: the home page, the feeds, the search, the tag pages, `robots.txt`, the manifest, the service worker, WebFinger, the mention search, the form token endpoint, the shortlink, the annotation pages, a stored file, the webmention endpoint, the WebSub callback, the member's drafts page, the login page and the logout, the current-user page, the registration page and the two password-reset pages):
   1. Symfony's router matches the controller's route (`RouterListener`, priority 32); 2. `LegacyRouteOverride` (31) asks the legacy router which page it would choose for the path and hands the request to the
   catch-all when that is a plugin's page (then the legacy path above applies); 3. `PageRequestListener::onController()` (`kernel.controller`, priority 0) refuses an undeclared method (405), begins the page
   (`LegacyPageLifecycle`: `page/ready`, the template type), refuses an API request on an account page, answers OPTIONS, applies the walled garden and enters it (`page/head`, the form token for a state-changing
@@ -1347,7 +1347,7 @@ for classes that extend `PageShell`, and holds each to the rule); it is `Idno\Pa
   sends a signed-in member on to the page they asked for. A login field that is not text (`email[]=bob`) is an empty value: a failed login, never an error. `logout()` fires `logout/success`, ends the session and starts another (`logUserOff()` then
   `startNewSession()`), puts the "signed out" message in the NEW session unless the request is a signed one, and forwards to the `Referer` through `RedirectTarget::sanitize()`. Unchanged although the classes moved, held by the recorded answers
   of `Tests/Characterisation/SignInAnswersTest`, `SignInWalledAnswersTest` and `SignInBlockedAnswersTest` (`fixtures/answers/sign-in/`, `sign-in-walled/`, `sign-in-blocked/`): a login while signed in switches the account; an XHR login or
-  logout ends with an empty 200 and no `Location`; a blocked member's login is refused silently. Deliberate differences, each a `CHANGED` case of the answers class with an assertion of the new answer, and in both upgrade documents: `GET`
+  logout ends with an empty 200 and no `Location`; a blocked member's login is refused silently. Deliberate differences, each a `CHANGED` case of the answers class with an assertion of the new answer, and in `docs/developers/plugins/upgrading.md` and the changelog: `GET`
   and `HEAD` of the logout, `PUT` and `DELETE` of either address and a malformed `Host` are the legacy router's 404 page (the logout answered an empty 200 to a GET, the redirect home or the 403 to the others); an XHR GET of the login page gets
   the headers of the same request that is not XHR; an XHR logout is sent the caching lines of every XHR POST (the legacy logout's new session replaced them with the session's one line); a signed request's JSON `{"location": ...}` is `application/json`; a login field that is not text is a failed login (it was the 500 page of a PHP error); an XHR POST of either page with a missing or wrong form token is the site's 403 page, the lifecycle's rule for every site page (the legacy page ended such a request with an empty answer).
 
@@ -1357,8 +1357,8 @@ for classes that extend `PageShell`, and holds each to the rule); it is `Idno\Pa
   lifecycle checks the session's form token for a browser and asks none of a signed request. A signed request is answered about the member that signed it even when it carries another member's cookie. The page is the member's profile drawn
   as a permalink (the body `entity/User/profile`, the title the member's, the description `The %s profile for %s`), asked of the site through `SignIn` (`currentUser()`, `siteTitle()`, `userTitle()`); a member's email address, API key and
   password hash are in no form of it. Core still registers `/currentUser/?` where it always did, with `Idno\Legacy\ControllerRoute`. Held by the `current-user-*` recordings of `SignInAnswersTest`, `SignInWalledAnswersTest`
-  and `SignInBlockedAnswersTest`, `AuthMatrixTest` and `TokenAgreementTest`. Deliberate differences, each a `CHANGED` case with an assertion of the new answer, and in both upgrade documents: a PUT or DELETE is the legacy router's 404 page (the
-  403 of a missing form token, or the redirect of a page with no handler); an XHR GET gets the headers of the same request that is not XHR.
+  and `SignInBlockedAnswersTest`, `AuthMatrixTest` and `TokenAgreementTest`. Deliberate differences, each a `CHANGED` case with an assertion of the new answer, and in `docs/developers/plugins/upgrading.md` and the changelog: a PUT or DELETE and a request with a malformed `Host` are the legacy router's 404 page (the
+  403 of a missing form token, or the redirect of a page with no handler, and the page itself for a malformed `Host`); an XHR GET gets the headers of the same request that is not XHR; an XHR POST with a missing or wrong form token is the site's 403 page (the legacy page ended it with an empty answer).
 
 - THE REGISTRATION PAGE (`/account/register`). `Idno\Pages\Account\Register` is deleted (no shell is kept: nothing extends it in the repository; a plugin that does must be disabled before the upgrade). `Idno\Http\Controller\RegistrationController::register()`
   has `#[Route('/{lead}account/register{slash}', name: 'idno_register')]` (GET, HEAD, OPTIONS and POST) and `#[SitePage(name: 'Idno\Pages\Account\Register', accountPage: true, publicOnPrivateSite: true, methods: ['GET', 'POST'])]`: an account page (a signed
@@ -2781,7 +2781,8 @@ authenticates nobody and never touches the session. The legacy application authe
 kernel boots, before `kernel.request`) and the legacy session stays the source of truth: PHP's session is started by the legacy
 boot, `$_SESSION['user_uuid']` and `$_SESSION['secure']` (which keeps an anonymous session non-empty for the database session
 handler) are written as before, `framework.session` is OFF (legacy pages run after `kernel.response`, in `LegacyResponse`'s
-callback, and often `exit`: Symfony's session listener would close the session and swallow the cookie) and Symfony never writes it.
+callback, and often `exit`: Symfony's session listener would close the session and swallow the cookie) and Symfony never writes it. Signing in and out, the form token and the session's cookie are the site's own (`SessionPages` over `Idno\Core\Session` and `NativeSession`, below), so the firewall stays STATELESS: it has no login
+authenticator, no `Session` on the request and no remember-me, and only reports who the legacy session says is making the request.
 
 - **Firewalls.** `upgrade` (`^/_upgrade/`, `security: false`: the legacy application is not booted there) and `main` (every
   other path): `stateless: true`, not lazy, ONE authenticator, `Idno\Security\CurrentUserAuthenticator`, an in-memory user
@@ -2860,7 +2861,7 @@ callback, and often `exit`: Symfony's session listener would close the session a
   arguments the legacy session always made the call with: `configure()` (the ini values `Session::init()` sets, BEFORE the handler step, so a handler a
   plugin supplies sees them: `SessionStorageHandlerTest`), `start($name, $savePath, $collection)` (the save path when given, the garbage collection's odds
   when given, the name when given, the `nocache` limiter and `session_start()`; a session a handler started itself is left as it is; it notes whether the
-  request carried the session's cookie, `carriedCookie()`, false again after `startNew()`), `useHandler()`, `regenerate()`, `destroy()`, `abort()`, `close()`,
+  request carried the session's cookie, `carriedCookie()`, false again after `startNew()`; `storesFiles()` says whether the handler in use is PHP's files), `useHandler()`, `regenerate()`, `destroy()`, `abort()`, `close()`,
   `startNew()`, `expireCookie()` (nothing under `IDNO_UNIT_TEST`), `removeCookieLine()`, `isActive()`, `id()` and `name()`. The RULES stay in `Idno\Core\Session`
   (who is signed in, stateless requests, the logout, the fingerprint), which fetches the owner once from the container and calls it for every step; its public
   methods are unchanged. Everything else that closed the session early (`AfterResponse`, `DefaultTemplate::drawPage()` and `renderPage()`,
@@ -3893,7 +3894,7 @@ mailer is switched off in `config/packages/framework.php` (it needs a configured
   `mail_emphasise`, are in `IdnoTwigExtensionTest::SAFE_FUNCTIONS`). `Email::setBodyFromTemplate($name, $vars)` writes both bodies and the subject the template names;
   `Email::drawMail()` returns the three without a message (the goldens use it); `setHTMLBodyFromTemplate()` and `setTextBodyFromTemplate()` remain for a caller that sets its own
   subject (a third-party `.tpl.php` template still wins). A person's words are one line in a part (`mail_one_line`: a line break cannot start a line of the mail's own), and every
-  link is built with `mail_url()` from `Email::siteAddress()`: the site's CONFIGURED `url` as written, with its own scheme (`Email` hands it to every draw as the variable `mail_address`; `site_url()` keeps its meaning for web pages and swaps the scheme to the request's), never the request's host or scheme, so a reset asked for over plain http still mails an https link. With no `url` configured the site detects its address from the request and the mail uses that, as it always did: set `url` for the guarantee (`MailFlowsTest::testALinkInAMailIsBuiltFromTheConfiguredAddressWhateverRequestAskedForTheMail`). EVERY MAIL IS WRITTEN IN THE SITE'S LANGUAGE (the stored `language` setting, else `en_US`), never the language of the request that caused it (`Email::inSiteLanguage()` wraps every draw, the subject included, in `Language::inLocale()`, which swaps the translations and puts the requester's language back in a `finally`, in a web request and in the worker alike); the shell's `lang` and `dir` are that language's (`PasswordResetMailPageTest`, `LanguageInLocaleTest`). Ports: `MailTransportDsn` is unchanged, so a stored host with no port still means port 25; only
+  link is built with `mail_url()` from `Email::siteAddress()`: the site's CONFIGURED `url` as written, with its own scheme (`Email` hands it to every draw as the variable `mail_address`; `site_url()` keeps its meaning for web pages and swaps the scheme to the request's), never the request's host or scheme, so a reset asked for over plain http still mails an https link. With no `url` configured the site detects its address from the request and the mail uses that, as it always did: set `url` for the guarantee (`MailFlowsTest::testALinkInAMailIsBuiltFromTheConfiguredAddressWhateverRequestAskedForTheMail`). EVERY MAIL IS WRITTEN IN THE SITE'S LANGUAGE (the `language` setting, which is set by hand in `config.ini` or `IDNO_LANGUAGE` because no admin page sets it yet, else `en_US`), never the language of the request that caused it (`Email::inSiteLanguage()` wraps every draw, the subject included, in `Language::inLocale()`, which swaps the translations and puts the requester's language back in a `finally`, in a web request and in the worker alike); the shell's `lang` and `dir` are that language's (`PasswordResetMailPageTest`, `LanguageInLocaleTest`). Ports: `MailTransportDsn` is unchanged, so a stored host with no port still means port 25; only
   the email settings form fills in the usual port of the security chosen (587, 465, 25) when it is saved with the port empty.
   The mail templates are Twig: `templates/email/**/*.html.twig` (the shell `shell.html.twig`, the parts and the eight bodies) and
   `templates/email-text/**/*.txt.twig`, drawn as every ported template is (a third-party `.tpl.php` mail template still wins,
@@ -5465,7 +5466,9 @@ no installer writes one.
   when it is unset; nothing uses it yet). It is deliberately not an `IDNO_*` variable: those
   are copied into the legacy config, which is saved to the database.
 - Key settings: `account_removal_seconds` (the time one run of an account's removal works; clamped to 0 to 60% of `max_execution_time`; `docs/install/config.md`), `database`, `dbname`, `dbhost`, `dbuser`, `dbpass`, `event_queue`,
-  `filesystem`, `uploadpath`, `site_secret`
+  `filesystem`, `uploadpath`, `site_secret`, `language` (the site's language, which mails are written in; `en_US` unless set), `trusted_proxies` (above),
+  `session_path` (where PHP's session files are kept; with none, and none in PHP's `session.save_path`, `Idno\Security\SessionDirectory` chooses `IDNO_SESSION_DIR`, else `var/sessions/`, else a per-project
+  temporary directory: see the SQLite bullet under "Kernel and services") and `invitation_lifetime_days` (stored: how long an invitation lasts, 14 by default)
 - `event_queue = 'AsynchronousQueue'` enables the async pipeline (required for ActivityPub)
 - `url` is a boot setting (`config.ini`, `config.json` or `IDNO_URL`; never stored in the database). The queue
   worker requires an explicit absolute one and refuses to start without it. Both installers write it: the web
@@ -5856,7 +5859,7 @@ no installer writes one.
     `activitypub/deliver-signed` and only THEN removes the account's follower records (`ActivityPubFollower::removeForUser()`: they are kept when a queue write fails, and nothing sends the Delete again; with the synchronous queue a delivery that fails still counts as handed over, because the enqueue answered) (the inbox, the body and the signed headers, run as nobody: the worker needs neither the account nor its key; with the synchronous queue the hand-over is made after the response, by `AfterResponse::later()`, which runs once from the kernel's terminate or, when the request never reaches it (a deprecated shell writes its answer and exits, as `DELETE /view/<id>` does), from a shutdown function). A signature is dated when it is made and the servers accept twelve hours. No Delete per post is sent. An account with no key or no followers sends nothing. What other servers do with a `Delete` of an actor is theirs.
     EVENTS QUEUED AS THE MEMBER BEFORE THE CLOSE are dropped when they run, with one log line (`LegacyUserContext::runAs()` returns null for a closed account, and for one whose handle is reserved: a deleted account), not thrown into the failure transport; a uuid that never existed still throws.
     HANDLES OF DELETED ACCOUNTS ARE RESERVED: when the account record is deleted its handle becomes a `Idno\Entities\ReservedHandle` (alias `reserved_handle`, in the `entities` collection, found by its `handle` field, which holds the NORMALISED handle: trimmed, lower case, accents, compatibility forms and `ß` folded, `AccountRegistry::normaliseHandle()`; it declares the index `User` already declares on `handle`, so no index or migration is created;
-    `account_uuid` and `display` are not indexed). It is for administrators only (access value `RESERVED_HANDLE`, `canRead()` administrators, serialises to nothing, in no listing or feed), it is on `AccountContent`'s kept list (the administrator whose session made it must not take it with them), and it is looked up ONLY when an account is created or renamed (`Register`'s service via `LegacyRegistrations`, the Users page's `add_user`, the installer's
+    `account_uuid` and `display` are not indexed). It is for administrators only (access value `RESERVED_HANDLE`, `canRead()` administrators, serialises to nothing, in no listing or feed), it is on `AccountContent`'s kept list (the administrator whose session made it must not take it with them), and it is looked up ONLY when an account is created or renamed (the registration page's service, `RegistrationPages`, via `LegacyRegistrations`, the Users page's `add_user`, the installer's
     administrator step `LegacyFirstAdministrator::problems()`, `User::setHandle()`), when a queued event's run-as user is missing (`isDeletedAccount()`), and on the Users page, which pages the list (`reserved_offset`, 25 a page). A reserved handle is "taken" (the ordinary answer) until an administrator gives it back with the Users page's `release_handle` action (a form token and an administrator's session). That keeps a newcomer from being taken for the old
     ActivityPub actor. An annotation is tied to its author by the stored `owner_url` (the profile address, built from the handle) and `made_here`, and `Entity::authoredAnnotationKey()` also requires the annotation's stored `time` not to be earlier than the account's `created`: a newcomer on a RELEASED handle is not the author of the old member's annotations (an imported comment dated before its member's account loses authorship).
   - Safeguards: an administrator cannot take away their own rights, delete their own account, or demote or delete the last administrator (`User::whyNotRemovableBy()` / `canBeDemotedOrDeletedBy()`, asked for `remove_rights` and `delete` on the Users page, by `Page::mayDeleteRequestedEntity()` (`/delete/<id>` and the plugins' delete pages) and by the permalink's DELETE (`PermalinkPages::delete()`, through `Permalinks::refusesToDeleteAccount()`), with one message (`User::explainWhyNotRemovable()`); the count is
@@ -5868,8 +5871,8 @@ no installer writes one.
   hash of nobody's password (an empty password costs nothing, as for a member), so an unknown name costs what a wrong password costs
   and the time does not tell them apart (the remaining difference is a database lookup by email after the one by handle, which a
   member found by handle does not make: not hidden).
-- Login throttling: `Idno\Security\LoginThrottle` (a public container service, built when first fetched; the login page fetches it
-  through `Idno::container()`; it takes a key string and nothing of the request) on `symfony/rate-limiter`'s FIXED WINDOW policy with
+- Login throttling: `Idno\Security\LoginThrottle` (a public container service, built when first fetched; `LoginAttempts` takes it as a
+  service closure; it takes a key string and nothing of the request) on `symfony/rate-limiter`'s FIXED WINDOW policy with
   `CacheStorage` over the site's ONE cache pool (`Psr\Cache\CacheItemPoolInterface`; see "The cache"): 5 attempts (`LIMIT`) per 300
   seconds (`WINDOW_SECONDS`) for each ACCOUNT. `SessionPages::signIn()` resolves the name typed FIRST (handle, then email: the
   database's own comparison, which on MySQL and MariaDB ignores case and accents, so `bén` and `BEN` are one handle) and counts
@@ -5877,7 +5880,8 @@ no installer writes one.
   spelled. A name no account has is counted under `keyForUnknownName($name)`: trimmed, NFKC-normalised (when `Normalizer` exists)
   and lower-cased with `mb_strtolower`. Keys are SHA-256 hashes (a name is never a cache key or file name). Accepted: because the count
   is for the account, someone can learn that a name exists by trying spellings (handles are public on profiles anyway). It is NOT per
-  address: there are no trusted proxies yet, so behind a reverse proxy every client shares the proxy's address.
+  address: a client's address is not dependable (the setting `trusted_proxies` only decides whether `X-Forwarded-Proto` and `-Port` are believed,
+  never a forwarded client address), so behind a reverse proxy a count per address would be one count for every client.
   `attempt($key)` RESERVES one attempt before the password is checked (so N parallel requests cannot get N guesses while the first
   is still in bcrypt) and is false when the window is full: that attempt is refused BEFORE the password is looked at, even a right
   one, with the same redirect as a failure and the message "Too many failed sign-in attempts ... Please wait a few minutes"; a
@@ -6125,6 +6129,8 @@ no installer writes one.
   - A site that sets no `trusted_proxies` still believes `X-Forwarded-Proto` from any client (`TrustedProxies::isSecure()`, behind `Page::isSSL()`), so a visitor can claim https for their own request; with the setting it is believed from the listed proxies alone (see "Configuration"). The line an API login failure logs still names the first `X-Forwarded-For` entry, which a client can choose. The login throttle counts by account,
     not by address, because a client address is not dependable.
   - Registration and the password reset request let someone learn whether a handle or an email address has an account.
+  - `%` and `_` in a search term of at most 5 bytes (any term, with `bypass_fulltext_search`, on MySQL and MariaDB; every short term on SQLite) are `LIKE` wildcards and are not escaped, so `q=%` matches everything the viewer may read; a longer term on a full-text index has no such characters.
+  - A registration's busy-database behaviour (a lock that cannot be had: the form drawn again with a 503) is tested on SQLite only (`RegistrationWhileTheDatabaseIsBusyTest` skips elsewhere); no test makes MySQL or MariaDB report a lock wait or a deadlock during a registration.
   - An invitation's link carries its code in the address: it reaches the browser's history, the server's logs and the page's own `Link: rel="self"` header (the registration page sends `Referrer-Policy: no-referrer` so no page it loads is told). The link is made on the configured `url`; a site with none
     gets the address it detected from the request, which an administrator's own request cannot make hostile but a mail from a shared setup should not rely on: set `url`.
   - The safeguards of the Users page and of the delete pages are a check and then an act (two administrators who demote each other at the same moment can leave none; see "Invitations and registration"), a stolen administrator session can mint an administrator invitation or give rights with only the form token, and the invitation's claim is atomic only on the SQL
