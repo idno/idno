@@ -20,6 +20,10 @@ final class ProfileWalledAnswersTest extends ProfileSiteCase
     protected const GROUP = 'profile-walled';
 
     private const CHANGED = [
+        'ada-member-accept-activitypub' => 'a private site does not federate: a member who asks for the profile as ActivityPub is told it has no such form, not given the actor',
+        'actor-visitor-html' => 'a private site does not federate: the actor address is a 404 for everyone, where the recording served the actor to a visitor',
+        'actor-visitor-activitypub' => 'a private site does not federate: the actor address is a 404 for everyone, where the recording served the actor to a visitor',
+        'actor-member-html' => 'a private site does not federate: the actor address is a 404 for everyone, where the recording served the actor to a member',
         'xhr-visitor' => 'an XHR GET gets the headers of the same request that is not XHR',
         'xhr-member' => 'an XHR GET gets the headers of the same request that is not XHR',
     ];
@@ -83,6 +87,27 @@ final class ProfileWalledAnswersTest extends ProfileSiteCase
             $this->record($case, 'GET', $path, $headers, $viewer);
         }
         $this->addToAssertionCount(1);
+    }
+
+    /** A private site hands no member's actor to anyone, a signed-in member included: the answer is the 406 of a page with no ActivityPub form. */
+    public function testAMemberAsksAPrivateSitesProfileAsActivityPub(): void
+    {
+        [$path, $headers] = self::form('/profile/ada', 'accept-activitypub');
+        $answer = $this->site()->request('GET', $path, $this->asViewer('member', $headers));
+
+        $this->assertSame(406, $answer->status);
+        $this->assertStringNotContainsString('"inbox"', $answer->body);
+    }
+
+    /** A private site names no member to another server: the actor address answers 404 to a visitor and a member alike. */
+    public function testTheActorAddressOfAPrivateSiteIsA404ToEveryone(): void
+    {
+        foreach (['visitor', 'member'] as $viewer) {
+            $answer = $this->site()->request('GET', '/actor/ada', $this->asViewer($viewer, ['Accept' => 'application/activity+json']));
+
+            $this->assertSame(404, $answer->status, $viewer);
+            $this->assertStringNotContainsString('"inbox"', $answer->body, $viewer);
+        }
     }
 
     public function testAHeadAndAnOptionsRequestOfAPrivateSite(): void
