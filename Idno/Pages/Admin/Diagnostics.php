@@ -37,8 +37,8 @@ namespace Idno\Pages\Admin {
 
         /**
          * The detailed report, as text. It is made to be sent to somebody who helps with a
-         * problem, so secrets are left out of it: of the configuration by the rule the site
-         * export uses (Config::redactSecrets()), and of the server variables, which hold the
+         * problem, so secrets are left out of it: of the configuration and of the session by the
+         * rule the site export uses (Config::redactSecrets()), and of the server variables, which hold the
          * environment the site may be configured with and the cookie of the request, by
          * Config::redactServerVariables(). Print neither as it is.
          *
@@ -72,7 +72,7 @@ namespace Idno\Pages\Admin {
             ];
 
             $report .= "\nRunning config:\n---------------\n" . json_encode($running, JSON_PRETTY_PRINT) . "\n\n";
-            $report .= "\$_SESSION:\n----------\n" . json_encode($session, JSON_PRETTY_PRINT) . "\n\n";
+            $report .= "\$_SESSION:\n----------\n" . json_encode(\Idno\Core\Config::redactSecrets($session), JSON_PRETTY_PRINT) . "\n\n";
             $report .= "\$_SERVER:\n---------\n" . json_encode(\Idno\Core\Config::redactServerVariables($server), JSON_PRETTY_PRINT) . "\n\n";
 
             return $report;
