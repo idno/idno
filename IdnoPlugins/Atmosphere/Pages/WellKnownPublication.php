@@ -22,6 +22,12 @@ class WellKnownPublication extends Page
     {
         $did = null;
 
+        // A private site names no member's identity. This address is open to visitors, so that
+        // other servers can read it: it answers them as a site with no publication does.
+        if (!\Idno\Core\Idno::site()->config()->isPublicSite()) {
+            $this->noPublication();
+        }
+
         // Try admin users first
         $admins = User::get(['admin' => true], [], 100, 0);
         if (!empty($admins)) {
@@ -49,9 +55,7 @@ class WellKnownPublication extends Page
         }
 
         if (empty($did)) {
-            $this->setResponse(404);
-            echo 'No AT Protocol publication configured.';
-            exit;
+            $this->noPublication();
         }
 
         $atUri = 'at://' . $did . '/site.standard.publication/self';
@@ -59,6 +63,17 @@ class WellKnownPublication extends Page
         header('Content-Type: text/plain');
         header('Cache-Control: public, max-age=3600');
         echo $atUri;
+        exit;
+    }
+
+    /**
+     * The answer of a site that has no publication to name.
+     */
+    private function noPublication(): void
+    {
+        $this->setResponse(404);
+        header('Content-Type: text/plain');
+        echo 'No AT Protocol publication configured.';
         exit;
     }
 

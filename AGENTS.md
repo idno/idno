@@ -359,10 +359,23 @@ takes effect at once and no post is saved again.
 - The same rule in core and in Atmosphere: `Webmention::pingMentions()` and
   `sendWebmentionPayload()` send nothing, `WebSub::publish()` pings no hub, and
   Atmosphere's `Main::shouldSync()` is false, so nothing is written to a member's PDS (a
-  record written earlier is deleted when its post is next saved). Anything new that sends
-  a post, or word of one, to another server must ask `Config::isPublicSite()` first.
+  record written earlier is deleted when its post is next saved). Atmosphere's "Backfill"
+  (`Pages\Backfill`) writes nothing either, not even the publication record, which holds the
+  site's name, address and description, and `/.well-known/site.standard.publication`
+  (`Pages\WellKnownPublication`, a public route) answers 404 as a site with no publication
+  does: it would name a member's DID. Anything new that sends a post, word of one, or who a
+  member is, to another server must ask `Config::isPublicSite()` first, and so must a page
+  registered as a public route (`addRoute(..., true)`), which a visitor to a private site
+  reaches.
+- Left open on purpose, because a member or the administrator asks for each one: syndication
+  to a service the member picks for a post (webhooks included), the WebSub subscription and
+  the page fetches made when a member follows a person, link previews, webmentions that
+  arrive, connecting an AT Protocol account (`/atmosphere/client-metadata.json` gives the
+  site's name and address), the feedback form, and mail. `docs/admin/private-sites.md` lists
+  both sides for administrators: keep it exact.
 - `IdnoPlugins/ActivityPub/Tests/PrivateSiteTest.php` (over HTTP),
-  `Tests/Core/PrivateSiteOutboundTest.php` and `IdnoPlugins/Atmosphere/Tests/PostSyncTest.php`
+  `Tests/Core/PrivateSiteOutboundTest.php`, `IdnoPlugins/Atmosphere/Tests/PostSyncTest.php` and
+  `IdnoPlugins/Atmosphere/Tests/PublicationOwnerTest.php`
   check this.
 
 ### Patterns to follow

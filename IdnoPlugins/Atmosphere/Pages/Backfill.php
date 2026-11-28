@@ -21,6 +21,14 @@ class Backfill extends Page
         $session = Main::getATProtoSessionForUser($user);
         $settingsUrl = \Idno\Core\Idno::site()->config()->getDisplayURL() . 'account/settings/atmosphere/';
 
+        // Nothing is written to a PDS from a private site: no post (Main::shouldSync()), and
+        // not the publication record either, which holds the site's name, address and description
+        if (!\Idno\Core\Idno::site()->config()->isPublicSite()) {
+            \Idno\Core\Idno::site()->session()->addErrorMessage('This site is private, so nothing is written to your PDS.');
+            $this->forward($settingsUrl);
+            return;
+        }
+
         if (empty($session['access_token']) || empty($session['did'])) {
             \Idno\Core\Idno::site()->session()->addErrorMessage('Not connected to an AT Protocol PDS.');
             $this->forward($settingsUrl);
