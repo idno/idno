@@ -40,6 +40,9 @@ namespace Idno\Core {
                     } else if (!empty($config['Extensions'])) {
                         $extensions = $config['Extensions'];
                     }
+                    // [Extensions] (template = extension): the extension is drawn BEFORE the
+                    // template it extends, after the extensions that were added earlier
+                    // (see DefaultTemplate::draw() for the whole order)
                     if (!empty($extensions)) {
                         foreach ($extensions as $template => $extension) {
                             site()->template()->extendTemplate($template, $extension);
@@ -50,6 +53,9 @@ namespace Idno\Core {
                     } else if (!empty($config['Prepend Extensions'])) {
                         $prep_extensions = $config['Prepend Extensions'];
                     }
+                    // [Prepend Extensions]: drawn ahead of everything else of the template,
+                    // its other extensions included. Each one is put at the front, so of
+                    // several for one template the one added last is drawn first
                     if (!empty($prep_extensions)) {
                         foreach ($prep_extensions as $template => $extension) {
                             //site()->template()->extendTemplate($template, $extension, true);
