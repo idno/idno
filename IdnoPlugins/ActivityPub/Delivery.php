@@ -74,8 +74,10 @@ class Delivery
     }
 
     /**
-     * Enqueue delivery of an activity to all of a user's followers' inboxes.
-     * Uses the async queue for background processing.
+     * Enqueue delivery of an activity to all of a user's followers' inboxes. With the
+     * asynchronous queue the worker makes the deliveries. Without it the queue runs each
+     * one at once, so they are all made here, inside the request, before this returns:
+     * that is logged as one warning for the activity, with the number of inboxes.
      *
      * @param User  $user     The local user whose followers should receive the activity
      * @param array $activity The activity to deliver
@@ -99,7 +101,15 @@ class Delivery
             return;
         }
 
-        \Idno\Core\Idno::site()->logging()->debug('ActivityPub: Queueing delivery to ' . count($inboxes) . ' inbox(es) for user ' . $user->getHandle());
+        if (Main::deliversInBackground()) {
+            \Idno\Core\Idno::site()->logging()->debug('ActivityPub: Queueing delivery to ' . count($inboxes) . ' inbox(es) for user ' . $user->getHandle());
+        } else {
+            \Idno\Core\Idno::site()->logging()->warning(
+                'ActivityPub: Delivering to ' . count($inboxes) . ' inbox(es) for user ' . $user->getHandle()
+                . ' inside this request, which waits for each of them, because the asynchronous event queue is not enabled.'
+                . " Set event_queue = 'AsynchronousQueue' and run the queue worker to deliver in the background."
+            );
+        }
 
         foreach ($inboxes as $inbox) {
             \Idno\Core\Idno::site()->queue()->enqueue('default', 'activitypub/deliver', [

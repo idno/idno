@@ -18,9 +18,9 @@ class Admin extends \Idno\Common\Page
 
         $t = \Idno\Core\Idno::site()->template();
 
-        // Check queue configuration
-        $queue = \Idno\Core\Idno::site()->queue();
-        $queueOk = ($queue instanceof \Idno\Core\AsynchronousQueue);
+        // Without the asynchronous queue the site federates, with every delivery made inside
+        // a member's request: the page says so
+        $deliversInBackground = \IdnoPlugins\ActivityPub\Main::deliversInBackground();
 
         // Gather stats
         $users = User::get([], [], PHP_INT_MAX);
@@ -47,7 +47,7 @@ class Admin extends \Idno\Common\Page
                 'total_users'    => $totalUsers,
                 'total_followers' => $totalFollowers,
                 'user_stats'     => $userStats,
-                'queue_ok'       => $queueOk,
+                'delivers_in_background' => $deliversInBackground,
                 'description'    => 'ActivityPub federation allows users on this site to be followed from Mastodon and other compatible platforms.',
             ]
         )->draw('activitypub/admin');
