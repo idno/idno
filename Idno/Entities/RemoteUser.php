@@ -28,6 +28,22 @@ namespace Idno\Entities {
             return false; // Remote users can never log in
         }
 
+        /**
+         * A remote member is a record about somebody on another site, not an account: it
+         * is deleted as a record. There is nothing to close and nothing it owns here.
+         *
+         * @return bool
+         */
+        public function delete()
+        {
+            return \Idno\Common\Entity::delete();
+        }
+
+        public function close()
+        {
+            return false;
+        }
+
         public function getURL()
         {
 

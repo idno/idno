@@ -421,6 +421,9 @@ namespace Idno\Data {
             // Join the rest of the search query elements to this search
             $query_parameters = array_merge($query_parameters, $search);
 
+            // Nothing a closed account owns is listed (after the caller's conditions, so none of them lifts it)
+            $query_parameters = $this->withoutClosedAccounts($query_parameters, false);
+
             // Prepare the fields array for searching, if required
             if (!empty($fields) && is_array($fields)) {
                 $fields = array_flip($fields);
@@ -444,6 +447,29 @@ namespace Idno\Data {
             }
 
             return false;
+        }
+
+        /**
+         * Adds to a query that what it finds is not owned by a closed account, unless it is of
+         * a class the site keeps (see DataConcierge::closedAccountsExclusion()): one more
+         * condition beside the caller's, which all hold together.
+         *
+         * @param  array $query
+         * @param  bool  $counting
+         * @return array
+         */
+        protected function withoutClosedAccounts(array $query, $counting)
+        {
+            if ($exclusion = $this->closedAccountsExclusion($counting)) {
+                $and = (isset($query['$and']) && is_array($query['$and'])) ? array_values($query['$and']) : [];
+                $and[] = ['$or' => [
+                    ['owner' => ['$nin' => $exclusion['owners']]],
+                    ['entity_subtype' => ['$in' => $exclusion['kept']]],
+                ]];
+                $query['$and'] = $and;
+            }
+
+            return $query;
         }
 
         /// A condition no record meets: what an array that is no condition becomes
@@ -667,6 +693,9 @@ namespace Idno\Data {
 
             // Join the rest of the search query elements to this search
             $query_parameters = array_merge($query_parameters, $search);
+
+            // Nothing a closed account owns is counted
+            $query_parameters = $this->withoutClosedAccounts($query_parameters, true);
 
             return $this->countRecords($query_parameters, $collection);
         }

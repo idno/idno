@@ -644,6 +644,30 @@ namespace Idno\Data {
                         // The alternatives: a map of fields, each read as above. With none there is nothing to match
                         $alternatives = empty($value) ? '' : $this->build_where_from_array($value, $variables, $metadata_joins, $non_md_variables, 'or', $collection);
                         $subwhere[]   = $alternatives === '' ? self::MATCH_NOTHING : "(" . $alternatives . ")";
+                    } else if ($key === self::NOT_OWNED_BY_CLOSED) {
+                        // Not owned by a closed account, unless it is of a class the site keeps
+                        // (see DataConcierge::closedAccountsExclusion()). Both are columns of the table.
+                        $owners = array_values(array_filter($value['owners'] ?? [], 'is_string'));
+                        $kept   = array_values(array_filter($value['kept'] ?? [], 'is_string'));
+                        if (array_keys($value) !== ['owners', 'kept'] || empty($owners)) {
+                            $subwhere[] = self::MATCH_NOTHING;
+                        } else {
+                            $lists = [];
+                            foreach ([$owners, $kept] as $list) {
+                                $placeholders = [];
+                                foreach ($list as $val) {
+                                    $placeholders[]                              = ":nonmdvalue{$non_md_variables}";
+                                    $variables[":nonmdvalue{$non_md_variables}"] = $val;
+                                    $non_md_variables++;
+                                }
+                                $lists[] = implode(', ', $placeholders);
+                            }
+                            $condition = "`{$collection}`.`owner` not in ({$lists[0]})";
+                            if ($lists[1] !== '') {
+                                $condition .= " or `{$collection}`.`entity_subtype` in ({$lists[1]})";
+                            }
+                            $subwhere[] = "({$condition})";
+                        }
                     } else if ($key === '$search') {
                         // The search query is always in $value position [0] for now
                         $val = array_key_exists(0, $value) ? $value[0] : '';

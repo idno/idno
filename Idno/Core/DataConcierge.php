@@ -142,6 +142,36 @@ namespace Idno\Core {
         }
 
         /**
+         * What a listing or a count must leave out because the account that owns it is closed
+         * (it is being deleted: see \Idno\Entities\User::close()): null when there is
+         * nothing to leave out, else the closed accounts' UUIDs ('owners') and the classes
+         * whose records stay listed whoever owns them, because they are the site's ('kept':
+         * \Idno\Core\AccountContent). Both back ends add it to every getObjects() and
+         * countObjects() query AFTER the caller's own conditions, so a caller's condition on
+         * the owner cannot lift it. Administrators are shown everything; a listing made with
+         * access ignored is too (a count never ignored access).
+         *
+         * @param  bool $counting Is this for countObjects()?
+         * @return array|null
+         */
+        protected function closedAccountsExclusion($counting = false)
+        {
+            if (!$counting && $this->getIgnoreAccess()) {
+                return null;
+            }
+            $session = \Idno\Core\Idno::site()->session();
+            if ($session && $session->isAdmin()) {
+                return null;
+            }
+            $owners = \Idno\Core\AccountRegistry::closed();
+            if (empty($owners)) {
+                return null;
+            }
+
+            return ['owners' => array_values($owners), 'kept' => \Idno\Core\AccountContent::classes()];
+        }
+
+        /**
          * Check if the database connection is still alive and reconnect
          * if it has timed out.  Long-running processes (e.g. the async
          * event queue worker) may hold a connection open for longer than

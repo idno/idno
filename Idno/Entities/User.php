@@ -77,6 +77,25 @@ namespace Idno\Entities {
                 }
             );
 
+            // The removal of a closed account's content and then of the account, run by the
+            // queue worker (delete() with the asynchronous queue). It queues itself again
+            // only when the run removed something.
+            \Idno\Core\Idno::site()->events()->addListener(
+                self::REMOVE_EVENT, function (\Idno\Core\Event $event) {
+                    $uuid = $event->data()['uuid'] ?? '';
+                    $user = is_string($uuid) && $uuid !== '' ? User::getByUUID($uuid, false) : false;
+                    if (!$user instanceof User || !$user->isClosed()) {
+                        return; // gone already, or not closed: a message naming an account that is in use deletes nothing
+                    }
+                    $outcome = $user->removeAccount(self::CONTENT_BATCH, self::removalSeconds());
+                    if ($outcome === 'time') {
+                        \Idno\Core\Idno::site()->queue()->enqueue('default', self::REMOVE_EVENT, ['uuid' => $uuid], false);
+                    } else if ($outcome === 'refused') {
+                        \Idno\Core\Idno::site()->logging()->warning('The removal of an account stopped: something it owns could not be removed (the log says what). "Continue deleting" on the Users page carries on.');
+                    }
+                }
+            );
+
             // Refresh session user whenever it is saved
             \Idno\Core\Idno::site()->events()->addListener(
                 'saved', function (\Idno\Core\Event $event) {
@@ -332,7 +351,7 @@ namespace Idno\Entities {
             $handle = trim($handle);
             $handle = strtolower($handle);
             if (!empty($handle) && ctype_alnum($handle)) {
-                if (!self::getByHandle($handle)) {
+                if (!self::getByHandle($handle) && !\Idno\Core\AccountRegistry::handleIsReserved($handle)) {
                     $this->handle = $handle;
                 }
             }
@@ -394,6 +413,9 @@ namespace Idno\Entities {
          */
         function getAPIkey()
         {
+            if ($this->isClosed()) {
+                return ''; // A closed account has no key, and is given none
+            }
             if (!empty($this->apikey)) {
                 return $this->apikey;
             }
@@ -588,7 +610,7 @@ namespace Idno\Entities {
             if ((string) $by_uuid === (string) $this->getUUID()) {
                 return false;
             }
-            if (!empty($this->admin) && !$this->isBanned() && static::countUnbannedAdmins() <= 1) {
+            if (!empty($this->admin) && !$this->isBanned() && !$this->isClosed() && static::countUnbannedAdmins() <= 1) {
                 return false;
             }
 
@@ -605,6 +627,15 @@ namespace Idno\Entities {
          */
         function canBeDemotedOrDeletedBy($by_uuid)
         {
+            if ((string) $by_uuid === (string) $this->getUUID()) {
+                return false;
+            }
+            // An account that is closed passed this check when it was closed: carrying on
+            // with its deletion is always allowed
+            if ($this->isClosed()) {
+                return true;
+            }
+
             return $this->canBeBannedBy($by_uuid);
         }
 
@@ -645,7 +676,8 @@ namespace Idno\Entities {
         }
 
         /**
-         * How many administrators the site has who are not banned
+         * How many administrators the site has who can sign in: not banned, and their account
+         * not closed (being deleted)
          *
          * @return int
          */
@@ -653,7 +685,7 @@ namespace Idno\Entities {
         {
             $count = 0;
             foreach (static::get(['admin' => true], [], 10000) ?: [] as $user) {
-                if (!empty($user->admin) && !$user->isBanned()) {
+                if (!empty($user->admin) && !$user->isBanned() && !$user->isClosed()) {
                     $count++;
                 }
             }
@@ -762,6 +794,9 @@ namespace Idno\Entities {
          */
         function getPasswordRecoveryCode()
         {
+            if ($this->isClosed()) {
+                return false;
+            }
             if ($code = $this->password_recovery_code) {
                 if ($this->password_recovery_code_time > (time() - (3600 * 3))) {
                     return $code;
@@ -1246,22 +1281,496 @@ namespace Idno\Entities {
             return parent::save($overrideAccess);
         }
 
+        /// How many of an account's records are looked up at a time while it is removed
+        const CONTENT_BATCH = 100;
+
+        /// The event the queue worker runs to remove a closed account: its data is the `uuid`
+        const REMOVE_EVENT = 'account/remove';
+
+        /// The collections whose records an account owns
+        const CONTENT_COLLECTIONS = ['entities', 'reader'];
+
+        /// What the last deleteContent() could not remove: 'classes' (class => count), 'at' and 'reason'; empty when it left nothing
+        private $removalReport = [];
+
         /**
-         * Remove this user and all its objects
+         * Is this account closed? A closed account is being deleted, or its deletion stopped
+         * before it was done. THE one question that decides whether an account may sign in
+         * or act: Session refuses a closed account wherever it refuses a banned one (a
+         * password, a browser session, a signed request, an access token, a queued event run
+         * as it), it has no API key and is sent no password reset, it does not count as an
+         * administrator, and its profile and posts are shown to administrators only.
          *
          * @return bool
          */
+        function isClosed()
+        {
+            return !empty($this->account_closed);
+        }
+
+        /**
+         * Is the account with this UUID closed? Asked of the set of closed accounts
+         * (\Idno\Core\AccountRegistry), which costs no lookup of the account.
+         *
+         * @param  mixed $uuid
+         * @return bool
+         */
+        static function uuidIsClosed($uuid)
+        {
+            return \Idno\Core\AccountRegistry::isClosed($uuid);
+        }
+
+        /**
+         * Close this account: the first step of deleting it, made before anything is
+         * removed, in one save. The account is marked, its password becomes the hash of a
+         * value nobody knows (a login to it costs what a wrong password costs and gets the
+         * same answer), and its API key, password recovery code and IndieAuth codes and
+         * tokens are removed. Its sessions end at their next request, because Session
+         * refuses it. The mark that keeps its posts out of every listing
+         * (AccountRegistry::markClosed()) is saved first, and in one transaction with the
+         * account where the database has them: a failure of either closes nothing. Then
+         * the event account/closed is triggered once (the ActivityPub plugin tells followers'
+         * servers that the actor is gone); a listener that fails does not undo the closing.
+         *
+         * Closing a closed account changes nothing and is true. The username and the email
+         * address stay taken until the account is deleted.
+         *
+         * @return bool Is the account closed?
+         */
+        function close()
+        {
+            $uuid = (string) $this->getUUID();
+            $logging = \Idno\Core\Idno::site()->logging();
+            if ($uuid === '' || empty($this->_id)) {
+                return false;
+            }
+            if ($this->isClosed()) {
+                // The mark is asserted again: whatever happened to it, the posts are not listed
+                try {
+                    \Idno\Core\AccountRegistry::markClosed($uuid);
+                } catch (\Throwable $e) {
+                    $logging->error('The mark of a closed account could not be put back: ' . get_class($e));
+                }
+
+                return true;
+            }
+            $fields = ['account_closed', 'password', 'apikey', 'indieauth_codes', 'indieauth_tokens', 'password_recovery_code'];
+            $previous = [];
+            foreach ($fields as $field) {
+                $previous[$field] = $this->$field;
+            }
+            try {
+                $closed = \Idno\Core\Idno::site()->db()->transaction(
+                    function () use ($uuid) {
+                        \Idno\Core\AccountRegistry::markClosed($uuid);
+                        $this->account_closed = time();
+                        $this->password = \password_hash(bin2hex(random_bytes(24)), PASSWORD_BCRYPT);
+                        $this->apikey = '';
+                        $this->indieauth_codes = [];
+                        $this->indieauth_tokens = [];
+                        $this->clearPasswordRecoveryCode();
+
+                        return $this->save(true) ? true : false;
+                    }
+                );
+            } catch (\Throwable $e) {
+                $logging->error('An account could not be closed: ' . get_class($e));
+                $closed = false;
+            }
+            if (!$closed) {
+                foreach ($previous as $field => $value) {
+                    $this->$field = $value;
+                }
+                try {
+                    \Idno\Core\AccountRegistry::unmarkClosed($uuid); // (where the two saves were not one transaction)
+                } catch (\Throwable $e) {
+                    $logging->error('The mark of an account that was not closed could not be removed: ' . get_class($e));
+                }
+
+                return false;
+            }
+            \Idno\Core\AccountRegistry::forget();
+            try {
+                \Idno\Core\Idno::site()->events()->triggerEvent('account/closed', ['object' => $this]);
+            } catch (\Throwable $e) {
+                $logging->error('A listener of account/closed failed: ' . get_class($e));
+            }
+
+            return true;
+        }
+
+        /**
+         * A closed account's profile is for administrators alone.
+         *
+         * @param  string $user_id
+         * @return true|false
+         */
+        function canRead($user_id = '')
+        {
+            if ($this->isClosed()) {
+                if (empty($user_id)) {
+                    $user_id = \Idno\Core\Idno::site()->session()->currentUserUUID();
+                }
+                $viewer = $user_id ? static::getByUUID($user_id) : false;
+
+                return $viewer instanceof User && $viewer->isAdmin();
+            }
+
+            return parent::canRead($user_id);
+        }
+
+        /**
+         * Delete this account and everything it owns. A job in two stages: the account is
+         * CLOSED first (close()), then its content is removed entity by entity
+         * (deleteContent()), and the account record last, only when nothing it owns is left.
+         *
+         * With the asynchronous queue the content is removed by the queue worker (the event
+         * account/remove, run as nobody, which queues itself again while it makes progress):
+         * the account is closed here and false is returned. Otherwise the job runs here for
+         * a bounded time (removalSeconds()) and what is left is done after the response
+         * (\Idno\Core\AfterResponse); the Users page's "Continue deleting" calls this again
+         * when that did not finish. From the command line (a console command, a test) the
+         * whole job is done here. Every step can be repeated.
+         *
+         * What is removed is not announced one post at a time (AccountContent::whileRemoving());
+         * followers' servers are told once, when the account is closed. Whether the requester
+         * may delete the account is for the page to ask (canBeDemotedOrDeletedBy()).
+         *
+         * @return bool Is the account gone?
+         */
         function delete()
         {
+            $site = \Idno\Core\Idno::site();
+            $session = $site->session();
+            $lang = $site->language();
+            if (!$this->isClosed() && \Idno\Core\AccountRegistry::closedIsFull()) {
+                $session->addErrorMessage($lang->_("Too many accounts are being deleted at once. Wait until some of them are gone, then try again."));
 
-            // First, remove all owned objects
-            while ($objects = Entity::get(array('owner' => $this->getUUID(), array(), 100))) {
-                foreach ($objects as $object) {
-                    $object->delete();
+                return false;
+            }
+            if (!$this->close()) {
+                $session->addErrorMessage($lang->esc_("%s could not be closed, so nothing was deleted. Please try again.", [$this->getTitle()]));
+
+                return false;
+            }
+            if ($site->queue() instanceof \Idno\Core\AsynchronousQueue) {
+                if ($site->queue()->enqueue('default', self::REMOVE_EVENT, ['uuid' => $this->getUUID()], false) === false) {
+                    $session->addErrorMessage($lang->esc_("%s is closed, but removing the account could not be started. Delete it again to carry on.", [$this->getTitle()]));
+                } else {
+                    $session->addMessage($lang->esc_("%s is closed and is being deleted: its content is removed in the background, and the account when nothing of it is left.", [$this->getTitle()]));
+                }
+
+                return false;
+            }
+            if (PHP_SAPI === 'cli') {
+                do {
+                    $outcome = $this->removeAccount();
+                } while ($outcome === 'time');
+            } else {
+                $outcome = $this->removeAccount(self::CONTENT_BATCH, self::removalSeconds());
+            }
+            if ($outcome === 'removed') {
+                return true;
+            }
+            if ($outcome === 'time') {
+                $uuid = (string) $this->getUUID();
+                \Idno\Core\AfterResponse::later(
+                    static function () use ($uuid) {
+                        do {
+                            $user = User::getByUUID($uuid, false);
+                            // (each run that says 'time' has removed something, so this ends)
+                        } while ($user instanceof User && $user->isClosed() && $user->removeAccount(self::CONTENT_BATCH, 25.0) === 'time');
+                    }
+                );
+                $session->addMessage($lang->esc_("%s is closed and is being deleted: the rest of its content is being removed now.", [$this->getTitle()]));
+            } else if ($outcome === 'busy') {
+                $session->addMessage($lang->esc_("%s is being deleted by another job already.", [$this->getTitle()]));
+            } else {
+                $session->addErrorMessage($lang->esc_("%s is closed, but something that belongs to it could not be deleted (a plugin may have refused). The list of users says what is left. Delete it again to try again.", [$this->getTitle()]));
+            }
+
+            return false;
+        }
+
+        /**
+         * How long one run of the removal works for in a web request or a queue worker: the
+         * setting account_removal_seconds (config.ini only), kept between 0 and 60% of
+         * PHP's time limit (an hour where there is none); null when it is not set, for
+         * deleteContent()'s default.
+         *
+         * @return float|null
+         */
+        static function removalSeconds()
+        {
+            $setting = \Idno\Core\Idno::site()->config()->account_removal_seconds;
+            if (!is_numeric($setting) || !is_finite((float) $setting)) {
+                return null;
+            }
+            $limit = (int) ini_get('max_execution_time');
+
+            return max(0.0, min((float) $setting, $limit > 0 ? $limit * 0.6 : 3600.0));
+        }
+
+        /**
+         * The job of deleting a closed account, as far as it gets in $seconds: its content
+         * (deleteContent()) and, when nothing is left, the account record, quietly
+         * (AccountContent::whileRemoving()). One job runs at a time: it holds a claim on the
+         * stored account (account_removing_until, account_removing_by) for five minutes,
+         * and a claim that is stale (its job was killed) is taken over.
+         *
+         * When the account is gone its username is reserved and it leaves the set of closed
+         * accounts (\Idno\Core\AccountRegistry). When it is not, what remains and why is
+         * stored on it (account_removal), for the Users page to say.
+         *
+         * @param  int        $batch
+         * @param  float|null $seconds see deleteContent()
+         * @return string 'removed' (the account is gone), 'time' (some of it was removed and
+         *                there is more: call again), 'refused' (something remains that could
+         *                not be removed, and this call removed nothing: stop), 'busy'
+         *                (another job holds the claim) or 'open' (the account is not closed:
+         *                nothing is removed from an account that is in use)
+         */
+        function removeAccount($batch = self::CONTENT_BATCH, $seconds = null)
+        {
+            if (!$this->isClosed()) {
+                return 'open';
+            }
+            $uuid = (string) $this->getUUID();
+            $handle = (string) $this->handle;
+            \Idno\Core\AccountRegistry::markClosed($uuid); // (asserted again by every run)
+
+            $token = bin2hex(random_bytes(8));
+            $stored = static::getByUUID($uuid, false);
+            if ($stored instanceof User && (int) $stored->account_removing_until > time() && (string) $stored->account_removing_by !== '') {
+                return 'busy';
+            }
+            $this->account_removing_until = time() + 300;
+            $this->account_removing_by = $token;
+            $this->save(true);
+            $stored = static::getByUUID($uuid, false);
+            if (!$stored instanceof User || (string) $stored->account_removing_by !== $token) {
+                return 'busy'; // another job took the claim in the same moment
+            }
+
+            $removed = false;
+            try {
+                $outcome = \Idno\Core\AccountContent::whileRemoving(
+                    function () use ($batch, $seconds) {
+                        $result = $this->deleteContent($batch, $seconds);
+                        if ($result !== 'done') {
+                            return $result;
+                        }
+
+                        return parent::delete() ? 'removed' : 'refused';
+                    }
+                );
+                $removed = $outcome === 'removed';
+
+                return $outcome;
+            } finally {
+                $logging = \Idno\Core\Idno::site()->logging();
+                if ($removed) {
+                    // Each on its own: a failure of one does not lose the other, or turn a deletion that worked into an error
+                    if ($handle !== '') {
+                        try {
+                            \Idno\Core\AccountRegistry::reserveHandle($handle, $uuid); // (first: a process that stops between the two leaves the username kept back)
+                        } catch (\Throwable $e) {
+                            $logging->warning('The username of a deleted account could not be reserved: ' . get_class($e));
+                        }
+                    }
+                    try {
+                        \Idno\Core\AccountRegistry::unmarkClosed($uuid);
+                    } catch (\Throwable $e) {
+                        $logging->warning('The mark of a deleted account could not be removed: ' . get_class($e));
+                    }
+                } else {
+                    $this->account_removing_until = 0;
+                    $this->account_removing_by = '';
+                    $this->account_removal = $this->removalReport ?: false;
+                    $this->save(true);
+                }
+            }
+        }
+
+        /**
+         * The avatar is a stored file of the account, and goes with it.
+         */
+        function deleteData()
+        {
+            $id = strtok((string) $this->icon, '/');
+            if (is_string($id) && preg_match('/^[A-Za-z0-9]{8,64}$/', $id)) {
+                try {
+                    if ($file = \Idno\Entities\File::getByID($id)) {
+                        $file->delete();
+                    }
+                } catch (\Throwable $e) {
+                    \Idno\Core\Idno::site()->logging()->warning('The avatar of a deleted account could not be deleted: ' . get_class($e));
                 }
             }
 
-            return parent::delete();
+            return true;
+        }
+
+        /**
+         * Delete what this account owns, one entity at a time, until it is all gone or the
+         * time is up. What it owns is every RAW RECORD of the entity collections whose owner
+         * is the account (read as records, so one whose class is gone or cannot be built is
+         * found too), except what belongs to the site (\Idno\Core\AccountContent). An
+         * entity that can be built is deleted through its own delete(), so its hooks run and
+         * its files go; one that cannot is removed as a record. PROGRESS IS RECORDS GONE:
+         * after each delete the record is read again by its id, and one that is still there
+         * (a listener refused, a delete() that left it) is refused and not tried again in
+         * this call. The time is checked after each entity, and at least one is done for
+         * each call.
+         *
+         * 'done' is said only when a COUNT of what the account still owns equals what was
+         * walked past and kept on purpose. A database that cannot be read is not "nothing
+         * left": it ends the call.
+         *
+         * What was refused is logged, one line for each class with the count and a few ids
+         * (never content), and kept for the Users page.
+         *
+         * @param  int        $batch   How many records to look up at a time
+         * @param  float|null $seconds The time to work for (null: 60% of PHP's time limit, or half a minute where there is none)
+         * @return string 'done'; 'time' (records were removed and there is more, or the time
+         *                is up: call again); 'refused' (records remain that cannot be removed,
+         *                or the database could not be read, and nothing was removed: stop)
+         */
+        function deleteContent($batch = self::CONTENT_BATCH, $seconds = null)
+        {
+            $batch = max(1, (int) $batch);
+            $limit = (int) ini_get('max_execution_time');
+            $seconds = $seconds ?? ($limit > 0 ? $limit * 0.6 : 30.0);
+            $deadline = microtime(true) + $seconds;
+            $uuid = (string) $this->getUUID();
+            $db = \Idno\Core\Idno::site()->db();
+            $logging = \Idno\Core\Idno::site()->logging();
+            $before = $db->getIgnoreAccess();
+            $abort = ignore_user_abort(true); // the entity the request is in the middle of is finished, with its files
+            $db->setIgnoreAccess(true);
+            $this->removalReport = [];
+            try {
+                $kept = 0;
+                $removed = 0;
+                $refused = [];
+                $unreadable = false;
+                $timeUp = false;
+                $owned = -1;
+                try {
+                    foreach (self::CONTENT_COLLECTIONS as $collection) {
+                        $offset = 0; // the records that stay where they are: the next batch begins after them
+                        while (!$timeUp && ($records = $db->getRecords([], ['owner' => $uuid], $batch, $offset, $collection))) {
+                            foreach ($records as $record) {
+                                if ($removed > 0 && microtime(true) >= $deadline) {
+                                    $timeUp = true;
+                                    break;
+                                }
+                                $id = (string) ($record['_id'] ?? '');
+                                if (($record['uuid'] ?? '') === $uuid || \Idno\Core\AccountContent::keeps($record)) {
+                                    $kept++;
+                                    $offset++;
+                                    continue;
+                                }
+                                $this->removeOwnedRecord($record, $collection);
+                                if ($id !== '' && !$db->getRecord($id, $collection)) {
+                                    $removed++;
+                                } else {
+                                    $offset++;
+                                    $class = (string) ($record['entity_subtype'] ?? '');
+                                    $refused[$class === '' ? '(no class)' : $class][] = $id;
+                                }
+                            }
+                        }
+                    }
+                    $owned = 0;
+                    foreach (self::CONTENT_COLLECTIONS as $collection) {
+                        $count = $db->countRecords(['owner' => $uuid], $collection);
+                        if (!is_int($count)) {
+                            throw new \Idno\Exceptions\TechnicalException('The records of the ' . $collection . ' collection could not be counted.');
+                        }
+                        $owned += $count;
+                    }
+                } catch (\Throwable $e) {
+                    $unreadable = true;
+                    $owned = -1;
+                    $logging->error('Account removal could not read what the account owns: ' . get_class($e));
+                }
+                if ($refused) {
+                    $this->removalReport = ['classes' => array_map('count', $refused), 'at' => time(), 'reason' => 'refused'];
+                    foreach ($refused as $class => $ids) {
+                        $ids = array_map(
+                            function ($id) {
+                                return preg_replace('/[^A-Za-z0-9-]/', '', (string) $id);
+                            }, array_slice($ids, 0, 3)
+                        );
+                        $logging->warning('Account removal: ' . count($refused[$class]) . ' record(s) of ' . preg_replace('/[\x00-\x1f\x7f]+/', ' ', substr($class, 0, 200)) . ' could not be removed (ids ' . implode(', ', $ids) . '): a plugin\'s listener may have refused, or the class\'s delete() leaves the record');
+                    }
+                } else if ($unreadable) {
+                    $this->removalReport = ['classes' => [], 'at' => time(), 'reason' => 'unreadable'];
+                }
+                if ($timeUp || ($removed > 0 && ($refused || $unreadable))) {
+                    return 'time';
+                }
+                if ($refused || $unreadable) {
+                    return 'refused';
+                }
+                if ($owned === $kept) {
+                    return 'done';
+                }
+                if ($removed > 0) {
+                    return 'time';
+                }
+                $this->removalReport = ['classes' => [], 'at' => time(), 'reason' => 'count'];
+
+                return 'refused';
+            } finally {
+                $db->setIgnoreAccess($before);
+                ignore_user_abort((bool) $abort);
+            }
+        }
+
+        /**
+         * Removes one record the account owns. An entity that can be built is deleted
+         * through its own delete(); a record that cannot is removed as a record, with the
+         * files its document names. Whether it is gone is for the caller to read.
+         *
+         * @param array  $record
+         * @param string $collection
+         */
+        private function removeOwnedRecord(array $record, $collection)
+        {
+            $db = \Idno\Core\Idno::site()->db();
+            $logging = \Idno\Core\Idno::site()->logging();
+            $entity = false;
+            if ($collection === 'entities') {
+                try {
+                    $entity = $db->rowToEntity($record);
+                } catch (\Throwable $e) {
+                    $logging->warning('A record of a deleted account could not be loaded as an entity and is removed as a record: ' . get_class($e));
+                }
+            }
+            if ($entity instanceof Entity) {
+                try {
+                    $entity->delete();
+                } catch (\Throwable $e) {
+                    $logging->error('Deleting an entity of an account failed: ' . get_class($e));
+                }
+
+                return;
+            }
+            if (!$db->deleteRecord((string) ($record['_id'] ?? ''), $collection)) {
+                return;
+            }
+            foreach ((array) ($record['attachments'] ?? []) as $attachment) {
+                $id = is_array($attachment) ? (string) ($attachment['_id'] ?? '') : '';
+                try {
+                    if ($id !== '' && ($file = \Idno\Entities\File::getByID($id))) {
+                        $file->delete();
+                    }
+                } catch (\Throwable $e) {
+                    $logging->warning('A file of a deleted account could not be deleted: ' . get_class($e));
+                }
+            }
         }
 
         public function jsonSerialize(): mixed
@@ -1271,6 +1780,7 @@ namespace Idno\Entities {
             unset($data['updated']);
             unset($data['published']);
             unset($data['banned'], $data['ban_reason'], $data['banned_by'], $data['ban_hides_profile']);
+            unset($data['account_closed'], $data['account_removing_until'], $data['account_removing_by'], $data['account_removal']);
             // The account email is private: it is never part of what is drawn for anybody
             unset($data['email']);
 

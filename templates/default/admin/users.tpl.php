@@ -109,6 +109,16 @@ if (!empty($vars['invitations'])) {
 }
 
 ?>
+<?php if (!empty($vars['reserved_handles']['items'])) { ?>
+        <div class="row" id="reserved-usernames">
+            <div class="col-md-10 col-md-offset-1">
+                <h3><?php echo \Idno\Core\Idno::site()->language()->_('Usernames of deleted accounts'); ?></h3>
+                <div class="pane">
+                    <?php echo $this->__(['reserved_handles' => $vars['reserved_handles']])->draw('admin/users/reserved'); ?>
+                </div>
+            </div>
+        </div>
+<?php } ?>
         <div class="row">
             <div class="col-md-10 col-md-offset-1">
 

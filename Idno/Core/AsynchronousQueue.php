@@ -28,7 +28,9 @@ class AsynchronousQueue extends EventQueue
         // Use explicit user context if provided (needed for unauthenticated
         // callers like ActivityPub inbox handlers), otherwise fall back to
         // the currently logged-in user.
-        $queuedEvent->runAsContext = $runAsUser ?: \Idno\Core\Idno::site()->session()->currentUserUUID();
+        // False runs the event as nobody, whoever is logged in (the removal of an account
+        // must not depend on the administrator who started it still being there).
+        $queuedEvent->runAsContext = $runAsUser === false ? '' : ($runAsUser ?: \Idno\Core\Idno::site()->session()->currentUserUUID());
         $queuedEvent->complete = false;
         $queuedEvent->queuedTs = time();
 
@@ -92,6 +94,11 @@ class AsynchronousQueue extends EventQueue
                 $user = \Idno\Entities\User::getByUUID($event->runAsContext);
                 if (empty($user)) {
                     throw new \Idno\Exceptions\TechnicalException(\Idno\Core\Idno::site()->language()->_("Invalid user (%s) given for runAsContext, aborting", [$event->runAsContext]));
+                }
+
+                if ($user->isClosed()) {
+                    // Queued as a member whose account has been closed since: dropped, not run as nobody
+                    throw new \Idno\Exceptions\TechnicalException('The account this event was queued for is closed; the event is dropped');
                 }
 
                 \Idno\Core\Idno::site()->session()->logUserOn($user);

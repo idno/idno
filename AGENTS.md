@@ -220,12 +220,15 @@ service sends for a member who signed up there themselves still arrive as ordina
    which enqueues signed POSTs to each follower's inbox.
 2. **Incoming**: `ActivityHandler::handle()` verifies HTTP signatures, routes by
    activity type, and processes Follow (auto-accept), Undo, Delete, QuoteRequest.
-3. **Quote posts (FEP-044f)**: Every post's object includes
+3. **An account that is deleted**: followers' servers are sent ONE `Delete` of the actor when
+   the account is closed, signed then, and no `Delete` for each post (see "Deleting an account
+   is a job in two stages" under Security). The actor's addresses answer 410 from that moment.
+4. **Quote posts (FEP-044f)**: Every post's object includes
    `interactionPolicy.canQuote.automaticApproval` set to `as:Public`. Incoming
    QuoteRequests for a public post are auto-accepted with an HMAC-signed stamp URL. The stamp
    endpoint serves `QuoteAuthorization` objects for third-party verification (see
    "Quote stamps" below).
-4. **Context**: Activities use the GoToSocial namespace (`gts:`) for interaction
+5. **Context**: Activities use the GoToSocial namespace (`gts:`) for interaction
    policies. The extended `CONTEXT_WITH_QUOTES` constant in `ActivityBuilder`
    defines all required JSON-LD terms.
 
@@ -1085,6 +1088,88 @@ something). What existing sites, hubs and plugins hold was kept, and must stay:
   take a member only (`Users::userFromInput()`): `User::getByUUID()` finds any entity by its
   address, and a post is answered as a member who does not exist.
   `Tests/Pages/Admin/UsersPageSafeguardsTest.php` checks this.
+- Deleting an account is a job in two stages, and the account is CLOSED before anything is
+  removed (`User::delete()`), on every page that deletes one.
+  - **Stage 1, `User::close()`, one save**: the stored field `account_closed` (a time) marks the
+    account, its password becomes the hash of a random value, and its API key, password
+    recovery code and IndieAuth codes and tokens are removed. `User::isClosed()` is THE one
+    question: `Session::logUserOn()`, `refreshSessionUser()` and `refreshCurrentSessionuser()`
+    refuse a closed account beside a banned one (so its browser sessions end at their next
+    request, and a signed request, an access token and a plugin's own authentication are
+    refused), `tryAuthUser()` does not compare a signature for it (it has no key:
+    `getAPIkey()` answers '' and makes none), the password recovery page sends it no code, a
+    queued event that was to run as it is dropped (`AsynchronousQueue::dispatch()`),
+    `User::countUnbannedAdmins()` does not count it, and `canBeDemotedOrDeletedBy()` lets its
+    deletion be carried on. The username and email stay taken until the account is gone.
+    Then the event `account/closed` is triggered once.
+  - **The set of closed accounts** is one `Idno\Entities\ClosedAccount` record for each
+    (`Idno\Core\AccountRegistry`: `closed()`, `isClosed()`, `markClosed()`, `unmarkClosed()`),
+    saved before the account is, in one transaction with it on MySQL
+    (`DataConcierge::transaction()`); a failure of either closes nothing. Every run of the
+    removal asserts the mark again. It is read by class once for each process that lists or
+    counts (again after `TRUST_SECONDS` in a process that lives long), and at most
+    `MAX_CLOSED` (500) accounts can be closed at once, because every visitor's query carries
+    the set.
+  - **Nobody but an administrator is shown what a closed account owns**, and the one place is
+    the database layer: `DataConcierge::closedAccountsExclusion()`, which
+    `AbstractSQL::getObjects()` / `countObjects()` (the search key
+    `AbstractSQL::NOT_OWNED_BY_CLOSED`, written by `MySQL::build_where_from_array()`) and
+    `Mongo::getObjects()` / `countObjects()` (`withoutClosedAccounts()`) add AFTER the caller's
+    conditions, so a caller's own `owner` condition cannot lift it. Records of the classes
+    the site keeps (below) stay listed. A listing made with access ignored is not filtered; a
+    count always is. By address, `Entity::canRead()` asks `isHiddenByClosedOwner()`,
+    `User::canRead()` is false, the profile and portfolio pages answer 404, Webfinger finds
+    nobody, and the ActivityPub actor, inbox, outbox and collections answer 410. Don't hide
+    a closed account's posts page by page.
+  - **Stage 2, `User::removeAccount()`**, which can stop and be called again: it holds a claim
+    on the stored account for five minutes (`account_removing_until`, `account_removing_by`;
+    'busy' for a second job), then `deleteContent()` walks the RAW RECORDS of the `entities`
+    and `reader` collections whose `owner` is the account (`getRecords()`, so a record whose
+    class is gone is found too). An entity that can be built is deleted through its own
+    `delete()`; one that cannot is deleted as a record. Progress is records gone: each is
+    read again after its delete, and one still there is refused, logged by class and kept in
+    `account_removal` for the Users page. The time is checked after each entity. The
+    account record goes last, only when a count of what it still owns equals what was kept
+    on purpose. It answers 'removed', 'time' (call again), 'refused', 'busy' or 'open' (not
+    closed: nothing is removed from an account in use).
+  - **Who runs it**: with the asynchronous queue, the event `account/remove`
+    (`User::REMOVE_EVENT`, data `uuid`), queued as nobody (`enqueue(..., false)`), which
+    queues itself again only when the run removed something. Otherwise `delete()` runs it in
+    the request for `User::removalSeconds()` (the `account_removal_seconds` setting, else 60%
+    of PHP's time limit) and the rest after the response (`Idno\Core\AfterResponse::later()`,
+    a shutdown function that lets the browser go first); from the command line all of it at
+    once. The Users page row shows a closed account as "Being deleted" with "Continue
+    deleting" (the `delete` action again): a killed worker's event is not redelivered.
+    `User::delete()` is true only when the account is gone.
+  - **What belongs to the site is kept**, with its owner unchanged: `Idno\Core\AccountContent`
+    is the one list (`User`, `RemoteUser`, `RemoteObject`, `AccessGroup`, `Invitation`,
+    `UnfurledUrl`, `AsynchronousQueuedEvent`, `GenericDataItem`, the two account records, the
+    StaticPages plugin's `StaticPage` by name, subclasses included, and what a plugin
+    registers with `AccountContent::keep()`). Everything else the account owns is its content.
+  - **Quiet**: while the job runs `AccountContent::removalInProgress()` is true:
+    `Entity::unsyndicate()` does nothing, and the ActivityPub and Atmosphere `delete`
+    listeners send nothing for each post. A new listener that tells another server about a
+    deleted post asks it first.
+  - **Other servers are told once**, at the close: the ActivityPub plugin hears
+    `account/closed` and `Delivery::announceActorDeleted()` builds ONE `Delete` whose object
+    is the actor (`ActivityBuilder::buildActorDelete()`), signs it for each follower inbox
+    while the account has its key, queues each signed body as `activitypub/deliver-signed`
+    (run as nobody: the worker needs neither the account nor its key) and then removes the
+    account's follower records.
+  - **The username of a deleted account is reserved**: an `Idno\Entities\ReservedHandle`
+    record (`handle` normalised by `AccountRegistry::normaliseHandle()`), asked for by
+    `Register`, the Users page's `add_user` and `User::setHandle()`
+    (`AccountRegistry::handleIsReserved()`), until an administrator releases it with the
+    Users page's `release_handle` action. A newcomer is otherwise taken for the old
+    ActivityPub actor. Both account records (`Idno\Entities\AccountRecord`) are for
+    administrators only, like invitations, and belong to no member.
+  - Known limits: comments the member left on other people's posts stay (they are part of
+    those posts); two deletions started in the same moment can both pass the last-administrator
+    check; the `Delete` of the actor is not sent again if its deliveries fail; a mark whose
+    account was never closed (a crash between the two saves on MongoDB) hides that account's
+    posts until `delete()` is called again or the mark is pruned.
+  - `Tests/Entities/AccountDeletionTest.php`, `Tests/Pages/Account/ClosedAccountTest.php`
+    (over HTTP) and `IdnoPlugins/ActivityPub/Tests/AccountDeletionTest.php` check this.
 - Going back after a form: `Page::forwardBack()` goes to the `Referer` only when it is an
   address of this site, and `Page::forwardToTarget($default)` reads a form's `forward-to`
   field the same way (`Login::sanitizeRedirectUrl()`), as does `Page::forwardAfterDelete()`. Don't `forward()` to

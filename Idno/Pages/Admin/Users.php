@@ -12,6 +12,9 @@ namespace Idno\Pages\Admin {
     class Users extends \Idno\Common\Page
     {
 
+        /// How many reserved usernames the page lists at a time
+        const RESERVED_PER_PAGE = 25;
+
         function getContent()
         {
             $this->adminGatekeeper(); // Admins only
@@ -24,8 +27,17 @@ namespace Idno\Pages\Admin {
 
             $invitations = Invitation::all();
 
+            // The usernames kept back for deleted accounts, a page at a time
+            $reserved_offset = max(0, (int) $this->getInput('reserved_offset', 0));
+            $reserved = [
+                'items' => \Idno\Entities\ReservedHandle::page(self::RESERVED_PER_PAGE, $reserved_offset),
+                'count' => \Idno\Entities\ReservedHandle::total(),
+                'offset' => $reserved_offset,
+                'per_page' => self::RESERVED_PER_PAGE,
+            ];
+
             $t        = \Idno\Core\Idno::site()->template();
-            $t->body  = $t->__(array('items' => $users, 'invitations' => $invitations, 'mail_configured' => \Idno\Core\Email::isConfigured(), 'count' => $count, 'items_per_page' => $limit))->draw('admin/users');
+            $t->body  = $t->__(array('items' => $users, 'invitations' => $invitations, 'reserved_handles' => $reserved, 'mail_configured' => \Idno\Core\Email::isConfigured(), 'count' => $count, 'items_per_page' => $limit))->draw('admin/users');
             $t->title = \Idno\Core\Idno::site()->language()->_('User Management');
             $t->drawPage();
 
@@ -40,7 +52,7 @@ namespace Idno\Pages\Admin {
 
             switch ($action) {
                 case 'add_rights':
-                    if ($user = $this->userFromInput()) {
+                    if (($user = $this->userFromInput()) && !$user->isClosed()) {
                         $user->setAdmin(true);
                         $user->save();
                         \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->esc_("%s was given administration rights.", [$user->getTitle()]));
@@ -54,10 +66,23 @@ namespace Idno\Pages\Admin {
                     }
                     break;
                 case 'delete':
+                    // Also "Continue deleting" for an account whose deletion stopped. When
+                    // the account is not gone yet, delete() says where it stands.
                     if (($user = $this->userFromInput()) && $this->mayDemoteOrDelete($user)) {
                         if ($user->delete()) {
-                            \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->esc_("%s was removed from your site.", [$user->getTitle()]));
+                            $language = \Idno\Core\Idno::site()->language();
+                            if ($user instanceof \Idno\Entities\RemoteUser) {
+                                \Idno\Core\Idno::site()->session()->addMessage($language->esc_("%s was removed from your site.", [$user->getTitle()]));
+                            } else {
+                                \Idno\Core\Idno::site()->session()->addMessage($language->esc_("%s was removed from your site. Their username is kept back; you can release it below.", [$user->getTitle()]));
+                            }
                         }
+                    }
+                    break;
+                case 'release_handle':
+                    $handle = $this->getTextInput('handle');
+                    if (\Idno\Core\AccountRegistry::releaseHandle($handle)) {
+                        \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->esc_("The username %s can be registered again.", [$handle]));
                     }
                     break;
                 case 'invite_users':
@@ -111,7 +136,7 @@ namespace Idno\Pages\Admin {
                         \Idno\Core\Idno::site()->session()->addMessage(\Idno\Core\Idno::site()->language()->_("Please enter a username and email address."));
                     } else if (!empty($email) && filter_var($email, FILTER_VALIDATE_EMAIL)) {
                         if (!($emailuser = \Idno\Entities\User::getByEmail($email))
-                        && !($handleuser = \Idno\Entities\User::getByHandle($handle))
+                        && !($handleuser = (\Idno\Entities\User::getByHandle($handle) ?: \Idno\Core\AccountRegistry::handleIsReserved($handle)))
                         && !empty($handle) && strlen($handle) <= 32
                         && !substr_count($handle, '/')
                         ) {

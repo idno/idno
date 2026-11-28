@@ -569,6 +569,10 @@ namespace Idno\Core {
                 if (empty($user)) {
                     $user = \Idno\Entities\User::getByEmail($apiUsername);
                 }
+                if (!empty($user) && $user->isClosed()) {
+                    // A closed account has no key: nothing is compared, and it is nobody's request
+                    $user = false;
+                }
                 if (!empty($user)) {
                     \Idno\Core\Idno::site()->logging()->debug("API auth found user by username: {$apiUsername} - " . $user->getName());
 
@@ -633,7 +637,7 @@ namespace Idno\Core {
 
         function logUserOn(\Idno\Entities\User $user)
         {
-            if ($user->isBanned() || \Idno\Core\Idno::site()->config()->emailIsBlocked($user->email)) {
+            if ($user->isBanned() || $user->isClosed() || \Idno\Core\Idno::site()->config()->emailIsBlocked($user->email)) {
                 $this->logUserOff();
 
                 return false;
@@ -668,7 +672,7 @@ namespace Idno\Core {
         {
             if ($user = User::getByUUID($user->getUUID(), false)) {
 
-                if ($user->isBanned() || \Idno\Core\Idno::site()->config()->emailIsBlocked($user->email)) {
+                if ($user->isBanned() || $user->isClosed() || \Idno\Core\Idno::site()->config()->emailIsBlocked($user->email)) {
                     $this->logUserOff();
 
                     return false;
@@ -690,7 +694,7 @@ namespace Idno\Core {
         {
             if (!$this->currentUser() && !empty($_SESSION['user_uuid'])) {
                 if ($this->user = User::getByUUID($_SESSION['user_uuid'])) {
-                    if ($this->user->isBanned() || \Idno\Core\Idno::site()->config()->emailIsBlocked($this->user->email)) {
+                    if ($this->user->isBanned() || $this->user->isClosed() || \Idno\Core\Idno::site()->config()->emailIsBlocked($this->user->email)) {
                         $this->logUserOff();
                     }
                 }

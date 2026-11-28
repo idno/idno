@@ -26,6 +26,9 @@ namespace Idno\Pages\Search {
 
                 foreach ($users as $user) {
                     /* @var \Idno\Entities\User $user */
+                    if ($user->isClosed()) {
+                        continue; // An account that is being deleted is offered to nobody
+                    }
                     $results[] = array(
                         'username' => $user->getHandle(),
                         'name'     => $user->getTitle(),

@@ -960,6 +960,10 @@ namespace Idno\Common {
          */
         function unsyndicate()
         {
+            // What the removal of an account deletes is not taken back one post at a time
+            if (\Idno\Core\AccountContent::removalInProgress()) {
+                return;
+            }
             if ($this->getActivityStreamsObjectType()) {
                 $event = new \Idno\Core\Event(array('object' => $this, 'object_type' => $this->getActivityStreamsObjectType()));
                 \Idno\Core\Idno::site()->events()->dispatch('delete/' . $this->getActivityStreamsObjectType(), $event);
@@ -1996,6 +2000,10 @@ namespace Idno\Common {
             // Unpublished entities are for their owner and admins only, whatever their access setting
             if ($this->isHiddenByPublishStatus($user_id)) return false;
 
+            // What a closed account owns (it is being deleted) is for administrators only,
+            // unless it is the site's (a static page an administrator wrote)
+            if ($this->isHiddenByClosedOwner($user_id)) return false;
+
             $access = $this->getAccess();
 
             if ($access == 'PUBLIC') return true;
@@ -2024,6 +2032,29 @@ namespace Idno\Common {
             //}
 
             return \Idno\Core\Idno::site()->events()->triggerEvent('canRead', array('object' => $this, 'user_id' => $user_id), false);
+        }
+
+        /**
+         * Is this entity hidden from a viewer because the account that owns it is closed (it
+         * is being deleted: see User::close())? Administrators are shown it; what belongs to
+         * the site (\Idno\Core\AccountContent) is never hidden. Listings and counts leave
+         * the same entities out (DataConcierge::closedAccountsExclusion()).
+         *
+         * @param  string $user_id The viewer; the member who is signed in when empty
+         * @return bool
+         */
+        function isHiddenByClosedOwner($user_id = '')
+        {
+            $owner = $this->getOwnerID();
+            if (empty($owner) || !User::uuidIsClosed($owner) || \Idno\Core\AccountContent::keeps(get_class($this))) {
+                return false;
+            }
+            if (empty($user_id)) {
+                $user_id = \Idno\Core\Idno::site()->session()->currentUserUUID();
+            }
+            $viewer = $user_id ? User::getByUUID($user_id) : false;
+
+            return !($viewer instanceof User && $viewer->isAdmin());
         }
 
         /**

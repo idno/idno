@@ -52,7 +52,10 @@ if ($user instanceof \Idno\Entities\User) {
         <p class="user-tbl">
             <small>
             <?php
-            if ($user instanceof \Idno\Entities\RemoteUser) {
+            if ($user->isClosed()) {
+                // Being deleted: the state, what is left, and the control that carries on
+                echo $this->__(['user' => $user])->draw('forms/components/usersearch/user/closed');
+            } else if ($user instanceof \Idno\Entities\RemoteUser) {
                 ?>
                 <?php echo \Idno\Core\Idno::site()->language()->_('Remote member'); ?>
                 <?php
@@ -81,7 +84,7 @@ if ($user instanceof \Idno\Entities\User) {
         <p class="user-tbl">
             <small>
             <?php
-            if ($user->getUUID() != \Idno\Core\Idno::site()->session()->currentUserUUID()) {
+            if (!$user->isClosed() && $user->getUUID() != \Idno\Core\Idno::site()->session()->currentUserUUID()) {
                 // Actions that plugins add for this member. The row is drawn by a template object
                 // of its own, which knows nothing of what plugins extend: ask the site's.
                 echo \Idno\Core\Idno::site()->template()->__(['user' => $user])->draw('forms/components/usersearch/user/actions');

@@ -430,7 +430,7 @@ namespace Idno\Entities {
             );
 
             // Not isAdmin(), which is about the request at hand (never true for an API request)
-            return $issuer instanceof User && !empty($issuer->admin) && !$issuer->isBanned();
+            return $issuer instanceof User && !empty($issuer->admin) && !$issuer->isBanned() && !$issuer->isClosed();
         }
 
         /**

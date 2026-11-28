@@ -453,7 +453,7 @@ class ActivityHandler
         $user = self::findLocalUser($actorId);
 
         // A banned member takes part in nothing: no follows are accepted for them
-        return ($user instanceof User && $user->isBanned()) ? false : $user;
+        return ($user instanceof User && ($user->isBanned() || $user->isClosed())) ? false : $user;
     }
 
     /**
