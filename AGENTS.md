@@ -6169,10 +6169,10 @@ no installer writes one.
 
 ## Git Conventions
 
-- `IdnoPlugins/` is gitignored with explicit `!` exceptions for each tracked plugin
+- `IdnoPlugins/*` is gitignored with an explicit `!` exception for each bundled plugin (so another plugin dropped into the folder is not tracked, and a new file in a bundled plugin is)
 - `ConsolePlugins/` follows the same pattern
 - `vendor/` is gitignored — use `composer install` to restore
-- New plugin files must be `git add -f` due to the gitignore pattern
+- A new bundled plugin needs its own `!IdnoPlugins/<Name>` (or `!ConsolePlugins/<Name>`) line in `.gitignore`; files inside a bundled plugin need no `git add -f`, but `*.json` is still ignored there
 - `*.json` is gitignored (except `composer.json` which was tracked before the rule)
 
 ## Indieweb compatibility

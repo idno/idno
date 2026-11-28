@@ -57,7 +57,7 @@ tests/_output/*
 
 IdnoPlugins.local/*
 
-IdnoPlugins/
+IdnoPlugins/*
 !IdnoPlugins/Bridgy
 !IdnoPlugins/Checkin
 !IdnoPlugins/Event
@@ -75,6 +75,7 @@ IdnoPlugins/
 
 ConsolePlugins/*
 !ConsolePlugins/BuildLanguage
+!ConsolePlugins/Example
 !ConsolePlugins/Export
 !ConsolePlugins/GhostExport
 
