@@ -121,7 +121,10 @@ namespace Idno\Core {
             $this->site_details = $this->site_details();
             $this->template     = $this->componentFactory($this->config->template, Template::class, "Idno\\Core\\", HybridTwigTemplate::class);
             $this->language     = new Language();
-                $this->language()->register(new GetTextTranslation()); // Register default gettext translations
+            // Core's gettext translations: the "idno" catalogue, then one made before the domain was renamed ("known")
+            foreach (GetTextTranslation::forCore() as $translation) {
+                $this->language()->register($translation);
+            }
             $this->syndication  = new Syndication();
             $this->helper_robot = new HelperRobot();
             $this->queue        = $this->componentFactory($this->config->event_queue, "Idno\\Core\\EventQueue", "Idno\\Core\\", "Idno\\Core\\SynchronousQueue");

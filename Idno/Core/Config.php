@@ -38,7 +38,6 @@ namespace Idno\Core {
             'default_config'         => true, // This is a trip-switch - changed to false if configuration is loaded from an ini file / the db
             'loglevel'               => 5,
             'multi_syndication'      => true,
-            'wayback_machine'        => false,
             'static_url'             => false,
             'user_avatar_favicons'   => true,
             'form_token_expiry'      => 3600,
@@ -61,8 +60,8 @@ namespace Idno\Core {
          * A setting is taken to be a secret when its name says so: see isSecretSetting().
          * A secret that is empty is left as it is, so that it can be seen that it is not set.
          * Any other text that is an address with a user name and password in it
-         * (scheme://user:password@host) has those replaced. Lists of settings are gone
-         * through at every depth.
+         * (scheme://user:password@host) has those replaced, up to the last @ before the
+         * path, as a password can hold one. Lists of settings are gone through at every depth.
          *
          * @param  array $settings Settings by name
          * @return array
@@ -77,11 +76,60 @@ namespace Idno\Core {
                 } else if (is_array($value)) {
                     $settings[$name] = static::redactSecrets($value);
                 } else if (is_string($value)) {
-                    $settings[$name] = preg_replace('#^([a-z][a-z0-9+.\-]*://)[^/@\s]+@#i', '$1' . static::REDACTED . '@', $value);
+                    $settings[$name] = preg_replace('#^([a-z][a-z0-9+.\-]*://)[^/\s]+@#i', '$1' . static::REDACTED . '@', $value);
                 }
             }
 
             return $settings;
+        }
+
+        /**
+         * A copy of PHP's server variables ($_SERVER, which holds the environment of the
+         * process and the headers of the request) for showing them, as the diagnostics report
+         * does. The names are all kept, so that it can be seen what is set; a value is replaced
+         * by self::REDACTED when the variable is a secret (see isSecretServerVariable()), and
+         * everything else goes through redactSecrets().
+         *
+         * @param  array $server Server variables by name
+         * @return array
+         */
+        static function redactServerVariables(array $server)
+        {
+            foreach ($server as $name => $value) {
+                if (static::isSecretServerVariable($name) && $value !== '' && $value !== null) {
+                    $server[$name] = static::REDACTED;
+                }
+            }
+
+            return static::redactSecrets($server);
+        }
+
+        /**
+         * Is a server variable one whose value must not be shown? True for
+         *  - a variable that sets a setting of the site (IDNO_<SETTING>, and KNOWN_<SETTING> as
+         *    it was called before: see loadIniFiles()) when that setting is a secret by
+         *    isSecretSetting(): IDNO_DBPASS and IDNO_SITE_SECRET, not IDNO_TITLE;
+         *  - what a request carries to say who sent it: the Cookie, Authorization and
+         *    Proxy-Authorization headers, the password and digest of HTTP authentication, and
+         *    the signature of an API request (X-IDNO-SIGNATURE, X-KNOWN-SIGNATURE);
+         *  - a name that ends in a word for a password.
+         * Apache puts REDIRECT_ before the name of a variable after an internal redirect, once
+         * for each redirect, so the name is read without it. (Any other name that
+         * isSecretSetting() knows, and an address with a password in it, such as
+         * IDNO_DATABASE_URL, are left to redactSecrets().)
+         *
+         * @param  string $name
+         * @return bool
+         */
+        static function isSecretServerVariable($name)
+        {
+            $name = preg_replace('/^(REDIRECT_)+/i', '', (string) $name);
+
+            if (preg_match('/^(?:IDNO|KNOWN)_(.+)$/i', $name, $setting)) {
+                return static::isSecretSetting(strtolower($setting[1]));
+            }
+
+            return (bool) preg_match('/(^|_)(COOKIE|AUTHORIZATION|SIGNATURE|PW|PWD|PASSWD)$|^PHP_AUTH_DIGEST$/i', $name);
         }
 
         /**
@@ -245,6 +293,68 @@ namespace Idno\Core {
         }
 
         /**
+         * The folders configuration files are read from, in the order they are read.
+         *
+         * @return string[]
+         */
+        protected function configurationPaths()
+        {
+            return [
+                $this->path,                    // Check old location (Warning: @deprecated and will be removed in future installs)
+                $this->path . '/configuration'  // Check for configuration in the new location
+            ];
+        }
+
+        /**
+         * The names a per-domain configuration file may have, without ".ini", in the order they are
+         * tried: the host as it is in the site's address, and then, for a host that begins with
+         * "www.", the host without it. That second name is what the host goes by everywhere else:
+         * `host` once init() has finished, the `hosts/<host>/` folders of plugins and themes, the
+         * database of a multitenant site and its folder of uploads. Only the first file found is
+         * read, so a site that has a file named with "www." is configured by that file alone.
+         *
+         * @return string[]
+         */
+        protected function hostConfigurationNames()
+        {
+            $host  = (string) $this->host;
+            $names = [$host];
+            if (substr($host, 0, 4) == 'www.') {
+                $names[] = substr($host, 4);
+            }
+
+            return $names;
+        }
+
+        /// The words that config.ini reads as on and as off; an environment variable means the same by them
+        const ENVIRONMENT_WORDS = [
+            'true' => true, 'on' => true, 'yes' => true,
+            'false' => false, 'off' => false, 'no' => false, 'none' => false,
+        ];
+
+        /**
+         * What the value of an IDNO_ or KNOWN_ environment variable is as a setting. A variable is
+         * always text, so "false" would be a text that is not empty, and a setting that code tests
+         * with empty() or as a condition (`debug`, say) would be on. A value that is exactly one of
+         * self::ENVIRONMENT_WORDS, in any letter case, is that boolean; any other value, "0", "1"
+         * and the empty text included, is returned as it is.
+         *
+         * @param  mixed $value
+         * @return mixed
+         */
+        static function environmentValue($value)
+        {
+            if (is_string($value)) {
+                $word = strtolower($value);
+                if (array_key_exists($word, static::ENVIRONMENT_WORDS)) {
+                    return static::ENVIRONMENT_WORDS[$word];
+                }
+            }
+
+            return $value;
+        }
+
+        /**
          * Load configuration from ini files
          */
         function loadIniFiles()
@@ -253,10 +363,7 @@ namespace Idno\Core {
 
                 $this->ini_config = array();
 
-                foreach ([
-                    $this->path,                    // Check old location (Warning: @deprecated and will be removed in future installs)
-                    $this->path . '/configuration'  // Check for configuration in the new location
-                ] as $path) {
+                foreach ($this->configurationPaths() as $path) {
 
                     if ($config = @parse_ini_file($path . '/config.ini', true)) {
                         if (!empty($config)) {
@@ -285,49 +392,20 @@ namespace Idno\Core {
                         $this->ini_config['dbport'] = $parsed['port'];
                     }
 
-                    $cloudcube = array_key_exists('CLOUDCUBE_URL', $_ENV);
-                    $aws_s3 = array_key_exists('IDNO_AWS_S3_BUCKET', $_ENV) || array_key_exists('KNOWN_AWS_S3_BUCKET', $_ENV);
-                    $bucket = '';
-
-                    if ($cloudcube) {
-                        $parsed = parse_url($_ENV['CLOUDCUBE_URL']);
-                        $host_parts = explode('.', $parsed['host']);
-                        $bucket = $host_parts[0];
-                        $this->ini_config['aws_key'] = $_ENV['CLOUDCUBE_ACCESS_KEY_ID'];
-                        $this->ini_config['aws_secret'] = $_ENV['CLOUDCUBE_SECRET_ACCESS_KEY'];
-                        $this->ini_config['aws_bucket'] = $bucket;
-                        $this->ini_config['aws_region'] = $bucket == 'cloud-cube-eu' ? 'eu-west-1' : 'us-east-1';
-                        $path = $parsed['path'];
-                    } elseif ($aws_s3) {
-                        $bucket = $_ENV['IDNO_AWS_S3_BUCKET'] ?? $_ENV['KNOWN_AWS_S3_BUCKET'];
-                        $this->ini_config['aws_key'] = $_ENV['IDNO_AWS_S3_ACCESS_KEY_ID'] ?? $_ENV['KNOWN_AWS_S3_ACCESS_KEY_ID'];
-                        $this->ini_config['aws_secret'] = $_ENV['IDNO_AWS_S3_SECRET_ACCESS_KEY'] ?? $_ENV['KNOWN_AWS_S3_SECRET_ACCESS_KEY'];
-                        $this->ini_config['aws_bucket'] = $bucket;
-                        $this->ini_config['aws_region'] = $_ENV['IDNO_AWS_S3_REGION'] ?? $_ENV['KNOWN_AWS_S3_REGION'];
-                        $path = str_replace('//', '/', '/'.($_ENV['IDNO_AWS_S3_PATH_PREFIX'] ?? $_ENV['KNOWN_AWS_S3_PATH_PREFIX']));
-                    }
-
-                    if (($cloudcube || $aws_s3) && (!empty($bucket))) {
-                        $this->ini_config['filesystem'] = 'local';
-                        $this->ini_config['uploadpath'] = "s3://{$bucket}{$path}";
-                    }
-
-                    $awsRegion = $_ENV['IDNO_AWS_S3_REGION'] ?? $_ENV['KNOWN_AWS_S3_REGION'] ?? null;
-                    if ($awsRegion) {
-                        $this->ini_config['aws_region'] = $awsRegion;
-                    }
-
                     $uploadPath = $_ENV['IDNO_UPLOAD_PATH'] ?? $_ENV['KNOWN_UPLOAD_PATH'] ?? null;
                     if ($uploadPath) {
                         $this->ini_config['uploadpath'] = $uploadPath;
                     }
 
-                    // Per domain configuration
-                    if ($config = @parse_ini_file($path . '/' . $this->host . '.ini', true)) {
-                        unset($this->ini_config['initial_plugins']);  // Don't let plugin settings be merged
-                        unset($this->ini_config['alwaysplugins']);
-                        unset($this->ini_config['antiplugins']);
-                        $this->ini_config = array_replace_recursive($this->ini_config, $config);
+                    // Per domain configuration: one file, the first of the host's names that has one
+                    foreach ($this->hostConfigurationNames() as $name) {
+                        if ($config = @parse_ini_file($path . '/' . $name . '.ini', true)) {
+                            unset($this->ini_config['initial_plugins']);  // Don't let plugin settings be merged
+                            unset($this->ini_config['alwaysplugins']);
+                            unset($this->ini_config['antiplugins']);
+                            $this->ini_config = array_replace_recursive($this->ini_config, $config);
+                            break;
+                        }
                     }
                 }
 
@@ -336,7 +414,7 @@ namespace Idno\Core {
                 foreach ($_SERVER as $name => $val) {
                     if (substr($name, 0, 5) == 'IDNO_') {
                         $configName = strtolower(str_replace('IDNO_', '', $name));
-                        $this->ini_config[$configName] = $val;
+                        $this->ini_config[$configName] = static::environmentValue($val);
                     }
                 }
                 // Backwards compat: also process KNOWN_ but don't override IDNO_ values
@@ -344,7 +422,7 @@ namespace Idno\Core {
                     if (substr($name, 0, 6) == 'KNOWN_') {
                         $configName = strtolower(str_replace('KNOWN_', '', $name));
                         if (!isset($this->ini_config[$configName])) {
-                            $this->ini_config[$configName] = $val;
+                            $this->ini_config[$configName] = static::environmentValue($val);
                         }
                     }
                 }
@@ -435,7 +513,6 @@ namespace Idno\Core {
             $this->disable_cleartext_warning = false; // Set to true to disable warning when access credentials are sent in the clear
             $this->cookie_jar                = rtrim(sys_get_temp_dir(), '/\\') . DIRECTORY_SEPARATOR; // Cookie jar for API requests, default location isn't terribly secure on shared hosts!
             $this->multi_syndication         = true; // Do we allow multiple accounts per syndication endpoint?
-            $this->wayback_machine           = false; // Automatically ping new pages on public sites to the Internet Archive
 
             $this->loadIniFiles();
             $this->sanitizeValues();

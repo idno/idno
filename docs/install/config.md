@@ -46,7 +46,7 @@ Beside `config.ini` you can have a file named after the site's host name: for a 
 
 When a per-domain file exists, the `alwaysplugins`, `antiplugins` and `initial_plugins` lists in `config.ini` are ignored, so that one site's plugin lists are never merged with another's. Put those lists in the per-domain file.
 
-The host name is exactly the one in the site's address: a site at `www.example.com` reads `configuration/www.example.com.ini`. On the command line it comes from the `IDNO_DOMAIN` environment variable (see [Background work](#background-work)).
+Name the file for the host without `www.`: a site at `www.example.com` reads `configuration/example.com.ini` too, which is also the name its plugins, themes and uploads go by. If a file named `configuration/www.example.com.ini` exists, a site at that address reads it instead, and only it. On the command line it comes from the `IDNO_DOMAIN` environment variable (see [Background work](#background-work)).
 
 ### Environment variables
 
@@ -59,7 +59,7 @@ Any setting can also come from an environment variable named `IDNO_` followed by
 - nginx with PHP-FPM: `fastcgi_param IDNO_DBPASS "a long password";`.
 - The command line and services: set the variable in the shell, or with `Environment=` in a systemd unit.
 
-A value from the environment is text. `IDNO_DEBUG=false` is the word "false", which counts as on. To turn a setting off from the environment, leave it empty (`IDNO_DEBUG=`) or use `0`.
+A variable whose whole value is `true`, `on` or `yes` turns a setting on, and `false`, `off`, `no` or `none` turns it off, in any letter case, as the same words do in `config.ini`. So `IDNO_DEBUG=false` turns debugging off. Any other value is text, exactly as you set it. A value that has to be one of those words as text (a password, say) can't come from the environment: put it in the file, in quotes.
 
 An environment variable holds a single text value, so settings that are lists (`alwaysplugins`, `antiplugins` and so on) must go in a file.
 
@@ -337,11 +337,9 @@ These take the name of a class, either in full or as a name inside Idno's own na
 The code still reads or stores these, but setting them changes nothing you can see:
 
 - **`indieweb_reference`**: saved by "Include permalinks" on the Site settings page. Nothing uses it.
-- **`wayback_machine`**: saved as off by the Site settings page. Nothing uses it.
 - **`force_ssl`**, **`ignore_ssl_gatekeeper`**: read only by a check that no page calls.
 - **`multi_syndication`**: read by `Config::multipleSyndicationAccounts()`, which nothing calls.
 - **`external_plugin_path`**: meant for plugins kept in another folder; use `directloadplugins[]` instead.
-- **`aws_key`**, **`aws_secret`**, **`aws_bucket`**, **`aws_region`** and the `IDNO_AWS_S3_*` and `CLOUDCUBE_*` environment variables: these point `uploadpath` at an `s3://` address, but Idno has no file system for one. They work only if something else on the server makes PHP understand `s3://` paths.
 
 ## Set by Idno itself
 

@@ -31,10 +31,27 @@ Check these before you replace the files:
 * **PHP 8.3 or later is required.** See the [requirements](requirements.md).
 * **MongoDB:** the `mongodb/mongodb` Composer package is no longer installed with Idno. After replacing the files,
   run `composer require mongodb/mongodb` in your Idno directory. The PHP `mongodb` extension is needed, as before.
+* **The S3 and Cloudcube variables are no longer read.** If your site's environment sets `CLOUDCUBE_URL` (with
+  `CLOUDCUBE_ACCESS_KEY_ID` and `CLOUDCUBE_SECRET_ACCESS_KEY`), or `IDNO_AWS_S3_BUCKET` or `KNOWN_AWS_S3_BUCKET` (with
+  the matching `..._ACCESS_KEY_ID`, `..._SECRET_ACCESS_KEY`, `..._REGION` and `..._PATH_PREFIX`), Idno used to set
+  `uploadpath` to an `s3://` address, which it has no file system for, so uploads were not stored. These variables now
+  do nothing. Before you upgrade, make sure `uploadpath` in `config.ini` (or `IDNO_UPLOAD_PATH` in the environment)
+  names a folder on the server that the web server can write to, with `filesystem = 'local'`, and remove the
+  variables. If something else on your server makes PHP understand `s3://` addresses and your uploads were being
+  stored, set `uploadpath` to that address yourself instead.
 * **Third-party plugins and themes that used the feed reader:** one that extends or names a class of the feed reader,
   calls `Idno::site()->reader()`, or draws one of its templates will fail when that code runs. Disable it before you
   upgrade, and enable it again once it no longer does. No bundled plugin or theme used any of it; the classes and
   templates are listed in [changes for plugin and theme authors](../developers/plugins/changes.md).
+* **Settings in environment variables:** an `IDNO_` (or `KNOWN_`) variable whose whole value is `true`, `on`, `yes`,
+  `false`, `off`, `no` or `none`, in any letter case, now turns the setting on or off, as the same word does in
+  `config.ini`. Before, every one of them counted as on. If you set `IDNO_DEBUG=false` or the like, the setting is
+  now off, as you meant. A variable that must hold one of those words as text (a password, say) has to move to
+  `config.ini`, in quotes.
+* **A site at a `www.` address with a per-domain configuration file:** such a site reads
+  `configuration/www.example.com.ini`, as before. If there is no such file, it now reads
+  `configuration/example.com.ini`, which it used to ignore. If you have a file by that name that you did not mean
+  the `www.` site to use, rename or remove it.
 
 What you and your members will find changed, with nothing to do unless it says so:
 

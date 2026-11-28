@@ -78,7 +78,9 @@ namespace Idno\Core\Bonita {
         }
 
         /**
-         * Method to draw an actual template element
+         * Method to draw an actual template element: the one template file of that name,
+         * and nothing registered for it. Extensions, prepended templates and replacements
+         * are added by \Idno\Core\DefaultTemplate::draw(), which says in which order.
          *
          * @param  string  $templateName Name of the template element to draw
          * @param  boolean $returnBlank  If true, returns a blank string on failure; otherwise false
