@@ -63,6 +63,7 @@ These changes are on the `dev` branch and will be part of the next release.
 * Security: a form field or JSON value sent as an array where a text is expected can no longer change or drop the condition of a lookup. In a query, a field value that is an array is a condition only when it is a map of operators the database supports, and otherwise matches nothing (MySQL used to leave it out of the query); see [the changes for plugin and theme authors](developers/plugins/changes.md)
 * Removed the Bridgy plugin, which only knew Twitter and Facebook, neither of which Bridgy supports any more. A site that had it enabled loads without it
 * A private site ("walled garden") no longer federates: its ActivityPub addresses answer "not found", and it sends no deliveries, webmentions or WebSub pings. Followers are kept
+* Security: on a private site with the Atmosphere plugin, the address that names the site's AT Protocol publication (`/.well-known/site.standard.publication`) still answered any visitor with the AT Protocol identity of a member, and a member who pressed "Backfill" had a record with the site's name, address and description written to their account. A private site now answers that address "not found" and writes nothing. [Private sites](admin/private-sites.md) lists exactly what stops while a site is private and what a member can still send
 
 1.6.4
 -----
