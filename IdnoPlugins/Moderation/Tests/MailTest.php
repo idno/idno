@@ -188,6 +188,24 @@ namespace IdnoPlugins\Moderation\Tests {
             $this->assertCount(1, $this->mails('received'));
         }
 
+        /**
+         * An administrator whose account was being deleted was still mailed each new report,
+         * with what the reporter wrote.
+         */
+        public function testAnAdministratorWhoseAccountIsBeingDeletedIsNotToldAboutAReport()
+        {
+            $leaving = static::member('mailadminleaving', true);
+            $this->swapUser(null);
+            $this->assertTrue(static::fresh($leaving)->close());
+
+            // (a reporter of their own: the class's reporter has an hourly limit to keep to)
+            $this->report(static::member('mailreporterlate'), 'post', $this->post(static::$author), 'spam', 'Some context');
+
+            $told = $this->to($this->mails('new-report'));
+            $this->assertNotContains($leaving->email, $told);
+            $this->assertContains(static::$admin->email, $told);
+        }
+
         public function testAnAdministratorIsNotToldAboutAReportOnThemself()
         {
             $other = static::member('mailadmintwo', true);

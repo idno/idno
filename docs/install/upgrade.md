@@ -59,6 +59,10 @@ What you and your members will find changed, with nothing to do unless it says s
   items, now answer "not found". Following a person at `/account/settings/following/` works as before. No data is
   deleted: the `reader` collection (the `reader`, `reader_search` and `reader_metadata` tables on MySQL) and every
   record the feed reader stored are kept, and are no longer shown anywhere.
+* **Deleting an account deletes what it posted.** Deleting a member on the Users page now permanently removes
+  their posts, drafts and uploaded files as well as the account; it used to leave most of them behind. Take a backup
+  or an export first if you may want any of it. The username is kept back afterwards, so that nobody new is taken
+  for the old member, until an administrator releases it on the Users page.
 * **The Bridgy plugin is gone.** A site that had it enabled loads without it, and its settings page is no longer
   there. Replies and likes that Bridgy sends for a member who signed up there themselves still arrive as webmentions.
 * **StandardSiteSync is now called Atmosphere.** A site that had the plugin enabled keeps it enabled. Members who

@@ -24,6 +24,7 @@
  *     /person/feed                         that person's RSS feed, which names itself and the WebSub hub /hub
  *     /hub                                 a WebSub hub: 202 to anything
  *     /log                                 JSON list of the requests seen so far ("METHOD target")
+ *     /signers                             JSON list of the keyId of each of those requests' Signature header ('' for none)
  *     /reset                               forget the requests seen so far
  *     anything else                        200, body "landed <METHOD> <path>"
  *
@@ -85,6 +86,7 @@ $origin = ($tls ? 'https' : 'http') . '://127.0.0.1:' . $port;
 echo $port . "\n";
 
 $log = [];
+$signers = [];
 $stopAt = time() + 300;
 
 while (time() < $stopAt) {
@@ -122,11 +124,16 @@ while (time() < $stopAt) {
     if ($path === '/log') {
         $headers = ['Content-Type: application/json'];
         $body = json_encode($log);
+    } else if ($path === '/signers') {
+        $headers = ['Content-Type: application/json'];
+        $body = json_encode($signers);
     } else if ($path === '/reset') {
         $log = [];
+        $signers = [];
         $body = 'reset';
     } else {
         $log[] = "$method $target";
+        $signers[] = preg_match('/^Signature:.*keyId="([^"]*)"/mi', $head, $signature) ? $signature[1] : '';
 
         if ($path === '/redirect' || strpos($path, '/redirect/') === 0) {
             $status = (int) ($query['code'] ?? 302) . ' Redirect';

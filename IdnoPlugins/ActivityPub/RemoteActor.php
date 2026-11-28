@@ -146,7 +146,11 @@ class RemoteActor
     }
 
     /**
-     * Get any local user with a keypair for signing outbound requests.
+     * Get a local user whose key signs outbound requests that are made for the site.
+     *
+     * A server that checks the signer fetches the signer's actor, so this is only ever a
+     * member whose actor this site still serves: never one who is banned, or whose account
+     * is closed (being deleted), whose actor answers 410.
      *
      * @return User|null
      */
@@ -157,14 +161,19 @@ class RemoteActor
             return \Idno\Core\Idno::site()->session()->currentUser();
         }
 
-        // Fall back to the first user with keys
-        $users = User::get([], [], 1);
-        if (!empty($users) && is_array($users)) {
-            $user = $users[0];
-            // Ensure the user has a keypair (generates one if needed)
-            if ($user instanceof User && $user->getPrivateKey()) {
-                return $user;
+        // Fall back to the first member who has an actor and keys
+        $offset = 0;
+        while ($users = User::get([], [], 50, $offset)) {
+            foreach ($users as $user) {
+                if (!($user instanceof User) || $user->isBanned() || $user->isClosed()) {
+                    continue;
+                }
+                // Ensure the user has a keypair (generates one if needed)
+                if ($user->getPrivateKey()) {
+                    return $user;
+                }
             }
+            $offset += 50;
         }
 
         return null;

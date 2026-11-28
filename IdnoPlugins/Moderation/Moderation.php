@@ -466,7 +466,8 @@ namespace IdnoPlugins\Moderation {
          */
         public static function canHandle(User $admin, ModerationCase $case)
         {
-            if (empty($admin->admin) || $admin->isBanned()) {
+            // (an account that is closed is being deleted: nobody can sign in to it)
+            if (empty($admin->admin) || $admin->isBanned() || $admin->isClosed()) {
                 return false;
             }
             if (empty($case->subject_uuid) || $case->subject_uuid !== $admin->getUUID()) {
